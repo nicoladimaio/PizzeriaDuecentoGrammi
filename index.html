@@ -111,15 +111,48 @@ nav a:hover {
         padding: 1.5em 1em;
       }
     }
+    .main-nav {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 1em;
+  background: #8eb84c;
+  padding: 0.5em 1em;
+  border-radius: 2em;
+  margin-bottom: 1em;
+}
+.main-nav a {
+  color: #fff;
+  text-decoration: none;
+  font-weight: bold;
+  padding: 0.3em 1em;
+  border-radius: 2em;
+  transition: background 0.2s;
+}
+.main-nav a:hover {
+  background: #f77f00;
+  color: #fff;
+}
+@media (max-width:600px) {
+  .main-nav {
+    flex-direction: row; /* Mantieni orizzontale anche su mobile */
+    gap: 0.5em;
+    padding: 0.3em 0.5em;
+  }
+}
   </style>
 </head>
 <body>
 
   <header>
     <img src="assets/logo1.png" alt="Logo Duecento Grammi" />
-   <nav style="background:#8eb84c; padding:0.5em 1em; display:flex; align-items:center; gap:1em;">
+   <!-- <nav style="background:#8eb84c; padding:0.5em 1em; display:flex; align-items:center; gap:1em;">
   <a href="index.html" style="color:#fff; text-decoration:none; font-weight:bold;">Home</a>
-  <a href="menu.html" style="color:#fff; text-decoration:none; font-weight:bold;">Menu</a>
+  <a href="menu.html" style="color:#fff; text-decoration:none; font-weight:bold;">Menu</a> -->
+<!-- </nav> -->
+ <nav class="main-nav">
+  <a href="index.html">Home</a>
+  <a href="menu.html">Menu</a>
 </nav>
   </header>
 
