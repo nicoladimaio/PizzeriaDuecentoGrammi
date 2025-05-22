@@ -7,7 +7,7 @@
 
 <body>
     
-  <div id="categorie" style="text-align:center; margin-bottom:2em;">
+  <div id="categorie" class="categorie-scroll" style="text-align:center; margin-bottom:2em;">
     <button type="button" class="cat-btn" data-cat="Antipasti">ANTIPASTI</button>
     <button type="button" class="cat-btn" data-cat="Pizze">PIZZE</button>
     <button type="button" class="cat-btn" data-cat="Bibite">BIBITE</button>
@@ -80,6 +80,24 @@
     align-items: flex-start;
     gap: 0.2em;
   }
+}
+.categorie-scroll {
+  display: flex;
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  gap: 0.5em;
+    justify-content: center;      /* Centra le categorie */
+  align-items: center;
+  padding-bottom: 0.5em;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin;
+}
+.categorie-scroll .cat-btn {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+.categorie-scroll::-webkit-scrollbar {
+  display: none;
 }
   </style>
   <script>
