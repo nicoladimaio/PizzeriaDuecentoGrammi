@@ -1,0 +1,131 @@
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Duecento Grammi - Pizzeria</title>
+  <link rel="icon" type="image/png" href="assets/logo1.png">
+</head>
+
+<body>
+    
+  <div id="categorie" style="text-align:center; margin-bottom:2em;">
+    <button type="button" class="cat-btn" data-cat="Antipasti">ANTIPASTI</button>
+    <button type="button" class="cat-btn" data-cat="Pizze">PIZZE</button>
+    <button type="button" class="cat-btn" data-cat="Bibite">BIBITE</button>
+    <!-- <button class="cat-btn" data-cat="Tutto">TUTTO</button> -->
+  </div>
+  <div id="menu"></div>
+  <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+  <style>
+    .cat-btn {
+      border: none;
+      background: #8eb84c;
+      color: #fff;
+      border-radius: 2em;
+      padding: 0.7em 2em;
+      margin: 0 0.5em;
+      font-size: 1em;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+    .cat-btn.active, .cat-btn:hover {
+      background: #f77f00;
+    }
+    .menu-item {
+      margin-bottom: 2em;
+      border-bottom: 1px solid #eee;
+      padding-bottom: 1em;
+      display: flex;
+      align-items: flex-start;
+      gap: 1em;
+    }
+    .menu-img {
+      width: 80px;
+      height: 80px;
+      object-fit: cover;
+      border-radius: 10px;
+      background: #eee;
+    }
+    .menu-title-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1em;
+}
+.menu-title-row h2 {
+  margin: 0;
+  font-size: 1.2em;
+  font-weight: bold;
+}
+.menu-prezzo {
+  font-weight: bold;
+  font-size: 1.1em;
+  white-space: nowrap;
+}
+    @media (max-width:600px) {
+         header {
+    flex-direction: column;
+    align-items: flex-start;
+    padding: 1em;
+  }
+  header img {
+    margin-bottom: 0.5em;
+  }
+  section {
+    padding: 1em 0.5em;
+  }
+      .menu-item { flex-direction: column; align-items: center; }
+      .menu-img { width: 100%; height: auto; }
+      .menu-title-row {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.2em;
+  }
+}
+  </style>
+  <script>
+    const csvUrl = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vQp3TIPji0kPDBU6WlwqmEndLOWXo7ma9nTeWOvn4LR8HVG-3t_h4dM8XU0CakggYTRv-tjy8WEPg_c/pub?output=csv';
+    let menuData = [];
+
+   function renderMenu(cat) {
+  let html = '';
+  menuData.forEach(row => {
+    const categoria = (row.Categoria || '').trim().toLowerCase();
+    const filtro = cat.trim().toLowerCase();
+    if (
+      row.Nome && row.Prezzo &&
+      (filtro === 'tutto' || categoria === filtro)
+    ) {
+      html += `<div class="menu-item">
+        ${row.Immagine ? `<img src="${row.Immagine}" class="menu-img" alt="${row.Nome}">` : ''}
+        <div>
+          <div class="menu-title-row">
+  <h2>${row.Nome}</h2>
+  <span class="menu-prezzo">${row.Prezzo}</span>
+</div>
+          ${row.Ingredienti ? `<p>${row.Ingredienti}</p>` : ''}
+        </div>
+      </div>`;
+    }
+  });
+  document.getElementById('menu').innerHTML = html || '<p>Nessun elemento trovato.</p>';
+}
+
+    fetch(csvUrl)
+      .then(res => res.text())
+      .then(text => {
+        menuData = Papa.parse(text, { header: true }).data;
+        renderMenu('Pizze'); // Carica le pizze di default
+      });
+
+    document.getElementById('categorie').addEventListener('click', function(e) {
+      if (e.target.classList.contains('cat-btn')) {
+        document.querySelectorAll('.cat-btn').forEach(btn => btn.classList.remove('active'));
+        e.target.classList.add('active');
+        renderMenu(e.target.dataset.cat);
+      }
+    });
+    // Attiva "Pizze" di default
+    document.querySelector('.cat-btn[data-cat="Pizze"]').classList.add('active');
+renderMenu('Pizze');
+    </script>
+</body>
