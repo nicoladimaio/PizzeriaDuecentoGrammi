@@ -127,6 +127,14 @@
         align-items: flex-start;
         gap: 0.2em;
       }
+       .menu-header h1 {
+    font-size: 1.1em;
+    padding-left: 2.2em; /* lascia spazio per la freccia */
+  }
+  .menu-back {
+    font-size: 1.5em;
+    padding-left: 0.1em;
+  }
     }
     .categorie-scroll {
   display: flex;
@@ -153,17 +161,42 @@
     .categorie-scroll::-webkit-scrollbar {
       display: none;
     }
+    .menu-header {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  margin-bottom: 1.5em;
+  min-height: 2.5em;
+}
+.menu-header h1 {
+  margin: 0;
+  font-size: 1.5em;
+  color: #222;
+  letter-spacing: 1px;
+  font-family: 'Playfair Display', serif;
+  font-weight: 700;
+  text-align: center;
+  flex: 1 1 auto;
+}
+.menu-back {
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  text-decoration: none;
+  color: #8eb84c;
+  font-size: 2em;
+  padding-left: 0.3em;
+  z-index: 2;
+}
   </style>
 </head>
 <body>
-  <div style="display: flex; align-items: center; justify-content: center; position: relative; margin-bottom: 1.5em;">
-    <a href="index.html" style="position: absolute; left: 0; top: 50%; transform: translateY(-50%); text-decoration: none; color: #8eb84c; font-size: 2em; padding-left: 0.3em;">
-      &#8592;
-    </a>
-   <h1 style="margin: 0; font-size: 1.5em; color: #222; letter-spacing: 1px; font-family: 'Playfair Display', serif; font-weight:700;">
-  Menù Duecento Grammi
-</h1>
-  </div>
+  <div class="menu-header">
+  <a href="index.html" class="menu-back">&#8592;</a>
+  <h1>Menù Duecento Grammi</h1>
+</div>
   <div id="categorie" class="categorie-scroll"></div>
   <div id="menu"></div>
   <div id="categorie" class="categorie-scroll" ></div>

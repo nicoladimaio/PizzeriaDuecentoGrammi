@@ -339,79 +339,104 @@ textarea {
   box-sizing: border-box;
 }
 
-    @media (max-width: 700px) {
-      .dashboard-container {
-        padding: 1em 0.3em;
-      }
-      form#addPizzaForm {
-        flex-direction: column;
-        gap: 0.7em;
-      }
-      .pizza-list {
-        display: flex;
-  flex-direction: column;
-  gap: 1.5em;
-      }
-      .pizza-card {
+   /* ...esistente... */
+
+@media (max-width: 700px) {
+  .menu-card, .pizza-card {
     flex-direction: column;
     align-items: flex-start;
     max-width: 98vw;
     gap: 0.7em;
+    min-height: 0;
+    padding: 0.7em 0.5em;
+  }
+  .menu-img, .pizza-card img {
+    width: 100%;
+    min-width: 0;
+    height: 120px;
+    border-radius: 12px 12px 0 0;
+    align-self: stretch;
+    margin-right: 0;
+  }
+  .menu-card-content, .pizza-card-content {
+    padding: 0.7em 0.7em 0.5em 0.7em;
+    width: 100%;
+  }
+  .menu-card-title, .pizza-card-title {
+    font-size: 1.15em;
+    color: #222;
+    font-weight: bold;
+    margin-bottom: 0.2em;
+  }
+  .menu-card-desc, .pizza-card-desc {
+    font-size: 1.08em;
+    color: #444;
+    margin-bottom: 0.5em;
+    font-weight: normal;
+  }
+  .menu-card-prezzo, .pizza-prezzo {
+    font-size: 1em;
+    color: #f77f00;
+    font-weight: bold;
+    margin-top: 0.3em;
+    background: none;
+    padding: 0;
   }
   .pizza-actions {
-     flex-direction: row;
+    flex-direction: row;
     width: 100%;
     justify-content: flex-end;
     align-items: center;
     padding: 0.5em 0.5em 0.5em 0;
     min-width: 0;
+    gap: 0.5em;
   }
-   .modal-content {
-    padding: 1em 0.5em;
-    max-width: 98vw;
+  .pizza-actions button {
+    font-size: 0.95em;
+    padding: 0.4em 0.8em;
+    margin-bottom: 0;
   }
-  .menu-card {
-    flex-direction: column;
-    align-items: flex-start;
-    max-width: 98vw;
-    gap: 0.7em;
-  }
-  .menu-img {
-    width: 100%;
-    min-width: 0;
-    height: 140px; /* o auto, se preferisci */
-    border-radius: 12px 12px 0 0;
-    align-self: stretch;
-  }  .menu-card {
-      flex-direction: column;
-    align-items: flex-start;
-    max-width: 98vw;
-  }
-  .menu-img {
-    width: 70px;
-    min-width: 70px;
-    height: 70px;
-  }
-  .menu-card-content {
-    padding: 0.7em 0.7em 0.5em 0.7em;
-  }
-    }
+  form#addPizzaForm input[type="file"],
+#editPizzaForm input[type="file"] {
+  font-size: 0.98em;
+  padding: 0.3em 0.2em;
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  max-width: 100%;
+  background: #fff;
+}
+}
   </style>
 </head>
 <body>
   <div class="dashboard-container" id="dashboardContent" style="display:none">
-    <h2>Gestione Menu</h2>
+  <h2>Gestione Menu</h2>
+  <div style="position: absolute; top: 1.2em; left: 1.2em; display: flex; gap: 0.5em; z-index: 10;">
+  <button id="showAddFormBtn" title="Aggiungi" style="background:#8eb84c; color:#fff; border:none; border-radius:50%; width:2.2em; height:2.2em; font-size:1.3em; font-weight:bold; cursor:pointer; display:flex; align-items:center; justify-content:center; box-shadow:0 1px 4px rgba(142,184,76,0.10);">+</button>
+</div>
+<div style="position: absolute; top: 1.2em; right: 1.2em; z-index: 10;">
+  <button class="logout-btn" onclick="logout()">Logout</button>
+</div>
+  <div class="categorie-scroll" id="categorieDashboard"></div>
+  <div class="pizza-list" id="listaPizze"></div>
+
+<div id="addModal" class="modal" style="display:none;">
+  <div class="modal-content">
+    <span class="close" id="closeAddModal">&times;</span>
+    <h3>Aggiungi voce</h3>
     <form id="addPizzaForm">
       <select id="categoria" required></select>
       <input type="text" id="nome" placeholder="Nome" required>
-        <textarea id="ingredienti" placeholder="Ingredienti" rows="3" style="resize:vertical; min-height:2.5em;"></textarea>
+      <textarea id="ingredienti" placeholder="Ingredienti" rows="3" style="resize:vertical; min-height:2.5em;"></textarea>
       <input type="number" id="prezzo" placeholder="Prezzo" step="0.5" required>
       <input type="file" id="immagine" accept="image/*">
-      <button type="submit">Aggiungi</button>
+      <div style="display:flex; gap:0.7em; justify-content: flex-end;">
+        <button type="submit">Aggiungi</button>
+      </div>
     </form>
-    <div class="categorie-scroll" id="categorieDashboard"></div>
-    <div class="pizza-list" id="listaPizze"></div>
-<button class="logout-btn" onclick="logout()">Logout</button>
+  </div>
+</div>
 
   <div id="editModal" class="modal" style="display:none;">
   <div class="modal-content">
@@ -420,7 +445,7 @@ textarea {
     <form id="editPizzaForm">
       <select id="edit_categoria" required></select>
       <input type="text" id="edit_nome" placeholder="Nome" required>
-      <input type="text" id="edit_ingredienti" placeholder="Ingredienti">
+      <textarea id="edit_ingredienti" placeholder="Ingredienti" rows="3" style="resize:vertical; min-height:2.5em;"></textarea>
       <input type="number" id="edit_prezzo" placeholder="Prezzo" step="0.5" required>
       <div id="edit-img-preview" style="margin:0.7em 0; text-align:center;"></div>
       <input type="file" id="edit_immagine" accept="image/*">
@@ -431,6 +456,7 @@ textarea {
     </form>
   </div>
 </div>
+
 </div>
     
     

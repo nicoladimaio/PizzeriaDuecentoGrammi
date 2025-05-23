@@ -64,26 +64,22 @@ document.getElementById('addPizzaForm').addEventListener('submit', async (e) => 
     immagineURL = await getDownloadURL(storageRef);
   }
 
-  if (editingId) {
-    // Modifica documento esistente
-    const updateData = { nome, ingredienti, prezzo, categoria };
-    if (immagineURL) updateData.immagine = immagineURL;
-    await updateDoc(doc(db, 'pizze', editingId), updateData);
-    editingId = null;
-    e.target.querySelector('button[type="submit"]').textContent = "Aggiungi";
-  } else {
-    // Nuovo documento
-    await addDoc(collection(db, 'pizze'), {
-      nome,
-      ingredienti,
-      prezzo,
-      categoria,
-      immagine: immagineURL
-    });
-  }
+  await addDoc(collection(db, 'pizze'), {
+    nome,
+    ingredienti,
+    prezzo,
+    categoria,
+    immagine: immagineURL
+  });
 
-  e.target.reset();
+  // Imposta la categoria attiva su quella appena aggiunta
+  categoriaFiltro = categoria;
+  renderCategorieMenu();
   caricaPizze();
+
+  // Chiudi la modale
+  document.getElementById('addModal').style.display = 'none';
+  e.target.reset();
 });
 
 window.pizzeData = [];
@@ -226,3 +222,15 @@ document.getElementById('editModal').onclick = function(e) {
     editingId = null;
   }
 };
+
+document.getElementById('showAddFormBtn').onclick = function() {
+  document.getElementById('addModal').style.display = 'flex';
+};
+document.getElementById('closeAddModal').onclick = function() {
+  document.getElementById('addModal').style.display = 'none';
+};
+document.getElementById('addModal').onclick = function(e) {
+  if (e.target === this) this.style.display = 'none';
+};
+
+document.getElementById('addModal').style.display = 'none';
