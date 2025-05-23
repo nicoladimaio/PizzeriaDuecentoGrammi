@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8">
+  <title>Login - Duecento Grammi</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <link rel="icon" type="image/png" href="assets/logo1.png">
+  <style>
+    body {
+      background: #f7f7f7;
+      font-family: 'Segoe UI', Arial, sans-serif;
+      margin: 0;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .login-container {
+      background: #fff;
+      border-radius: 16px;
+      box-shadow: 0 2px 16px rgba(0,0,0,0.08);
+      padding: 2.5em 2em 2em 2em;
+      max-width: 350px;
+      width: 100%;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+    .login-logo {
+      width: 90px;
+      height: 90px;
+      object-fit: contain;
+      margin-bottom: 1em;
+      border-radius: 50%;
+      background: #8eb84c;
+      box-shadow: 0 1px 4px rgba(142,184,76,0.08);
+      display: block;
+    }
+    h2 {
+      margin: 0 0 1.2em 0;
+      color: #8eb84c;
+      font-size: 1.3em;
+      text-align: center;
+      font-weight: bold;
+      letter-spacing: 1px;
+    }
+    #loginForm {
+      width: 100%;
+      display: flex;
+      flex-direction: column;
+      gap: 1em;
+    }
+    #loginForm input[type="email"],
+    #loginForm input[type="password"] {
+      padding: 0.7em;
+      border: 1px solid #c6e1a7;
+      border-radius: 6px;
+      font-size: 1em;
+      background: #f9f9f9;
+      outline: none;
+      transition: border 0.2s;
+    }
+    #loginForm input:focus {
+      border-color: #8eb84c;
+    }
+    #loginForm button {
+      background: #f77f00;
+      color: #fff;
+      border: none;
+      border-radius: 6px;
+      padding: 0.7em 0;
+      font-size: 1.1em;
+      font-weight: bold;
+      cursor: pointer;
+      transition: background 0.2s;
+      margin-top: 0.5em;
+    }
+    #loginForm button:hover {
+      background: #8eb84c;
+    }
+    #unauth-msg {
+      color: #d62828;
+      font-weight: bold;
+      margin-top: 1em;
+      text-align: center;
+      min-height: 1.5em;
+    }
+    @media (max-width: 500px) {
+      .login-container {
+        padding: 1.2em 0.5em 1em 0.5em;
+        max-width: 98vw;
+      }
+      .login-logo {
+        width: 70px;
+        height: 70px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="login-container">
+    <img src="assets/logo1.png" alt="Logo Duecento Grammi" class="login-logo" />
+    <h2>Login Amministratore</h2>
+    <form id="loginForm">
+      <input type="email" id="email" placeholder="Email" required>
+      <input type="password" id="password" placeholder="Password" required>
+      <button type="submit">Accedi</button>
+    </form>
+    <div id="unauth-msg"></div>
+  </div>
+  <script>
+    if (window.location.search.includes('unauth=1')) {
+      document.getElementById('unauth-msg').textContent = 'UTENTE NON AUTORIZZATO';
+    }
+  </script>
+  <script type="module" src="assets/js/firebase.js"></script>
+  <script type="module" src="assets/js/auth.js"></script>
+</body>
+</html>
