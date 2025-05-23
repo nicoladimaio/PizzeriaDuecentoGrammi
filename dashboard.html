@@ -235,6 +235,110 @@ display: flex;
   margin-bottom: 0.5em;
   box-shadow: 0 1px 4px rgba(142,184,76,0.08);
 }
+.menu-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1.2em;
+  align-items: center;
+}
+.menu-card {
+    display: flex;
+  flex-direction: row;      /* Assicurati che sia row su desktop */
+  align-items: stretch;     /* Fondamentale! */
+  background: #fcfbe7;
+  border-radius: 16px;
+  box-shadow: 0 1px 6px rgba(142,184,76,0.08);
+  max-width: 650px;
+  width: 100%;
+  min-height: 120px;
+  margin: 0 auto;
+  overflow: hidden;
+  position: relative;
+  gap: 0;
+}
+.menu-img {
+  width: 120px;
+  min-width: 120px;
+  height: 100%;
+  object-fit: cover;
+  background: #eee;
+  flex-shrink: 0;
+  align-self: stretch;
+  border-top-right-radius: 16px;
+  border-bottom-right-radius: 16px;
+  border-top-left-radius: 0;
+  border-bottom-left-radius: 0;
+  border-radius: 12px;
+}
+.menu-card-content {
+   flex: 1 1 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+  padding: 0.9em 1em 0.7em 1em;
+  position: relative;
+}
+.menu-card-title {
+  font-weight: bold;
+  font-size: 1.15em;
+  margin: 0 0 0.3em 0;
+  color: #222;
+}
+.menu-card-desc {
+  font-size: 1em;
+  color: #444;
+  margin: 0 0 0.7em 0;
+  font-weight: normal;
+}
+.menu-card-prezzo {
+  font-weight: bold;
+  color: #222;
+  font-size: 1.1em;
+  background: #fcfbe7;
+  padding: 0.1em 0.7em;
+  border-radius: 1em;
+  position: static;
+  margin-top: auto;
+  align-self: flex-start;
+}
+.pizza-actions {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: flex-end;
+  gap: 0.5em;
+  padding: 1em 1em 1em 0;
+  min-width: 110px;
+}
+.pizza-actions button {
+  background: #8eb84c;
+  color: #fff;
+  border: none;
+  border-radius: 5px;
+  padding: 0.4em 1em;
+  font-size: 0.98em;
+  cursor: pointer;
+  transition: background 0.2s;
+  margin-bottom: 0.3em;
+}
+.pizza-actions button:last-child {
+  background: #d62828;
+  margin-bottom: 0;
+}
+.pizza-actions button:hover {
+  opacity: 0.85;
+}
+textarea {
+  width: 100%;
+  font-size: 1em;
+  padding: 0.6em;
+  border: 1px solid #c6e1a7;
+  border-radius: 6px;
+  background: #fff;
+  font-family: inherit;
+  box-sizing: border-box;
+}
+
     @media (max-width: 700px) {
       .dashboard-container {
         padding: 1em 0.3em;
@@ -255,14 +359,41 @@ display: flex;
     gap: 0.7em;
   }
   .pizza-actions {
-    margin-left: 0;
-    flex-direction: row;
+     flex-direction: row;
     width: 100%;
     justify-content: flex-end;
+    align-items: center;
+    padding: 0.5em 0.5em 0.5em 0;
+    min-width: 0;
   }
    .modal-content {
     padding: 1em 0.5em;
     max-width: 98vw;
+  }
+  .menu-card {
+    flex-direction: column;
+    align-items: flex-start;
+    max-width: 98vw;
+    gap: 0.7em;
+  }
+  .menu-img {
+    width: 100%;
+    min-width: 0;
+    height: 140px; /* o auto, se preferisci */
+    border-radius: 12px 12px 0 0;
+    align-self: stretch;
+  }  .menu-card {
+      flex-direction: column;
+    align-items: flex-start;
+    max-width: 98vw;
+  }
+  .menu-img {
+    width: 70px;
+    min-width: 70px;
+    height: 70px;
+  }
+  .menu-card-content {
+    padding: 0.7em 0.7em 0.5em 0.7em;
   }
     }
   </style>
@@ -273,8 +404,8 @@ display: flex;
     <form id="addPizzaForm">
       <select id="categoria" required></select>
       <input type="text" id="nome" placeholder="Nome" required>
-      <input type="text" id="ingredienti" placeholder="Ingredienti">
-      <input type="number" id="prezzo" placeholder="Prezzo" step="0.01" required>
+        <textarea id="ingredienti" placeholder="Ingredienti" rows="3" style="resize:vertical; min-height:2.5em;"></textarea>
+      <input type="number" id="prezzo" placeholder="Prezzo" step="0.5" required>
       <input type="file" id="immagine" accept="image/*">
       <button type="submit">Aggiungi</button>
     </form>
@@ -290,7 +421,7 @@ display: flex;
       <select id="edit_categoria" required></select>
       <input type="text" id="edit_nome" placeholder="Nome" required>
       <input type="text" id="edit_ingredienti" placeholder="Ingredienti">
-      <input type="number" id="edit_prezzo" placeholder="Prezzo" step="0.01" required>
+      <input type="number" id="edit_prezzo" placeholder="Prezzo" step="0.5" required>
       <div id="edit-img-preview" style="margin:0.7em 0; text-align:center;"></div>
       <input type="file" id="edit_immagine" accept="image/*">
       <div style="display:flex; gap:0.7em; justify-content: flex-end;">

@@ -133,11 +133,46 @@ nav a:hover {
   background: #f77f00;
   color: #fff;
 }
+.user-icon {
+  position: absolute;
+  top: 24px;
+  right: 24px;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #fff;
+  border-radius: 50%;
+  width: 38px;
+  height: 38px;
+  box-shadow: 0 1px 6px rgba(142,184,76,0.10);
+  transition: box-shadow 0.2s;
+  text-decoration: none;
+}
+.user-icon:hover {
+  box-shadow: 0 2px 12px rgba(142,184,76,0.18);
+  background: #f3fbe7;
+}
+.user-icon svg {
+  width: 24px;
+  height: 24px;
+  display: block;
+}
 @media (max-width:600px) {
   .main-nav {
     flex-direction: row; /* Mantieni orizzontale anche su mobile */
     gap: 0.5em;
     padding: 0.3em 0.5em;
+  }
+  .user-icon {
+    top: 10px;
+    right: 10px;
+    width: 32px;
+    height: 32px;
+  }
+  .user-icon svg {
+    width: 20px;
+    height: 20px;
   }
 }
   </style>
@@ -154,6 +189,12 @@ nav a:hover {
     <img src="assets/logo1.png" alt="Logo Duecento Grammi" />
   <a href="index.html">Home</a>
   <a href="menu.html">Menu</a>
+      <a href="login.html" class="user-icon" title="Area riservata">
+  <svg width="28" height="28" viewBox="0 0 24 24" fill="#8eb84c" xmlns="http://www.w3.org/2000/svg">
+    <circle cx="12" cy="8" r="4"/>
+    <path d="M4 20c0-2.7 3.6-4 8-4s8 1.3 8 4" fill="none" stroke="#8eb84c" stroke-width="2"/>
+  </svg>
+</a>
 </nav>
   </header>
 

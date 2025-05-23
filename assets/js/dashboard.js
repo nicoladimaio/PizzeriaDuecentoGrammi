@@ -97,19 +97,26 @@ async function caricaPizze() {
     window.pizzeData.push({ ...data, id: docSnap.id });
     // Filtra per categoria se necessario
     if (categoriaFiltro !== "Tutte" && data.categoria !== categoriaFiltro) return;
+
+    // Card stile menu.html
+    let prezzo = (data.prezzo || '').toString().trim();
+    if (!prezzo.includes('€')) prezzo = prezzo + ' €';
+
     const div = document.createElement('div');
-    div.className = "pizza-card";
-    div.innerHTML = `
-      <h3>${data.nome} <small>(${data.categoria || ''})</small></h3>
-      <p>${data.ingredienti}</p>
-      <p class="pizza-prezzo">€${data.prezzo}</p>
-      ${data.immagine ? `<img src="${data.immagine}" width="150">` : ''}
-      <div class="pizza-actions">
-        <button onclick="modificaPizza('${docSnap.id}', '${escapeQuotes(data.nome)}', '${escapeQuotes(data.ingredienti)}', '${escapeQuotes(data.prezzo)}', '${escapeQuotes(data.categoria || '')}')">Modifica</button>
-        <button onclick="eliminaPizza('${docSnap.id}')">Elimina</button>
-      </div>
-    `;
-    listaDiv.appendChild(div);
+div.className = "menu-card";
+div.innerHTML = `
+  ${data.immagine ? `<img src="${data.immagine}" class="menu-img" alt="${data.nome}">` : ''}
+  <div class="menu-card-content">
+    <div class="menu-card-title">${data.nome}</div>
+    ${data.ingredienti ? `<div class="menu-card-desc">${data.ingredienti}</div>` : ''}
+    <div class="menu-card-prezzo">${prezzo}</div>
+  </div>
+  <div class="pizza-actions">
+    <button onclick="modificaPizza('${docSnap.id}', '${escapeQuotes(data.nome)}', '${escapeQuotes(data.ingredienti)}', '${escapeQuotes(data.prezzo)}', '${escapeQuotes(data.categoria || '')}')">Modifica</button>
+    <button onclick="eliminaPizza('${docSnap.id}')">Elimina</button>
+  </div>
+`;
+listaDiv.appendChild(div);
   });
 }
 
