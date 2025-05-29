@@ -154,36 +154,52 @@
       }
       @media (max-width: 700px) {
         .hero-category {
-          height: 120px;
+          height: 90px;
         }
         .hero-category-title {
-          font-size: 1.1em;
-          padding: 0 0.2em;
+          font-size: 1em;
+          padding: 0.2 0.7em;
         }
         .menu2-grid {
           grid-template-columns: 1fr;
-          gap: 1.2em;
-          padding: 0 0.2em;
+          gap: 0.7em;
+          padding: 0 0.1em;
         }
         .menu2-card {
           min-height: 0;
           height: auto;
-          padding-bottom: 1em;
+          padding-bottom: 0.7em;
+          border-radius: 12px;
         }
         .menu2-img {
-          height: 120px;
-          max-width: 100vw;
+          height: 90px;
+          border-radius: 12px 12px 0 0;
         }
         .menu2-title {
-          font-size: 1.08em;
+          font-size: 1em;
+          margin: 0.7em 0 0.2em 0;
         }
         .menu2-desc {
-          font-size: 1em;
-          margin-bottom: 0.7em;
+          font-size: 0.98em;
+          margin-bottom: 0.5em;
         }
         .menu2-prezzo {
-          font-size: 1em;
-          padding: 0.15em 0.7em;
+          font-size: 0.98em;
+          padding: 0.12em 0.6em;
+          margin-bottom: 0.7em;
+        }
+        .categorie-bar {
+          position: sticky;
+          top: 0;
+          background: #fcfbe7;
+          z-index: 10;
+          padding: 0.5em 0.2em 0.5em 0.2em;
+          margin-bottom: 1em;
+          border-bottom: 1px solid #eee;
+        }
+        .cat-btn2 {
+          font-size: 0.98em;
+          padding: 0.4em 1em;
         }
       }
     </style>
@@ -206,19 +222,19 @@
       // Puoi associare immagini diverse alle categorie qui:
       const CAT_IMAGES = {
         Antipasti: "assets/crocchè.jpg",
-        "Pizze classiche": "assets/logo1.png",
+        "Pizze classiche": "assets/logo.jpg",
         "Pizze Speciali": "assets/logo.jpg",
-        Bibite: "assets/logo1.png",
-        "Birre alla spina": "assets/logo1.png",
-        "Birre artigianali": "assets/logo1.png",
-        "Vini bianchi": "assets/logo1.png",
-        "Vini rossi": "assets/logo1.png",
-        Bollicine: "assets/logo1.png",
-        Caffè: "assets/logo1.png",
-        Amari: "assets/logo1.png",
-        Liquori: "assets/logo1.png",
-        Grappa: "assets/logo1.png",
-        "Whisky & Rum": "assets/logo1.png",
+        Bibite: "assets/logo.jpg",
+        "Birre alla spina": "assets/logo.jpg",
+        "Birre artigianali": "assets/logo.jpg",
+        "Vini bianchi": "assets/logo.jpg",
+        "Vini rossi": "assets/logo.jpg",
+        Bollicine: "assets/logo.jpg",
+        Caffè: "assets/logo.jpg",
+        Amari: "assets/logo.jpg",
+        Liquori: "assets/logo.jpg",
+        Grappa: "assets/logo.jpg",
+        "Whisky & Rum": "assets/logo.jpg",
       };
 
       const CATEGORIE = Object.keys(CAT_IMAGES);
@@ -281,20 +297,22 @@
           ) {
             let prezzo = row.Prezzo.trim();
             if (!prezzo.includes("€")) prezzo = prezzo + " €";
-            html += `<div class="menu2-card">
-            ${
-              row.Immagine
-                ? `<img src="${row.Immagine}" class="menu2-img" alt="${row.Nome}">`
-                : `<img src="assets/logo1.png" class="menu2-img" alt="No image">`
-            }
-            <div class="menu2-title">${row.Nome}</div>
-            ${
-              row.Ingredienti
-                ? `<div class="menu2-desc">${row.Ingredienti}</div>`
-                : ""
-            }
-            <div class="menu2-prezzo">${prezzo}</div>
-          </div>`;
+            html += `<div class="menu2-card" onclick="showPizzaModal('${encodeURIComponent(
+              JSON.stringify(row)
+            )}')">
+        ${
+          row.Immagine
+            ? `<img src="${row.Immagine}" class="menu2-img" alt="${row.Nome}">`
+            : `<img src="assets/logo1.png" class="menu2-img" alt="No image">`
+        }
+        <div class="menu2-title">${row.Nome}</div>
+        ${
+          row.Ingredienti
+            ? `<div class="menu2-desc">${row.Ingredienti}</div>`
+            : ""
+        }
+        <div class="menu2-prezzo">${prezzo}</div>
+      </div>`;
           }
         });
         document.getElementById("menu2").innerHTML =
@@ -302,6 +320,123 @@
       }
 
       loadMenu();
+
+      window.showPizzaModal = function (rowStr) {
+        const row = JSON.parse(decodeURIComponent(rowStr));
+        document.getElementById("modalImg").src =
+          row.Immagine || "assets/logo1.png";
+        document.getElementById("modalNome").textContent = row.Nome;
+        document.getElementById("modalIngredienti").textContent =
+          row.Ingredienti;
+        document.getElementById("modalPrezzo").textContent =
+          row.Prezzo.includes("€") ? row.Prezzo : row.Prezzo + " €";
+        document.getElementById("pizzaModal").style.display = "flex";
+      };
+      document.getElementById("closePizzaModal").onclick = function () {
+        document.getElementById("pizzaModal").style.display = "none";
+      };
+      document.getElementById("pizzaModal").onclick = function (e) {
+        if (e.target === this) this.style.display = "none";
+      };
+
+      const toTopBtn = document.getElementById("toTopBtn");
+      window.addEventListener("scroll", function () {
+        toTopBtn.style.display = window.scrollY > 200 ? "block" : "none";
+      });
+      toTopBtn.onclick = () => window.scrollTo({ top: 0, behavior: "smooth" });
     </script>
+    <button
+      id="toTopBtn"
+      style="
+        display: none;
+        position: fixed;
+        bottom: 2em;
+        right: 1.2em;
+        z-index: 999;
+        background: #8eb84c;
+        color: #fff;
+        border: none;
+        border-radius: 50%;
+        width: 2.5em;
+        height: 2.5em;
+        font-size: 1.5em;
+        box-shadow: 0 2px 8px rgba(142, 184, 76, 0.18);
+        cursor: pointer;
+      "
+    >
+      &#8679;
+    </button>
   </body>
+
+  <div
+    id="pizzaModal"
+    style="
+      display: none;
+      position: fixed;
+      z-index: 1000;
+      left: 0;
+      top: 0;
+      width: 100vw;
+      height: 100vh;
+      background: rgba(0, 0, 0, 0.45);
+      align-items: center;
+      justify-content: center;
+    "
+  >
+    <div
+      id="pizzaModalContent"
+      style="
+        background: #fff;
+        border-radius: 1.2em;
+        max-width: 95vw;
+        width: 340px;
+        padding: 1.5em;
+        box-shadow: 0 8px 32px rgba(142, 184, 76, 0.18);
+        position: relative;
+        text-align: center;
+      "
+    >
+      <span
+        id="closePizzaModal"
+        style="
+          position: absolute;
+          top: 0.7em;
+          right: 1em;
+          font-size: 2em;
+          color: #8eb84c;
+          cursor: pointer;
+        "
+        >&times;</span
+      >
+      <img
+        id="modalImg"
+        src=""
+        alt=""
+        style="
+          width: 100%;
+          max-height: 180px;
+          object-fit: cover;
+          border-radius: 1em;
+          margin-bottom: 1em;
+        "
+      />
+      <div
+        id="modalNome"
+        style="
+          font-family: 'Playfair Display', serif;
+          font-size: 1.3em;
+          font-weight: bold;
+          margin-bottom: 0.5em;
+        "
+      ></div>
+      <div
+        id="modalIngredienti"
+        style="font-size: 1.05em; color: #444; margin-bottom: 1em"
+      ></div>
+      <div
+        id="modalPrezzo"
+        style="font-size: 1.1em; color: #f77f00; font-weight: bold"
+      ></div>
+    </div>
+  </div>
 </html>
