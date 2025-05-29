@@ -1,0 +1,306 @@
+<!DOCTYPE html>
+<html lang="it">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Duecento Grammi - Pizzeria Artigianale</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="icon" type="image/png" href="assets/logo1.png" />
+    <link
+      href="https://fonts.googleapis.com/css?family=Playfair+Display:700,400&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      :root {
+        --verde: #8eb84c;
+        --arancio: #f77f00;
+        --giallo: #fcfbe7;
+        --nero: #222;
+        --grigio: #f7f7f7;
+      }
+      body {
+        margin: 0;
+        font-family: "Segoe UI", Arial, sans-serif;
+        background: var(--grigio);
+        color: var(--nero);
+      }
+      header {
+        background: var(--giallo);
+        padding: 0;
+        position: relative;
+        min-height: 60vh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-direction: column;
+        overflow: hidden;
+      }
+      .hero-bg {
+        position: absolute;
+        inset: 0;
+        background: linear-gradient(120deg, #f7f7f7 0%, #fcfbe7 100%);
+        z-index: 1;
+      }
+      .hero-content {
+        position: relative;
+        z-index: 2;
+        text-align: center;
+        padding: 3em 1em 2em 1em;
+      }
+      .hero-logo {
+        width: 110px;
+        height: 110px;
+        object-fit: contain;
+        border-radius: 50%;
+        background: #fff;
+        box-shadow: 0 2px 16px rgba(142, 184, 76, 0.1);
+        margin-bottom: 1.2em;
+        border: 4px solid var(--verde);
+      }
+      .hero-title {
+        font-family: "Playfair Display", serif;
+        font-size: 2.5em;
+        color: var(--nero);
+        font-weight: 700;
+        margin: 0 0 0.2em 0;
+        letter-spacing: 2px;
+      }
+      .hero-subtitle {
+        font-size: 1.3em;
+        color: var(--arancio);
+        font-family: "Playfair Display", serif;
+        margin-bottom: 1.2em;
+        font-weight: 400;
+      }
+      .hero-btns {
+        margin-top: 2em;
+        display: flex;
+        gap: 1em;
+        justify-content: center;
+        flex-wrap: wrap;
+      }
+      .hero-btn {
+        background: var(--verde);
+        color: #fff;
+        border: none;
+        border-radius: 2em;
+        padding: 0.9em 2.2em;
+        font-size: 1.1em;
+        font-weight: bold;
+        cursor: pointer;
+        transition: background 0.2s, box-shadow 0.2s;
+        box-shadow: 0 1px 6px rgba(142, 184, 76, 0.1);
+        text-decoration: none;
+        letter-spacing: 1px;
+      }
+      .hero-btn.menu {
+        background: var(--arancio);
+      }
+      .hero-btn:hover {
+        background: #b7d97a;
+        color: var(--nero);
+      }
+      .hero-btn.menu:hover {
+        background: #ffb366;
+        color: var(--nero);
+      }
+      .hero-info {
+        margin-top: 2.5em;
+        color: #444;
+        font-size: 1.1em;
+        background: rgba(255, 255, 255, 0.7);
+        display: inline-block;
+        padding: 1em 2em;
+        border-radius: 1em;
+        box-shadow: 0 1px 6px rgba(142, 184, 76, 0.06);
+      }
+      main {
+        max-width: 900px;
+        margin: -3em auto 0 auto;
+        background: #fff;
+        border-radius: 18px;
+        box-shadow: 0 2px 16px rgba(142, 184, 76, 0.08);
+        padding: 2.5em 1.5em 2em 1.5em;
+        position: relative;
+        z-index: 3;
+      }
+      .section-title {
+        font-family: "Playfair Display", serif;
+        font-size: 2em;
+        color: var(--verde);
+        margin-top: 0;
+        margin-bottom: 0.5em;
+        text-align: center;
+        font-weight: 700;
+      }
+      .about-text {
+        font-size: 1.15em;
+        line-height: 1.7;
+        color: #333;
+        text-align: center;
+        margin-bottom: 2em;
+      }
+      .info-blocks {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 2em;
+        justify-content: center;
+        margin-bottom: 2em;
+      }
+      .info-block {
+        background: var(--giallo);
+        border-radius: 1em;
+        box-shadow: 0 1px 6px rgba(142, 184, 76, 0.06);
+        padding: 1.5em 2em;
+        min-width: 220px;
+        flex: 1 1 220px;
+        max-width: 320px;
+        text-align: center;
+        font-size: 1.1em;
+        color: #222;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 0.7em;
+      }
+      .info-block .icon {
+        font-size: 2em;
+        margin-bottom: 0.2em;
+        color: var(--arancio);
+      }
+      .gallery {
+        display: flex;
+        gap: 1em;
+        flex-wrap: wrap;
+        justify-content: center;
+        margin-bottom: 2em;
+      }
+      .gallery img {
+        width: 180px;
+        height: 120px;
+        object-fit: cover;
+        border-radius: 1em;
+        box-shadow: 0 1px 6px rgba(142, 184, 76, 0.08);
+        background: #eee;
+      }
+      footer {
+        background: var(--verde);
+        color: #fff;
+        text-align: center;
+        padding: 2em 1em 1em 1em;
+        margin-top: 3em;
+        border-radius: 18px 18px 0 0;
+        font-size: 1.1em;
+        letter-spacing: 1px;
+      }
+      @media (max-width: 700px) {
+        header {
+          min-height: 40vh;
+          padding: 1em 0.2em;
+        }
+        .hero-title {
+          font-size: 1.5em;
+        }
+        .hero-subtitle {
+          font-size: 1em;
+        }
+        main {
+          padding: 1.2em 0.3em 1em 0.3em;
+        }
+        .section-title {
+          font-size: 1.2em;
+        }
+        .info-blocks {
+          flex-direction: column;
+          gap: 1em;
+        }
+        .gallery img {
+          width: 98vw;
+          max-width: 320px;
+          height: 90px;
+        }
+        footer {
+          font-size: 1em;
+          padding: 1.2em 0.5em 0.7em 0.5em;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <div class="hero-bg"></div>
+      <div class="hero-content">
+        <img
+          src="assets/logo1.png"
+          alt="Logo Duecento Grammi"
+          class="hero-logo"
+        />
+        <div class="hero-title">Duecento Grammi</div>
+        <div class="hero-subtitle">Pizzeria Artigianale</div>
+        <div class="hero-btns">
+          <a href="menu2.html" class="hero-btn menu">Scopri il Menù</a>
+          <a href="tel:0823833221" class="hero-btn">Chiama Ora</a>
+        </div>
+        <div class="hero-info">
+          📍 Viale Europa, 30 &nbsp; | &nbsp; 🕖 Mar-Dom 19:00-00:00 &nbsp; |
+          &nbsp; 📞 0823 833 221
+        </div>
+      </div>
+    </header>
+    <main>
+      <div class="section-title">Una pizza fatta con amore</div>
+      <div class="about-text">
+        Ingredienti selezionati, impasto da 200 grammi, passione e
+        tradizione.<br />
+        Vieni a provare la vera pizza artigianale a <b>Duecento Grammi</b>!
+      </div>
+      <div class="info-blocks">
+        <div class="info-block">
+          <span class="icon">🍕</span>
+          <b>Impasto da 200g</b>
+          <span>Il nostro segreto per una pizza soffice e gustosa.</span>
+        </div>
+        <div class="info-block">
+          <span class="icon">🥗</span>
+          <b>Ingredienti freschi</b>
+          <span>Solo materie prime selezionate e di qualità.</span>
+        </div>
+        <div class="info-block">
+          <span class="icon">👨‍🍳</span>
+          <b>Passione e tradizione</b>
+          <span>Ogni pizza è preparata con cura artigianale.</span>
+        </div>
+      </div>
+      <div class="section-title">Galleria</div>
+      <div class="gallery">
+        <img src="assets/Centro.png" alt="Locale" />
+        <img src="assets/logo1.png" alt="Logo" />
+        <img src="assets/logo.jpg" alt="Pizza" />
+      </div>
+      <div class="section-title">Dove siamo</div>
+      <div class="info-blocks">
+        <div class="info-block">
+          <span class="icon">📍</span>
+          <b>Indirizzo</b>
+          <span>Viale Europa, 30</span>
+        </div>
+        <div class="info-block">
+          <span class="icon">🕖</span>
+          <b>Orari</b>
+          <span>Mar-Dom 19:00 - 00:00</span>
+        </div>
+        <div class="info-block">
+          <span class="icon">📞</span>
+          <b>Prenotazioni</b>
+          <span
+            ><a
+              href="tel:0823833221"
+              style="color: inherit; text-decoration: underline"
+              >0823 833 221</a
+            ></span
+          >
+        </div>
+      </div>
+    </main>
+    <footer>© 2025 Duecento Grammi - Tutti i diritti riservati</footer>
+  </body>
+</html>

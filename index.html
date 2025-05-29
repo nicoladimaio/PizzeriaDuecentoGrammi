@@ -1,229 +1,240 @@
 <!DOCTYPE html>
 <html lang="it">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Duecento Grammi - Pizzeria</title>
-  <link rel="icon" type="image/png" href="assets/logo1.png">
-  <style>
-   body {
-    font-family: 'Segoe UI', sans-serif;
-    margin: 0;
-    background-color: rgb(252, 224, 114); /* giallo paglierino */
-    color: #333;
-  }
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Duecento Grammi - Pizzeria</title>
+    <link rel="icon" type="image/png" href="assets/logo1.png" />
+    <style>
+      body {
+        font-family: "Segoe UI", sans-serif;
+        margin: 0;
+        background-color: rgb(252, 224, 114); /* giallo paglierino */
+        color: #333;
+      }
 
-    header {
-      background-color: #8eb84c; /* verde chiaro */
-      color: #222;
-      text-align: left;
-      padding: 0.7em 2em;
-      display: flex;
-      align-items: center;
-      gap: 1em;
-      min-height: 56px;
-    }
+      header {
+        background-color: #8eb84c; /* verde chiaro */
+        color: #222;
+        text-align: left;
+        padding: 0.7em 2em;
+        display: flex;
+        align-items: center;
+        gap: 1em;
+        min-height: 56px;
+      }
 
-    header img {
-      height: 40px;
-      width: auto;
-      margin-right: 1em;
-    }
+      header img {
+        height: 40px;
+        width: auto;
+        margin-right: 1em;
+      }
 
-    header h1 {
-      font-size: 1.5em;
-      margin: 0;
-      font-weight: bold;
-      letter-spacing: 1px;
-    }
+      header h1 {
+        font-size: 1.5em;
+        margin: 0;
+        font-weight: bold;
+        letter-spacing: 1px;
+      }
 
-    header p {
-      margin: 0 0 0 1em;
-      font-size: 1em;
-      color: #333;
-    }
+      header p {
+        margin: 0 0 0 1em;
+        font-size: 1em;
+        color: #333;
+      }
 
-    footer {
-      background-color: #8eb84c;
-      color: white;
-      text-align: center;
-      padding: 1.5em 1em;
-    }
-
-    section {
-      padding: 2em 1em;
-      max-width: 800px;
-      margin: auto;
-    }
-
-    h1, h2 {
-      margin-bottom: 0.3em;
-    }
-
-    .btn {
-      background-color: #f77f00;
-      color: white;
-      padding: 0.8em 1.2em;
-      text-decoration: none;
-      border-radius: 5px;
-      display: inline-block;
-      margin-top: 1em;
-    }
-
-    .info {
-      line-height: 1.6;
-      font-size: 1.1em;
-    }
-    nav {
-  flex-wrap: wrap;
-  font-size: 1.1em;
-}
-nav a {
-  padding: 0.3em 1em;
-  border-radius: 2em;
-  transition: background 0.2s;
-}
-nav a:hover {
-  background: #f77f00;
-  color: #fff;
-}
-@media (max-width:600px) {
-    header {
-    flex-direction: column;
-    align-items: flex-start;
-    padding: 1em;
-  }
-  header img {
-    margin-bottom: 0.5em;
-  }
-  section {
-    padding: 1em 0.5em;
-  }
-  nav {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 0.5em;
-  }
-}
-
-    @media (max-width: 600px) {
-      section {
+      footer {
+        background-color: #8eb84c;
+        color: white;
+        text-align: center;
         padding: 1.5em 1em;
       }
-    }
-    .main-nav {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  gap: 1em;
-  background: #8eb84c;
-  padding: 0.5em 1em;
-  border-radius: 2em;
-  margin-bottom: 1em;
-}
-.main-nav a {
-  color: #fff;
-  text-decoration: none;
-  font-weight: bold;
-  padding: 0.3em 1em;
-  border-radius: 2em;
-  transition: background 0.2s;
-}
-.main-nav a:hover {
-  background: #f77f00;
-  color: #fff;
-}
-.user-icon {
-  position: absolute;
-  top: 24px;
-  right: 24px;
-  z-index: 100;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: #fff;
-  border-radius: 50%;
-  width: 38px;
-  height: 38px;
-  box-shadow: 0 1px 6px rgba(142,184,76,0.10);
-  transition: box-shadow 0.2s;
-  text-decoration: none;
-}
-.user-icon:hover {
-  box-shadow: 0 2px 12px rgba(142,184,76,0.18);
-  background: #f3fbe7;
-}
-.user-icon svg {
-  width: 24px;
-  height: 24px;
-  display: block;
-}
-@media (max-width:600px) {
-  .main-nav {
-    flex-direction: row; /* Mantieni orizzontale anche su mobile */
-    gap: 0.5em;
-    padding: 0.3em 0.5em;
-  }
-  .user-icon {
-    top: 10px;
-    right: 10px;
-    width: 32px;
-    height: 32px;
-  }
-  .user-icon svg {
-    width: 20px;
-    height: 20px;
-  }
-}
-  </style>
-</head>
-<body>
 
-  <header>
-    
-   <!-- <nav style="background:#8eb84c; padding:0.5em 1em; display:flex; align-items:center; gap:1em;">
+      section {
+        padding: 2em 1em;
+        max-width: 800px;
+        margin: auto;
+      }
+
+      h1,
+      h2 {
+        margin-bottom: 0.3em;
+      }
+
+      .btn {
+        background-color: #f77f00;
+        color: white;
+        padding: 0.8em 1.2em;
+        text-decoration: none;
+        border-radius: 5px;
+        display: inline-block;
+        margin-top: 1em;
+      }
+
+      .info {
+        line-height: 1.6;
+        font-size: 1.1em;
+      }
+      nav {
+        flex-wrap: wrap;
+        font-size: 1.1em;
+      }
+      nav a {
+        padding: 0.3em 1em;
+        border-radius: 2em;
+        transition: background 0.2s;
+      }
+      nav a:hover {
+        background: #f77f00;
+        color: #fff;
+      }
+      @media (max-width: 600px) {
+        header {
+          flex-direction: column;
+          align-items: flex-start;
+          padding: 1em;
+        }
+        header img {
+          margin-bottom: 0.5em;
+        }
+        section {
+          padding: 1em 0.5em;
+        }
+        nav {
+          flex-direction: column;
+          align-items: flex-start;
+          gap: 0.5em;
+        }
+      }
+
+      @media (max-width: 600px) {
+        section {
+          padding: 1.5em 1em;
+        }
+      }
+      .main-nav {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        gap: 1em;
+        background: #8eb84c;
+        padding: 0.5em 1em;
+        border-radius: 2em;
+        margin-bottom: 1em;
+      }
+      .main-nav a {
+        color: #fff;
+        text-decoration: none;
+        font-weight: bold;
+        padding: 0.3em 1em;
+        border-radius: 2em;
+        transition: background 0.2s;
+      }
+      .main-nav a:hover {
+        background: #f77f00;
+        color: #fff;
+      }
+      .user-icon {
+        position: absolute;
+        top: 24px;
+        right: 24px;
+        z-index: 100;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: #fff;
+        border-radius: 50%;
+        width: 38px;
+        height: 38px;
+        box-shadow: 0 1px 6px rgba(142, 184, 76, 0.1);
+        transition: box-shadow 0.2s;
+        text-decoration: none;
+      }
+      .user-icon:hover {
+        box-shadow: 0 2px 12px rgba(142, 184, 76, 0.18);
+        background: #f3fbe7;
+      }
+      .user-icon svg {
+        width: 24px;
+        height: 24px;
+        display: block;
+      }
+      @media (max-width: 600px) {
+        .main-nav {
+          flex-direction: row; /* Mantieni orizzontale anche su mobile */
+          gap: 0.5em;
+          padding: 0.3em 0.5em;
+        }
+        .user-icon {
+          top: 10px;
+          right: 10px;
+          width: 32px;
+          height: 32px;
+        }
+        .user-icon svg {
+          width: 20px;
+          height: 20px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <!-- <nav style="background:#8eb84c; padding:0.5em 1em; display:flex; align-items:center; gap:1em;">
   <a href="index.html" style="color:#fff; text-decoration:none; font-weight:bold;">Home</a>
   <a href="menu.html" style="color:#fff; text-decoration:none; font-weight:bold;">Menu</a> -->
-<!-- </nav> -->
- <nav class="main-nav">
-    <img src="assets/logo1.png" alt="Logo Duecento Grammi" />
-  <a href="index.html">Home</a>
-  <a href="menu.html">Menu</a>
-      <a href="login.html" class="user-icon" title="Area riservata">
-  <svg width="28" height="28" viewBox="0 0 24 24" fill="#8eb84c" xmlns="http://www.w3.org/2000/svg">
-    <circle cx="12" cy="8" r="4"/>
-    <path d="M4 20c0-2.7 3.6-4 8-4s8 1.3 8 4" fill="none" stroke="#8eb84c" stroke-width="2"/>
-  </svg>
-</a>
-</nav>
-  </header>
+      <!-- </nav> -->
+      <nav class="main-nav">
+        <img src="assets/logo1.png" alt="Logo Duecento Grammi" />
+        <a href="index.html">Home</a>
+        <a href="menu2.html">Menu</a>
+        <a href="login.html" class="user-icon" title="Area riservata">
+          <svg
+            width="28"
+            height="28"
+            viewBox="0 0 24 24"
+            fill="#8eb84c"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <circle cx="12" cy="8" r="4" />
+            <path
+              d="M4 20c0-2.7 3.6-4 8-4s8 1.3 8 4"
+              fill="none"
+              stroke="#8eb84c"
+              stroke-width="2"
+            />
+          </svg>
+        </a>
+      </nav>
+    </header>
 
+    <section style="text-align: center">
+      <img
+        src="assets/Centro.png"
+        alt="Centro"
+        style="max-width: 100%; height: auto"
+      />
+    </section>
 
-  <section style="text-align: center;">
-  <img src="assets/Centro.png" alt="Centro" style="max-width: 100%; height: auto;" />
-</section>
+    <section>
+      <h2>Chi siamo</h2>
+      <p>
+        Una pizza fatta con amore, ingredienti selezionati e tanta passione.
+        Vieni a provare l’impasto da 200 grammi che dà il nome alla nostra
+        pizzeria!
+      </p>
+    </section>
 
-  <section>
-    <h2>Chi siamo</h2>
-    <p>Una pizza fatta con amore, ingredienti selezionati e tanta passione. Vieni a provare l’impasto da 200 grammi che dà il nome alla nostra pizzeria!</p>
-  </section>
+    <section>
+      <h2>Dove siamo</h2>
+      <p class="info">
+        📍 Viale Europa, 30<br />
+        📞 <a href="tel:0823833221">0823 833 221</a><br />
+        🕖 Aperto da martedì a domenica<br />
+        ⏰ Dalle 19:00 alle 00:00
+      </p>
+    </section>
 
-  <section>
-    <h2>Dove siamo</h2>
-    <p class="info">
-      📍 Viale Europa, 30<br />
-      📞 <a href="tel:0823833221">0823 833 221</a><br />
-      🕖 Aperto da martedì a domenica<br />
-      ⏰ Dalle 19:00 alle 00:00
-    </p>
-  </section>
-
- 
-
-  <footer>
-    © 2025 Duecento Grammi - Tutti i diritti riservati
-  </footer>
-
-</body>
-
+    <footer>© 2025 Duecento Grammi - Tutti i diritti riservati</footer>
+  </body>
 </html>

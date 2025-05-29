@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="it">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Menù Duecento Grammi</title>
+    <link rel="icon" type="image/png" href="assets/logo1.png" />
+    <link
+      href="https://fonts.googleapis.com/css?family=Playfair+Display:700,400&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      body {
+        background: #fcfbe7;
+        font-family: "Segoe UI", Arial, sans-serif;
+        margin: 0;
+        color: #222;
+      }
+      .menu2-header {
+        text-align: center;
+        font-family: "Playfair Display", serif;
+        font-size: 2.2em;
+        color: #8eb84c;
+        font-weight: 700;
+        letter-spacing: 1px;
+        margin: 1.2em 0 0.7em 0;
+      }
+      .categorie-bar {
+        display: flex;
+        gap: 0.7em;
+        overflow-x: auto;
+        padding: 0.7em 0.5em 1.2em 0.5em;
+        margin: 0 auto 1.5em auto;
+        max-width: 900px;
+        scrollbar-width: thin;
+        -webkit-overflow-scrolling: touch;
+      }
+      .cat-btn2 {
+        background: #8eb84c;
+        color: #fff;
+        border: none;
+        border-radius: 2em;
+        padding: 0.6em 1.5em;
+        font-size: 1.05em;
+        font-family: inherit;
+        font-weight: bold;
+        cursor: pointer;
+        transition: background 0.2s, box-shadow 0.2s;
+        box-shadow: 0 1px 4px rgba(142, 184, 76, 0.08);
+        white-space: nowrap;
+      }
+      .cat-btn2.active,
+      .cat-btn2:hover {
+        background: #f77f00;
+        color: #fff;
+        box-shadow: 0 4px 16px rgba(247, 127, 0, 0.13);
+      }
+      .menu2-grid {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 2em;
+        max-width: 1100px;
+        margin: 0 auto 2em auto;
+        padding: 0 1em;
+      }
+      .menu2-card {
+        background: #fff;
+        border-radius: 18px;
+        box-shadow: 0 2px 12px rgba(142, 184, 76, 0.1);
+        display: flex;
+        flex-direction: column;
+        align-items: stretch;
+        transition: box-shadow 0.22s, transform 0.18s;
+        padding: 0;
+        position: relative;
+        min-height: 410px;
+        height: 410px;
+        overflow: hidden;
+      }
+      .menu2-card:hover {
+        box-shadow: 0 8px 32px rgba(142, 184, 76, 0.18),
+          0 2px 12px rgba(247, 127, 0, 0.08);
+        transform: translateY(-4px) scale(1.025);
+      }
+      .menu2-img {
+        width: 100%;
+        height: 180px;
+        object-fit: cover;
+        border-radius: 18px 18px 0 0;
+        background: #eee;
+        box-shadow: none;
+        margin-bottom: 0;
+        display: block;
+      }
+      .menu2-title {
+        font-family: "Playfair Display", serif;
+        font-size: 1.25em;
+        font-weight: bold;
+        color: #222;
+        margin: 1em 0 0.3em 0;
+        text-align: center;
+        letter-spacing: 1px;
+      }
+      .menu2-desc {
+        font-size: 1.08em;
+        color: #444;
+        text-align: center;
+        margin: 0 1em 1.2em 1em;
+        min-height: 2.5em;
+      }
+      .menu2-prezzo {
+        font-weight: bold;
+        color: #f77f00;
+        font-size: 1.15em;
+        margin-top: auto;
+        text-align: center;
+        letter-spacing: 1px;
+        background: #fcfbe7;
+        border-radius: 1em;
+        padding: 0.2em 1.1em;
+        display: inline-block;
+        margin-bottom: 1.2em;
+        align-self: center;
+      }
+      @media (max-width: 1000px) {
+        .menu2-grid {
+          grid-template-columns: repeat(2, 1fr);
+        }
+      }
+      @media (max-width: 700px) {
+        .menu2-header {
+          font-size: 1.3em;
+          margin: 1em 0 0.7em 0;
+        }
+        .menu2-grid {
+          grid-template-columns: 1fr;
+          gap: 1.2em;
+          padding: 0 0.2em;
+        }
+        .menu2-card {
+          min-height: 0;
+          height: auto;
+          padding-bottom: 1em;
+        }
+        .menu2-img {
+          height: 120px;
+          max-width: 100vw;
+        }
+        .menu2-title {
+          font-size: 1.08em;
+        }
+        .menu2-desc {
+          font-size: 1em;
+          margin-bottom: 0.7em;
+        }
+        .menu2-prezzo {
+          font-size: 1em;
+          padding: 0.15em 0.7em;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="menu2-header">Menù Duecento Grammi</div>
+    <div id="categorie2" class="categorie-bar"></div>
+    <div id="menu2" class="menu2-grid"></div>
+
+    <script type="module">
+      import { db } from "./assets/js/firebase.js";
+      import {
+        collection,
+        getDocs,
+      } from "https://www.gstatic.com/firebasejs/10.11.1/firebase-firestore.js";
+
+      const CATEGORIE = [
+        "Antipasti",
+        "Pizze classiche",
+        "Pizze Speciali",
+        "Bibite",
+        "Birre alla spina",
+        "Birre artigianali",
+        "Vini bianchi",
+        "Vini rossi",
+        "Bollicine",
+        "Caffè",
+        "Amari",
+        "Liquori",
+        "Grappa",
+        "Whisky & Rum",
+      ];
+
+      let menuData = [];
+      let categoriaFiltro = CATEGORIE[0];
+
+      function renderCategorieMenu() {
+        const categorieDiv = document.getElementById("categorie2");
+        categorieDiv.innerHTML = "";
+        CATEGORIE.forEach((cat) => {
+          const btn = document.createElement("button");
+          btn.type = "button";
+          btn.className =
+            "cat-btn2" + (cat === categoriaFiltro ? " active" : "");
+          btn.textContent = cat;
+          btn.onclick = () => {
+            categoriaFiltro = cat;
+            renderCategorieMenu();
+            renderMenu();
+          };
+          categorieDiv.appendChild(btn);
+        });
+      }
+
+      async function loadMenu() {
+        menuData = [];
+        const querySnapshot = await getDocs(collection(db, "pizze"));
+        querySnapshot.forEach((doc) => {
+          const data = doc.data();
+          menuData.push({
+            Nome: data.nome || "",
+            Prezzo: data.prezzo || "",
+            Ingredienti: data.ingredienti || "",
+            Categoria: data.categoria || "Pizze classiche",
+            Immagine: data.immagine || "",
+          });
+        });
+        renderCategorieMenu();
+        renderMenu();
+      }
+
+      function renderMenu() {
+        let html = "";
+        menuData.forEach((row) => {
+          const categoria = (row.Categoria || "").trim().toLowerCase();
+          const filtro = categoriaFiltro.trim().toLowerCase();
+          if (
+            row.Nome &&
+            row.Prezzo &&
+            (filtro === "tutte" || categoria === filtro)
+          ) {
+            let prezzo = row.Prezzo.trim();
+            if (!prezzo.includes("€")) prezzo = prezzo + " €";
+            html += `<div class="menu2-card">
+            ${
+              row.Immagine
+                ? `<img src="${row.Immagine}" class="menu2-img" alt="${row.Nome}">`
+                : `<img src="assets/logo1.png" class="menu2-img" alt="No image">`
+            }
+            <div class="menu2-title">${row.Nome}</div>
+            ${
+              row.Ingredienti
+                ? `<div class="menu2-desc">${row.Ingredienti}</div>`
+                : ""
+            }
+            <div class="menu2-prezzo">${prezzo}</div>
+          </div>`;
+          }
+        });
+        document.getElementById("menu2").innerHTML =
+          html || '<p style="text-align:center;">Nessun elemento trovato.</p>';
+      }
+
+      loadMenu();
+    </script>
+  </body>
+</html>
