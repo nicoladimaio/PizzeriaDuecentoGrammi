@@ -42,15 +42,16 @@
         height: 64px;
         background: linear-gradient(
           180deg,
-          rgba(0, 0, 0, 0.82) 60%,
+          rgba(0, 0, 0, 0.82) 20%,
           rgba(0, 0, 0, 0.12) 100%
         );
         box-shadow: 0 8px 32px rgba(0, 0, 0, 0.18);
         z-index: 100;
         display: flex;
         align-items: center;
+        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.18);
         justify-content: center;
-        transition: top 0.4s cubic-bezier(0.4, 1, 0.7, 1);
+        transition: top 0.38s cubic-bezier(0.4, 1, 0.7, 1), background 0.38s;
       }
       .navbar.hide {
         top: -80px;
@@ -286,7 +287,6 @@
         font-weight: 400;
         letter-spacing: 0.08em;
         color: #fff;
-        opacity: 0.85;
         margin-bottom: 2em;
         background: none;
         padding: 0.2em 1.5em 0.5em 1.5em;
@@ -457,13 +457,14 @@
       @media (max-width: 700px) {
         .navbar {
           height: 48px;
+          transition: top 0.38s cubic-bezier(0.4, 1, 0.7, 1);
         }
         .navbar-title {
           font-size: 1.1em;
           padding: 0.1em 0.5em;
         }
         .navbar.hide {
-          top: -100%; /* nascondi la navbar mobile fuori dallo schermo */
+          top: -60px; /* nascondi la navbar mobile fuori dallo schermo */
         }
         .hero-slider {
           height: 100vh;
@@ -525,8 +526,12 @@
           padding: 0.7em 0 0.5em 0;
         }
         .hero-slider-title {
-          font-size: 1.5em;
-          line-height: 1.15;
+          font-size: 2.8em;
+          width: 100vw;
+          max-width: 100vw;
+          padding: 0.1em 0;
+          line-height: 1.1;
+          letter-spacing: 0.08em;
         }
         .hero-slider-title .title-line {
           display: block;
@@ -620,6 +625,7 @@
       const navbar = document.getElementById("mainNavbar");
       window.addEventListener("scroll", function () {
         const curr = window.scrollY;
+        // Mostra la navbar se sei in cima o stai scrollando verso l'alto
         if (curr === 0) {
           navbar.classList.remove("hide");
         } else {
