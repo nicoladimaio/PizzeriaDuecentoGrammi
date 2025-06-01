@@ -1,0 +1,654 @@
+<!DOCTYPE html>
+<html lang="it">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Menù Duecento Grammi</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="icon" type="image/png" href="assets/logo1.png" />
+    <link
+      href="https://fonts.googleapis.com/css?family=Playfair+Display:700,400&display=swap"
+      rel="stylesheet"
+    />
+    <link
+      href="https://fonts.googleapis.com/css?family=Cormorant+Garamond:400,700&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      :root {
+        --verde: #8eb84c;
+        --arancio: #f77f00;
+        --giallo: #fcfbe7;
+        --nero: #222;
+        --grigio: #f7f7f7;
+        --oro: #ffe082;
+        --oro-hover: #ffd54f;
+      }
+      body {
+        margin: 0;
+        font-family: "Segoe UI", Arial, sans-serif;
+        background: var(--grigio);
+        color: var(--nero);
+      }
+      .navbar {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        height: 64px;
+        background: linear-gradient(
+          180deg,
+          rgba(0, 0, 0, 0.82) 20%,
+          rgba(0, 0, 0, 0.12) 100%
+        );
+        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.18);
+        z-index: 100;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition: top 0.38s cubic-bezier(0.4, 1, 0.7, 1), background 0.38s;
+      }
+      .navbar.hide {
+        top: -80px;
+      }
+      .navbar-title {
+        color: #fff;
+        font-family: "Cormorant Garamond", serif;
+        font-size: 1em;
+        font-weight: 400;
+        letter-spacing: 0.18em;
+        text-transform: uppercase;
+        text-shadow: 0 4px 24px rgba(0, 0, 0, 0.45),
+          0 1px 4px rgba(0, 0, 0, 0.18);
+        text-align: center;
+        cursor: pointer;
+        user-select: none;
+        transition: color 0.18s;
+        line-height: 1.1;
+        padding: 0.1em 1.2em;
+        border-radius: 0;
+        display: inline-block;
+        text-decoration: none;
+        background: none;
+        position: relative;
+        overflow: hidden;
+        z-index: 1;
+      }
+      .hero-category-hero {
+        position: relative;
+        width: 100vw;
+        height: 180px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        overflow: hidden;
+        z-index: 1;
+      }
+      .hero-category-bg {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        filter: blur(2px) brightness(0.7);
+        z-index: 1;
+        transition: background-image 0.5s;
+      }
+      .hero-category-title {
+        position: relative;
+        z-index: 2;
+        color: #fff;
+        font-family: "Playfair Display", serif;
+        font-size: 2.2em;
+        font-weight: 700;
+        text-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
+        letter-spacing: 2px;
+        text-align: center;
+        background: rgba(0, 0, 0, 0.25);
+        padding: 0.3em 1.2em;
+        border-radius: 1em;
+      }
+      .categorie-bar {
+        display: flex;
+        gap: 0.2em;
+        overflow-x: auto;
+        width: 100vw;
+        max-width: 100vw;
+        padding: 1.2em 0 1.2em 0;
+        margin: 0 auto 1.5em auto;
+        scrollbar-width: none;
+        -webkit-overflow-scrolling: touch;
+        background: none;
+        position: sticky;
+        top: 0px;
+        background: rgba(255, 255, 255, 0.92) !important;
+        opacity: 0.95 !important;
+        z-index: 200;
+        border-bottom: none;
+        border-radius: 0;
+      }
+      .categorie-bar::-webkit-scrollbar {
+        display: none;
+      }
+      .cat-btn4 {
+        background: none;
+        color: #222 !important;
+        border: none;
+        border-radius: 0;
+        padding: 0.3em 0.7em;
+        font-size: 0.82em;
+        font-family: "Cormorant Garamond", serif;
+        font-weight: 600;
+        cursor: pointer;
+        transition: color 0.2s;
+        white-space: nowrap;
+        position: relative;
+        outline: none;
+        text-transform: uppercase;
+        letter-spacing: 0.11em;
+      }
+      .cat-btn4.active,
+      .cat-btn4:focus,
+      .cat-btn4:hover {
+        color: #222 !important;
+      }
+      .cat-btn4::after {
+        content: "";
+        display: none;
+        position: absolute;
+        left: 50%;
+        bottom: 0.2em;
+        transform: translateX(-50%);
+        width: 0;
+        height: 3px;
+      }
+      .cat-btn4.active::after,
+      .cat-btn4:hover::after,
+      .cat-btn4:focus::after {
+        display: block;
+        width: 100%;
+        left: 0;
+        transform: none;
+        height: 3px;
+        background: linear-gradient(
+          to right,
+          rgba(255, 224, 130, 0) 0%,
+          #bfa13a 30%,
+          #ffe082 50%,
+          #bfa13a 70%,
+          rgba(255, 224, 130, 0) 100%
+        );
+        border-radius: 2px;
+        margin-top: 0.2em;
+        transition: width 0.2s;
+        position: absolute;
+        bottom: 0.2em;
+        content: "";
+      }
+      .menu4-grid {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 2em;
+        max-width: 1100px;
+        margin: 0 auto 2em auto;
+        padding: 0 1em;
+      }
+      .menu4-card {
+        background: #fff;
+        border-radius: 18px;
+        box-shadow: 0 2px 12px rgba(142, 184, 76, 0.1);
+        display: flex;
+        flex-direction: column;
+        align-items: stretch;
+        transition: box-shadow 0.22s, transform 0.18s;
+        padding: 0;
+        position: relative;
+        min-height: 410px;
+        height: 410px;
+        overflow: hidden;
+      }
+      .menu4-card:hover {
+        box-shadow: 0 8px 32px rgba(142, 184, 76, 0.18),
+          0 2px 12px rgba(247, 127, 0, 0.08);
+        transform: translateY(-4px) scale(1.025);
+      }
+      .menu4-img {
+        width: 100%;
+        height: 180px;
+        object-fit: cover;
+        border-radius: 18px 18px 0 0;
+        background: #eee;
+        box-shadow: none;
+        margin-bottom: 0;
+        display: block;
+      }
+      .menu4-title {
+        font-family: "Playfair Display", serif;
+        font-size: 1.25em;
+        font-weight: bold;
+        color: #222;
+        margin: 1em 0 0.3em 0;
+        text-align: center;
+        letter-spacing: 1px;
+      }
+      .menu4-desc {
+        font-size: 1.08em;
+        color: #444;
+        text-align: center;
+        margin: 0 1em 1.2em 1em;
+        min-height: 2.5em;
+      }
+      .pizza-loader img {
+        width: 80px;
+        height: 80px;
+        /* animation: pizza-spin 1.2s linear infinite; */
+        /* border-radius: 50%;
+        box-shadow: 0 2px 12px rgba(142, 184, 76, 0.13); */
+      }
+      @keyframes pizza-spin {
+        100% {
+          transform: rotate(360deg);
+        }
+      }
+      .menu4-prezzo {
+        font-weight: bold;
+        color: #f77f00;
+        font-size: 1.15em;
+        margin-top: auto;
+        text-align: center;
+        letter-spacing: 1px;
+        background: #fcfbe7;
+        border-radius: 1em;
+        padding: 0.2em 1.1em;
+        display: inline-block;
+        margin-bottom: 1.2em;
+        align-self: center;
+      }
+      @media (max-width: 1000px) {
+        .menu4-grid {
+          grid-template-columns: repeat(2, 1fr);
+        }
+      }
+      @media (max-width: 700px) {
+        .navbar {
+          height: 48px;
+        }
+        .hero-category-hero {
+          height: 110px;
+          padding-top: 48px;
+          margin-top: 0;
+        }
+        .hero-category-title {
+          font-size: 1.1em;
+          padding: 0.2em 0.7em;
+        }
+        .categorie-bar {
+          top: 0px;
+          padding: 0.5em 0.2em 0.5em 0.2em;
+          margin-bottom: 1em;
+          border-radius: 0 0 0.7em 0.7em;
+        }
+        .cat-btn4 {
+          font-size: 0.98em;
+          padding: 0.4em 1em;
+        }
+        .menu4-grid {
+          grid-template-columns: 1fr;
+          gap: 0.7em;
+          padding: 0 0.1em;
+        }
+        .menu4-card {
+          min-height: 0;
+          height: auto;
+          padding-bottom: 0.7em;
+          border-radius: 12px;
+        }
+        .menu4-img {
+          height: 90px;
+          border-radius: 12px 12px 0 0;
+        }
+        .menu4-title {
+          font-size: 1em;
+          margin: 0.7em 0 0.2em 0;
+        }
+        .menu4-desc {
+          font-size: 0.98em;
+          margin-bottom: 0.5em;
+        }
+        .menu4-prezzo {
+          font-size: 0.98em;
+          padding: 0.12em 0.6em;
+          margin-bottom: 0.7em;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div
+      id="loader"
+      style="
+        position: fixed;
+        left: 0;
+        top: 0;
+        width: 100vw;
+        height: 100vh;
+        background: #fff;
+        z-index: 9999;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      "
+    >
+      <div class="pizza-loader">
+        <img src="assets/loader.gif" alt="Pizza Loader" />
+      </div>
+    </div>
+    <nav class="navbar" id="mainNavbar">
+      <a href="landing3.html" class="navbar-title"
+        ><span>Duecento Grammi</span></a
+      >
+    </nav>
+    <div id="heroCat" class="hero-category-hero">
+      <img
+        id="heroCatImg"
+        class="hero-category-bg"
+        src="assets/crocchè.jpg"
+        alt="Categoria"
+      />
+      <div id="heroCatTitle" class="hero-category-title">Antipasti</div>
+    </div>
+    <div id="categorie4" class="categorie-bar"></div>
+    <div id="menu4" class="menu4-grid"></div>
+
+    <script type="module">
+      // Navbar hide on scroll (come landing3.html)
+      let lastScroll = 0;
+      const navbar = document.getElementById("mainNavbar");
+      window.addEventListener("scroll", function () {
+        const curr = window.scrollY;
+        if (curr === 0) {
+          navbar.classList.remove("hide");
+        } else {
+          navbar.classList.add("hide");
+        }
+        lastScroll = curr;
+      });
+
+      // Categorie e immagini di copertina
+      const CAT_IMAGES = {
+        Antipasti: "assets/crocchè.jpg",
+        "Pizze classiche": "assets/pizze_classiche.jpg",
+        "Pizze Speciali": "assets/interni.jpg",
+        Bibite: "assets/interni.jpg",
+        "Birre alla spina": "assets/interni.jpg",
+        "Birre artigianali": "assets/interni.jpg",
+        "Vini bianchi": "assets/interni.jpg",
+        "Vini rossi": "assets/interni.jpg",
+        Bollicine: "assets/interni.jpg",
+        Caffè: "assets/interni.jpg",
+        Amari: "assets/interni.jpg",
+        Liquori: "assets/interni.jpg",
+        Grappa: "assets/interni.jpg",
+        "Whisky & Rum": "assets/interni.jpg",
+      };
+      const CATEGORIE = Object.keys(CAT_IMAGES);
+
+      // Firestore import dinamico
+      import { db } from "./assets/js/firebase.js";
+      import {
+        collection,
+        getDocs,
+      } from "https://www.gstatic.com/firebasejs/10.11.1/firebase-firestore.js";
+
+      let menuData = [];
+      let categoriaFiltro = CATEGORIE[0];
+
+      function getQueryParam(name) {
+        const url = new URL(window.location.href);
+        return url.searchParams.get(name);
+      }
+      function normalizeCat(str) {
+        return (str || "").trim().toLowerCase();
+      }
+      const catParam = getQueryParam("cat");
+      if (catParam) {
+        const found = CATEGORIE.find(
+          (cat) => normalizeCat(cat) === normalizeCat(catParam)
+        );
+        if (found) categoriaFiltro = found;
+      }
+
+      function scrollCategoriaAttivaInCentro() {
+        const bar = document.getElementById("categorie4");
+        const active = bar.querySelector(".cat-btn4.active");
+        if (active) {
+          const barRect = bar.getBoundingClientRect();
+          const btnRect = active.getBoundingClientRect();
+          // Calcola lo scroll per centrare il bottone attivo
+          const scrollLeft =
+            active.offsetLeft - bar.offsetWidth / 2 + active.offsetWidth / 2;
+          bar.scrollTo({ left: scrollLeft, behavior: "smooth" });
+        }
+      }
+
+      function renderCategorieMenu() {
+        const categorieDiv = document.getElementById("categorie4");
+        categorieDiv.innerHTML = "";
+        CATEGORIE.forEach((cat) => {
+          const btn = document.createElement("button");
+          btn.type = "button";
+          btn.className =
+            "cat-btn4" + (cat === categoriaFiltro ? " active" : "");
+          btn.textContent = cat;
+          btn.onclick = () => {
+            const url = new URL(window.location);
+            url.searchParams.set("cat", cat);
+            window.history.replaceState({}, "", url);
+            categoriaFiltro = cat;
+            updateHero();
+            renderCategorieMenu();
+            enableCategorieDrag();
+            scrollCategoriaAttivaInCentro();
+            renderMenu();
+          };
+          categorieDiv.appendChild(btn);
+        });
+      }
+
+      // ...existing code...
+      function enableCategorieDrag() {
+        const bar = document.getElementById("categorie4");
+        let isDown = false,
+          startX,
+          scrollLeft;
+        bar.addEventListener("mousedown", (e) => {
+          isDown = true;
+          startX = e.pageX - bar.offsetLeft;
+          scrollLeft = bar.scrollLeft;
+          bar.classList.add("dragging");
+        });
+        bar.addEventListener("mouseleave", () => {
+          isDown = false;
+          bar.classList.remove("dragging");
+        });
+        bar.addEventListener("mouseup", () => {
+          isDown = false;
+          bar.classList.remove("dragging");
+        });
+        bar.addEventListener("mousemove", (e) => {
+          if (!isDown) return;
+          e.preventDefault();
+          const x = e.pageX - bar.offsetLeft;
+          const walk = (x - startX) * 1.2;
+          bar.scrollLeft = scrollLeft - walk;
+        });
+        // Touch support
+        bar.addEventListener("touchstart", (e) => {
+          isDown = true;
+          startX = e.touches[0].pageX - bar.offsetLeft;
+          scrollLeft = bar.scrollLeft;
+        });
+        bar.addEventListener("touchend", () => {
+          isDown = false;
+        });
+        bar.addEventListener("touchmove", (e) => {
+          if (!isDown) return;
+          const x = e.touches[0].pageX - bar.offsetLeft;
+          const walk = (x - startX) * 1.2;
+          bar.scrollLeft = scrollLeft - walk;
+        });
+      }
+      renderCategorieMenu();
+      enableCategorieDrag();
+      scrollCategoriaAttivaInCentro();
+
+      function updateHero() {
+        document.getElementById("heroCatTitle").textContent = categoriaFiltro;
+        document.getElementById("heroCatImg").src =
+          CAT_IMAGES[categoriaFiltro] || "assets/logo1.png";
+      }
+
+      async function loadMenu() {
+        menuData = [];
+        const querySnapshot = await getDocs(collection(db, "pizze"));
+        querySnapshot.forEach((doc) => {
+          const data = doc.data();
+          menuData.push({
+            Nome: data.nome || "",
+            Prezzo: data.prezzo || "",
+            Ingredienti: data.ingredienti || "",
+            Categoria: data.categoria || "Pizze classiche",
+            Immagine: data.immagine || "",
+          });
+        });
+        updateHero();
+        renderCategorieMenu();
+        enableCategorieDrag();
+        scrollCategoriaAttivaInCentro();
+        renderMenu();
+        document.getElementById("loader").style.display = "none";
+      }
+
+      function renderMenu() {
+        let html = "";
+        menuData.forEach((row) => {
+          const categoria = (row.Categoria || "").trim();
+          const filtro = categoriaFiltro.trim();
+          if (
+            row.Nome &&
+            row.Prezzo &&
+            (filtro === "tutte" || categoria === filtro)
+          ) {
+            let prezzo = row.Prezzo.trim();
+            if (!prezzo.includes("€")) prezzo = prezzo + " €";
+            html += `<div class="menu4-card" onclick="showPizzaModal('${encodeURIComponent(
+              JSON.stringify(row)
+            )}')">
+  ${
+    row.Immagine
+      ? `<img src="${row.Immagine}" class="menu4-img" alt="${row.Nome}">`
+      : `<img src="assets/logo1.png" class="menu4-img" alt="No image">`
+  }
+  <div class="menu4-title">${row.Nome}</div>
+  ${row.Ingredienti ? `<div class="menu4-desc">${row.Ingredienti}</div>` : ""}
+  <div class="menu4-prezzo">${prezzo}</div>
+</div>`;
+          }
+        });
+        document.getElementById("menu4").innerHTML =
+          html || '<p style="text-align:center;">Nessun elemento trovato.</p>';
+      }
+
+      loadMenu();
+
+      window.showPizzaModal = function (rowStr) {
+        const row = JSON.parse(decodeURIComponent(rowStr));
+        document.getElementById("modalImg").src =
+          row.Immagine || "assets/logo1.png";
+        document.getElementById("modalNome").textContent = row.Nome;
+        document.getElementById("modalIngredienti").textContent =
+          row.Ingredienti;
+        document.getElementById("modalPrezzo").textContent =
+          row.Prezzo.includes("€") ? row.Prezzo : row.Prezzo + " €";
+        document.getElementById("pizzaModal").style.display = "flex";
+      };
+      document.getElementById("closePizzaModal").onclick = function () {
+        document.getElementById("pizzaModal").style.display = "none";
+      };
+      document.getElementById("pizzaModal").onclick = function (e) {
+        if (e.target === this) this.style.display = "none";
+      };
+    </script>
+
+    <div
+      id="pizzaModal"
+      style="
+        display: none;
+        position: fixed;
+        z-index: 1000;
+        left: 0;
+        top: 0;
+        width: 100vw;
+        height: 100vh;
+        background: rgba(0, 0, 0, 0.45);
+        align-items: center;
+        justify-content: center;
+      "
+    >
+      <div
+        id="pizzaModalContent"
+        style="
+          background: #fff;
+          border-radius: 1.2em;
+          max-width: 95vw;
+          width: 340px;
+          padding: 1.5em;
+          box-shadow: 0 8px 32px rgba(142, 184, 76, 0.18);
+          position: relative;
+          text-align: center;
+        "
+      >
+        <span
+          id="closePizzaModal"
+          style="
+            position: absolute;
+            top: 0.7em;
+            right: 1em;
+            font-size: 2em;
+            color: #8eb84c;
+            cursor: pointer;
+          "
+          >&times;</span
+        >
+        <img
+          id="modalImg"
+          src=""
+          alt=""
+          style="
+            width: 100%;
+            max-height: 180px;
+            object-fit: cover;
+            border-radius: 1em;
+            margin-bottom: 1em;
+          "
+        />
+        <div
+          id="modalNome"
+          style="
+            font-family: 'Playfair Display', serif;
+            font-size: 1.3em;
+            font-weight: bold;
+            margin-bottom: 0.5em;
+          "
+        ></div>
+        <div
+          id="modalIngredienti"
+          style="font-size: 1.05em; color: #444; margin-bottom: 1em"
+        ></div>
+        <div
+          id="modalPrezzo"
+          style="font-size: 1.1em; color: #f77f00; font-weight: bold"
+        ></div>
+      </div>
+    </div>
+  </body>
+</html>

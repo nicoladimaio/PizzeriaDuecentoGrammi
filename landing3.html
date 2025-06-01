@@ -13,6 +13,10 @@
       href="https://fonts.googleapis.com/css?family=Cormorant+Garamond:400,700&display=swap"
       rel="stylesheet"
     />
+    <link
+      href="https://fonts.googleapis.com/css?family=Dancing+Script:400,700&display=swap"
+      rel="stylesheet"
+    />
     <!-- Swiper CSS -->
     <link
       rel="stylesheet"
@@ -539,20 +543,25 @@
         }
       }
       footer {
-        background: var(--verde);
+        background: #232323;
         color: #fff;
         text-align: center;
         padding: 2em 1em 1em 1em;
         margin-top: 3em;
-        border-radius: 18px 18px 0 0;
         font-size: 1.1em;
         letter-spacing: 1px;
+      }
+      footer a {
+        color: #ffe082;
+        text-decoration: underline;
       }
     </style>
   </head>
   <body>
     <nav class="navbar" id="mainNavbar">
-      <a href="index.html" class="navbar-title"><span>Duecento Grammi</span></a>
+      <a href="landing3.html" class="navbar-title"
+        ><span>Duecento Grammi</span></a
+      >
     </nav>
     <header class="hero-slider">
       <div class="hero-slider-bg" id="heroSliderBg"></div>
@@ -574,7 +583,7 @@
         </div>
         <div class="hero-menu-block">
           <div class="hero-menu-line"></div>
-          <a href="menu3.html" class="hero-menu-link">IL NOSTRO MENÙ</a>
+          <a href="menu4.html" class="hero-menu-link">IL NOSTRO MENÙ</a>
           <div class="hero-menu-line"></div>
         </div>
       </div>
@@ -590,20 +599,49 @@
     </div>
 
     <footer>
-      <div style="font-size: 1.1em; line-height: 1.7">
-        📍 Viale Europa, 30, Marcianise (CE)<br />
-        🕖 Mar-Dom 19:00 - 00:00<br />
-        📞
-        <a
-          href="tel:0823833221"
-          style="color: inherit; text-decoration: underline"
-          >0823 833 221</a
+      <div style="max-width: 600px; margin: 0 auto; text-align: center">
+        <div
+          style="
+            font-family: 'Playfair Display', serif;
+            font-size: 1.2em;
+            font-weight: bold;
+            letter-spacing: 0.08em;
+            margin-bottom: 0.1em;
+          "
         >
-      </div>
-      <div style="margin-top: 1.2em; font-size: 0.98em">
-        © 2025 Duecento Grammi - Tutti i diritti riservati
+          DUECENTO
+        </div>
+        <div
+          style="
+            font-family: 'Dancing Script', cursive;
+            font-size: 1.2em;
+            font-style: italic;
+            margin-bottom: 0.7em;
+            margin-top: -0.1em;
+          "
+        >
+          - grammi -
+        </div>
+        <div style="font-size: 1.1em; line-height: 1.7; margin-bottom: 0.5em">
+          📍 Viale Europa, 30, Marcianise (CE)
+        </div>
+        <div style="font-size: 1.1em; line-height: 1.7; margin-bottom: 0.5em">
+          📞
+          <a
+            href="tel:0823833221"
+            style="color: inherit; text-decoration: underline"
+            >0823 833 221</a
+          >
+        </div>
+        <div style="font-size: 1.1em; line-height: 1.7">
+          🕖 Mar-Dom 19:00 - 00:00
+        </div>
+        <div style="margin-top: 1.2em; font-size: 0.98em">
+          © 2025 Duecento Grammi - Tutti i diritti riservati
+        </div>
       </div>
     </footer>
+
     <!-- Swiper JS -->
     <script src="https://cdn.jsdelivr.net/npm/swiper@11/swiper-bundle.min.js"></script>
     <script>
@@ -674,15 +712,19 @@
       swiperWrapper.innerHTML = menuCards
         .map(
           (card) => `
-    <div class="swiper-slide">
-      <a href="${card.href}" class="menu-card-link" tabindex="0" draggable="false">
-        <div class="menu-card-rect">
-          <img src="${card.img}" alt="${card.title}" class="menu-card-img-full" draggable="false" />
-          <span class="menu-card-title-overlay">${card.title}</span>
-        </div>
-      </a>
+<div class="swiper-slide">
+  <a href="menu4.html?cat=${encodeURIComponent(
+    card.title
+  )}" class="menu-card-link" tabindex="0" draggable="false">
+    <div class="menu-card-rect">
+      <img src="${card.img}" alt="${
+            card.title
+          }" class="menu-card-img-full" draggable="false" />
+      <span class="menu-card-title-overlay">${card.title}</span>
     </div>
-  `
+  </a>
+</div>
+`
         )
         .join("");
 
