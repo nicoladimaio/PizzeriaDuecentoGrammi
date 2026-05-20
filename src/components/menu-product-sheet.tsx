@@ -1,5 +1,7 @@
+import { useEffect } from "react";
 import Image from "next/image";
 import { AllergenBadge } from "@/components/allergens/allergen-badge";
+import { SpiceLevelIndicator } from "@/components/spice-level-indicator";
 import type { MenuProduct } from "@/types/menu-app";
 
 type MenuProductSheetProps = {
@@ -9,7 +11,32 @@ type MenuProductSheetProps = {
 
 const formatPrice = (price: number): string => `${price.toFixed(2)} €`;
 
+const toReadableAllergen = (value: string): string => {
+  return value
+    .replace(/_/g, " ")
+    .split(" ")
+    .map((chunk) =>
+      chunk.length > 0 ? chunk[0].toUpperCase() + chunk.slice(1) : chunk,
+    )
+    .join(" ");
+};
+
 export function MenuProductSheet({ product, onClose }: MenuProductSheetProps) {
+  useEffect(() => {
+    if (!product) return;
+
+    const previousOverflow = document.body.style.overflow;
+    const previousTouchAction = document.body.style.touchAction;
+
+    document.body.style.overflow = "hidden";
+    document.body.style.touchAction = "none";
+
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      document.body.style.touchAction = previousTouchAction;
+    };
+  }, [product]);
+
   return (
     <div
       className={product ? "qr-sheet-backdrop open" : "qr-sheet-backdrop"}
@@ -50,6 +77,12 @@ export function MenuProductSheet({ product, onClose }: MenuProductSheetProps) {
                 </span>
               </div>
               <p className="qr-sheet-desc">{product.description}</p>
+              <SpiceLevelIndicator
+                level={product.spiceLevel}
+                className="qr-spice-row qr-spice-row-detail"
+                showLabel
+                hideWhenZero
+              />
               {product.allergens.length > 0 ? (
                 <div
                   className="qr-sheet-allergens"
@@ -58,13 +91,14 @@ export function MenuProductSheet({ product, onClose }: MenuProductSheetProps) {
                   {product.allergens.map((allergen) => (
                     <AllergenBadge
                       key={`${product.id}-${allergen}`}
-                      allergen={allergen}
+                      allergen={toReadableAllergen(allergen)}
+                      showLabel
+                      showTooltip={false}
+                      className="qr-sheet-allergen-chip"
                     />
                   ))}
                 </div>
-              ) : (
-                <p>Nessuno indicato</p>
-              )}
+              ) : null}
             </div>
           </>
         ) : null}

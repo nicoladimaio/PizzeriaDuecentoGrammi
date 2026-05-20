@@ -1,5 +1,6 @@
 import Image from "next/image";
 import { AllergenBadge } from "@/components/allergens/allergen-badge";
+import { SpiceLevelIndicator } from "@/components/spice-level-indicator";
 import type { MenuProduct } from "@/types/menu-app";
 
 type MenuProductCardProps = {
@@ -43,17 +44,27 @@ export function MenuProductCard({ product, onOpen }: MenuProductCardProps) {
           {product.badges.hot ? <span>🔥 Piu richiesta</span> : null}
           {product.badges.recent ? <span>🆕 Novita</span> : null}
         </div>
-        {product.allergens.length > 0 ? (
+        {product.allergens.length > 0 || product.spiceLevel > 0 ? (
           <div
-            className="qr-product-allergens"
-            aria-label="Allergeni del piatto"
+            className="qr-product-meta-row"
+            aria-label="Piccantezza e allergeni del piatto"
           >
-            {product.allergens.map((allergen) => (
-              <AllergenBadge
-                key={`${product.id}-${allergen}`}
-                allergen={allergen}
+            <div className="qr-product-allergens">
+              {product.allergens.map((allergen) => (
+                <AllergenBadge
+                  key={`${product.id}-${allergen}`}
+                  allergen={allergen}
+                />
+              ))}
+            </div>
+            <div className="qr-product-spice-end">
+              <SpiceLevelIndicator
+                level={product.spiceLevel}
+                className="qr-spice-row-inline"
+                showLabel={false}
+                hideWhenZero
               />
-            ))}
+            </div>
           </div>
         ) : null}
       </div>

@@ -31,6 +31,30 @@ export const getMenuItems = (): MenuItem[] => {
           (item as { immagine?: string }).immagine ??
           "assets/logo1.png",
       ).trim(),
+      piccantezza:
+        (
+          item as {
+            piccantezza?: string | number | boolean;
+            Piccantezza?: string | number | boolean;
+          }
+        ).piccantezza ??
+        (item as { Piccantezza?: string | number | boolean }).Piccantezza,
+      spiceLevel:
+        (
+          item as {
+            spiceLevel?: string | number | boolean;
+            SpiceLevel?: string | number | boolean;
+          }
+        ).spiceLevel ??
+        (item as { SpiceLevel?: string | number | boolean }).SpiceLevel,
+      spicyLevel:
+        (
+          item as {
+            spicyLevel?: string | number | boolean;
+            SpicyLevel?: string | number | boolean;
+          }
+        ).spicyLevel ??
+        (item as { SpicyLevel?: string | number | boolean }).SpicyLevel,
     }))
     .filter((item) => item.Nome.length > 0);
 };

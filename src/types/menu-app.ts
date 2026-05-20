@@ -9,6 +9,7 @@ export type MenuProduct = {
   name: string;
   price: number;
   category: string;
+  spiceLevel: number;
   image: string;
   description: string;
   ingredients: string[];

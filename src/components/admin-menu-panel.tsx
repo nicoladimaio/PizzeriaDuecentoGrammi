@@ -1,7 +1,7 @@
 "use client";
 
 import { FormEvent, useEffect, useMemo, useState } from "react";
-import type { Dispatch, SetStateAction } from "react";
+import type { Dispatch, DragEvent, SetStateAction } from "react";
 import {
   CeleryIcon,
   CrustaceansIcon,
@@ -18,6 +18,7 @@ import {
   SulphitesIcon,
   TreeNutsIcon,
 } from "@/components/allergens/allergen-icons";
+import { SpiceLevelIndicator } from "@/components/spice-level-indicator";
 import {
   addDoc,
   collection,
@@ -35,6 +36,7 @@ type AdminMenuItem = {
   ingredienti: string;
   prezzo: number;
   categoria: string;
+  spiceLevel: number;
   immagine: string;
   ordine: number;
   ingredientIds: string[];
@@ -170,6 +172,119 @@ const normalizePrice = (value: unknown): number | null => {
   return Number(parsed.toFixed(2));
 };
 
+const parseSpiceLevel = (value: unknown): number => {
+  if (typeof value === "boolean") return value ? 1 : 0;
+
+  if (value && typeof value === "object") {
+    const asObject = value as Record<string, unknown>;
+    const nested =
+      asObject.level ?? asObject.value ?? asObject.intensity ?? asObject.degree;
+    if (nested !== undefined) return parseSpiceLevel(nested);
+    return 0;
+  }
+
+  const raw = String(value ?? "")
+    .trim()
+    .toLowerCase();
+  if (!raw) return 0;
+
+  if (
+    raw === "si" ||
+    raw === "sì" ||
+    raw === "yes" ||
+    raw === "true" ||
+    raw === "on"
+  ) {
+    return 1;
+  }
+
+  const parsed = Number(raw.replace(",", "."));
+  if (!Number.isFinite(parsed)) {
+    const peppers = (raw.match(/🌶/g) || []).length;
+    if (peppers > 0) return Math.min(3, peppers);
+    if (
+      raw.includes("poco") ||
+      raw.includes("lieve") ||
+      raw.includes("basso") ||
+      raw.includes("low")
+    ) {
+      return 1;
+    }
+    if (
+      raw.includes("medio") ||
+      raw.includes("media") ||
+      raw.includes("medium")
+    ) {
+      return 2;
+    }
+    if (
+      raw.includes("molto") ||
+      raw.includes("alto") ||
+      raw.includes("forte") ||
+      raw.includes("high")
+    ) {
+      return 3;
+    }
+    if (raw.includes("piccante") || raw.includes("spicy")) {
+      return 2;
+    }
+    return 0;
+  }
+  if (parsed <= 0) return 0;
+  if (parsed >= 3) return 3;
+  return Math.round(parsed);
+};
+
+const extractSpiceLevelFromRaw = (raw: Record<string, unknown>): number => {
+  const direct = parseSpiceLevel(
+    raw.piccantezza ??
+      raw.Piccantezza ??
+      raw.livelloPiccantezza ??
+      raw.piccante ??
+      raw.spiceLevel ??
+      raw.SpiceLevel ??
+      raw.spicyLevel ??
+      raw.SpicyLevel,
+  );
+  if (direct > 0) return direct;
+
+  let best = 0;
+  const seen = new WeakSet<object>();
+
+  const visit = (value: unknown, depth: number) => {
+    if (depth > 5 || best >= 3) return;
+
+    if (Array.isArray(value)) {
+      value.forEach((entry) => visit(entry, depth + 1));
+      return;
+    }
+
+    if (!value || typeof value !== "object") return;
+    const obj = value as Record<string, unknown>;
+    if (seen.has(obj)) return;
+    seen.add(obj);
+
+    Object.entries(obj).forEach(([key, entry]) => {
+      if (/piccant|spic/i.test(key)) {
+        best = Math.max(best, parseSpiceLevel(entry));
+      }
+      if (entry && typeof entry === "object") {
+        visit(entry, depth + 1);
+      }
+    });
+  };
+
+  visit(raw, 0);
+  return best;
+};
+
+const getSpiceLabel = (level: number): string => {
+  if (level <= 0) return "";
+  if (level === 1) return "Poco piccante";
+  if (level === 2) return "Piccante";
+  return "Molto piccante";
+};
+
 const sanitizeFileName = (name: string): string =>
   name.replace(/[^a-zA-Z0-9._-]/g, "_");
 
@@ -182,6 +297,23 @@ const reorderIds = (ids: string[], movingId: string, targetId: string) => {
   const [moved] = next.splice(from, 1);
   next.splice(to, 0, moved);
   return next;
+};
+
+const setReorderDragGhost = (event: DragEvent<HTMLElement>, title: string) => {
+  if (!event.dataTransfer) return;
+
+  const ghost = document.createElement("div");
+  ghost.className = "reorder-drag-ghost";
+  ghost.textContent = title;
+  document.body.appendChild(ghost);
+
+  event.dataTransfer.effectAllowed = "move";
+  event.dataTransfer.setData("text/plain", title);
+  event.dataTransfer.setDragImage(ghost, 14, 12);
+
+  window.setTimeout(() => {
+    ghost.remove();
+  }, 0);
 };
 
 const toggleInArray = (arr: string[], value: string): string[] => {
@@ -212,11 +344,17 @@ export function AdminMenuPanel() {
   const [draggingModalCategoryId, setDraggingModalCategoryId] = useState<
     string | null
   >(null);
-  const [draggingItemId, setDraggingItemId] = useState<string | null>(null);
+  const [draggingReorderItemId, setDraggingReorderItemId] = useState<
+    string | null
+  >(null);
+  const [reorderDropTargetId, setReorderDropTargetId] = useState<string | null>(
+    null,
+  );
 
   const [showCategoryModal, setShowCategoryModal] = useState(false);
   const [showItemModal, setShowItemModal] = useState(false);
   const [showIngredientModal, setShowIngredientModal] = useState(false);
+  const [showReorderMode, setShowReorderMode] = useState(false);
 
   const [editingItemId, setEditingItemId] = useState<string | null>(null);
   const [editingIngredientId, setEditingIngredientId] = useState<string | null>(
@@ -245,6 +383,7 @@ export function AdminMenuPanel() {
   const [newItemName, setNewItemName] = useState("");
   const [newItemPrice, setNewItemPrice] = useState("");
   const [newItemCategory, setNewItemCategory] = useState("");
+  const [newItemSpiceLevel, setNewItemSpiceLevel] = useState(0);
   const [newItemIngredientIds, setNewItemIngredientIds] = useState<string[]>(
     [],
   );
@@ -260,6 +399,7 @@ export function AdminMenuPanel() {
   const [editItemName, setEditItemName] = useState("");
   const [editItemPrice, setEditItemPrice] = useState("");
   const [editItemCategory, setEditItemCategory] = useState("");
+  const [editItemSpiceLevel, setEditItemSpiceLevel] = useState(0);
   const [editItemIngredientIds, setEditItemIngredientIds] = useState<string[]>(
     [],
   );
@@ -283,6 +423,26 @@ export function AdminMenuPanel() {
   >("new");
 
   useEffect(() => {
+    if (!showReorderMode) return;
+
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      setShowReorderMode(false);
+      setReorderDropTargetId(null);
+      setDraggingReorderItemId(null);
+    };
+
+    window.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener("keydown", onKeyDown);
+    };
+  }, [showReorderMode]);
+
+  useEffect(() => {
     const db = getClientDb();
     const unsubscribe = onSnapshot(collection(db, "menu_items"), (snapshot) => {
       const next = snapshot.docs
@@ -295,6 +455,9 @@ export function AdminMenuPanel() {
             prezzo: normalizePrice(data.prezzo ?? data.Prezzo) ?? 0,
             categoria: toString(
               (data.categoria ?? data.Categoria) || "Pizze classiche",
+            ),
+            spiceLevel: extractSpiceLevelFromRaw(
+              data as Record<string, unknown>,
             ),
             immagine: toString(
               (data.immagine ?? data.Immagine) || "assets/logo1.png",
@@ -560,11 +723,31 @@ export function AdminMenuPanel() {
     );
   }, [ingredients, newIngredientSearch]);
 
+  const newIngredientExactMatch = useMemo(() => {
+    const query = newIngredientSearch.trim().toLowerCase();
+    if (!query) return null;
+    return (
+      ingredients.find(
+        (ingredient) => ingredient.name.toLowerCase() === query,
+      ) ?? null
+    );
+  }, [ingredients, newIngredientSearch]);
+
   const filteredEditIngredientOptions = useMemo(() => {
     const query = editIngredientSearch.trim().toLowerCase();
     if (!query) return ingredients;
     return ingredients.filter((ingredient) =>
       ingredient.name.toLowerCase().includes(query),
+    );
+  }, [ingredients, editIngredientSearch]);
+
+  const editIngredientExactMatch = useMemo(() => {
+    const query = editIngredientSearch.trim().toLowerCase();
+    if (!query) return null;
+    return (
+      ingredients.find(
+        (ingredient) => ingredient.name.toLowerCase() === query,
+      ) ?? null
     );
   }, [ingredients, editIngredientSearch]);
 
@@ -661,23 +844,23 @@ export function AdminMenuPanel() {
     query: string,
     selectedIds: string[],
     setSelectedIds: Dispatch<SetStateAction<string[]>>,
-  ): boolean => {
+    target: "new" | "edit",
+  ): "added" | "create" | "noop" => {
     const normalized = query.trim().toLowerCase();
-    if (normalized.length < 3) return false;
+    if (normalized.length < 2) return "noop";
 
     const exact = ingredients.find(
       (ingredient) => ingredient.name.toLowerCase() === normalized,
     );
-    const firstMatch =
-      exact ??
-      ingredients.find((ingredient) =>
-        ingredient.name.toLowerCase().includes(normalized),
-      );
-    if (!firstMatch) return false;
-    if (selectedIds.includes(firstMatch.id)) return false;
+    if (!exact) {
+      openQuickCreateIngredient(query, target);
+      return "create";
+    }
 
-    setSelectedIds((prev) => [...prev, firstMatch.id]);
-    return true;
+    if (selectedIds.includes(exact.id)) return "noop";
+
+    setSelectedIds((prev) => [...prev, exact.id]);
+    return "added";
   };
 
   const addAllergenFromQuery = (
@@ -952,6 +1135,8 @@ export function AdminMenuPanel() {
         ingredienti: ingredientiText,
         prezzo,
         categoria,
+        piccantezza: newItemSpiceLevel,
+        spiceLevel: newItemSpiceLevel,
         immagine: uploadedImage,
         ordine: currentCategoryItems.length,
         ingredientIds,
@@ -964,6 +1149,7 @@ export function AdminMenuPanel() {
       setNewItemName("");
       setNewItemPrice("");
       setNewItemCategory(categoria);
+      setNewItemSpiceLevel(0);
       setNewItemIngredientIds([]);
       setNewItemAllergens([]);
       setNewImageFile(null);
@@ -981,6 +1167,7 @@ export function AdminMenuPanel() {
     setEditItemName(item.nome);
     setEditItemPrice(String(item.prezzo));
     setEditItemCategory(item.categoria);
+    setEditItemSpiceLevel(item.spiceLevel ?? 0);
     setEditItemIngredientIds(item.ingredientIds);
     const detected = inferAllergensFromIngredientIds(item.ingredientIds);
     setEditItemAllergens(
@@ -1042,6 +1229,8 @@ export function AdminMenuPanel() {
         ingredienti: ingredientiText,
         prezzo,
         categoria: editItemCategory.trim(),
+        piccantezza: editItemSpiceLevel,
+        spiceLevel: editItemSpiceLevel,
         immagine: uploadedImage,
         ingredientIds,
         allergeni,
@@ -1050,6 +1239,7 @@ export function AdminMenuPanel() {
 
       setEditingItemId(null);
       setEditImageFile(null);
+      setEditItemSpiceLevel(0);
       setEditItemIngredientIds([]);
       setEditItemAllergens([]);
       setFeedback("Piatto aggiornato.");
@@ -1208,6 +1398,16 @@ export function AdminMenuPanel() {
     }
   };
 
+  const moveItemByStep = async (itemId: string, step: -1 | 1) => {
+    const currentIds = visibleItems.map((entry) => entry.id);
+    const currentIndex = currentIds.indexOf(itemId);
+    if (currentIndex < 0) return;
+    const targetIndex = currentIndex + step;
+    if (targetIndex < 0 || targetIndex >= currentIds.length) return;
+    const targetId = currentIds[targetIndex];
+    await reorderCategoryItems(itemId, targetId);
+  };
+
   return (
     <section className="admin-shell">
       {feedback ? <p className="success-text">{feedback}</p> : null}
@@ -1217,7 +1417,7 @@ export function AdminMenuPanel() {
         <p className="section-subtitle">Caricamento menu remoto...</p>
       ) : null}
 
-      <div className="admin-tabs">
+      <div className="admin-tabs menu-top-tabs">
         <button
           type="button"
           className={
@@ -1262,6 +1462,16 @@ export function AdminMenuPanel() {
               }}
             >
               + Nuovo piatto
+            </button>
+            <button
+              type="button"
+              className="admin-mini-btn"
+              onClick={() => {
+                setShowReorderMode(true);
+              }}
+              disabled={!activeCategory || visibleItems.length <= 1}
+            >
+              Riordina
             </button>
           </div>
 
@@ -1334,22 +1544,6 @@ export function AdminMenuPanel() {
                       : "admin-dish-card admin-dish-card-compact admin-dish-card-hidden"
                   }
                   key={item.id}
-                  draggable
-                  onDragStart={() => {
-                    setDraggingItemId(item.id);
-                  }}
-                  onDragOver={(event) => {
-                    event.preventDefault();
-                  }}
-                  onDrop={() => {
-                    if (draggingItemId) {
-                      void reorderCategoryItems(draggingItemId, item.id);
-                    }
-                    setDraggingItemId(null);
-                  }}
-                  onDragEnd={() => {
-                    setDraggingItemId(null);
-                  }}
                 >
                   <div className="admin-dish-media-wrap compact">
                     <img
@@ -1368,6 +1562,11 @@ export function AdminMenuPanel() {
                     <p className="admin-dish-desc compact">
                       {item.ingredienti || "Nessuna descrizione"}
                     </p>
+                    <SpiceLevelIndicator
+                      level={item.spiceLevel}
+                      className="admin-spice-indicator"
+                      hideWhenZero
+                    />
                     {item.allergeni.length > 0 ? (
                       <div className="chip-wrap">
                         {item.allergeni.map((key) => (
@@ -1922,6 +2121,23 @@ export function AdminMenuPanel() {
               </div>
 
               <label>
+                Piccantezza (opzionale)
+                <select
+                  value={String(newItemSpiceLevel)}
+                  onChange={(event) => {
+                    setNewItemSpiceLevel(
+                      parseSpiceLevel(event.currentTarget.value),
+                    );
+                  }}
+                >
+                  <option value="0">Non specificata</option>
+                  <option value="1">🌶 Poco piccante</option>
+                  <option value="2">🌶🌶 Piccante</option>
+                  <option value="3">🌶🌶🌶 Molto piccante</option>
+                </select>
+              </label>
+
+              <label>
                 Ingredienti
                 <div className="ingredient-picker-wrap">
                   <input
@@ -1940,12 +2156,13 @@ export function AdminMenuPanel() {
                     onKeyDown={(event) => {
                       if (event.key !== "Enter") return;
                       event.preventDefault();
-                      const added = addIngredientFromQuery(
+                      const result = addIngredientFromQuery(
                         newIngredientSearch,
                         newItemIngredientIds,
                         setNewItemIngredientIds,
+                        "new",
                       );
-                      if (added) {
+                      if (result === "added" || result === "create") {
                         setNewIngredientSearch("");
                         setShowNewIngredientResults(false);
                       }
@@ -1955,76 +2172,85 @@ export function AdminMenuPanel() {
                   {showNewIngredientResults &&
                   newIngredientSearch.trim().length >= 3 ? (
                     <div className="ingredient-search-dropdown">
-                      {filteredNewIngredientOptions.length > 0 ? (
-                        filteredNewIngredientOptions
-                          .slice(0, 10)
-                          .map((ingredient) => {
-                            const active = newItemIngredientIds.includes(
-                              ingredient.id,
-                            );
-                            return (
-                              <button
-                                type="button"
-                                key={ingredient.id}
-                                className={
-                                  active
-                                    ? "ingredient-search-item active"
-                                    : "ingredient-search-item"
-                                }
-                                onMouseDown={(event) => {
-                                  event.preventDefault();
-                                  setNewItemIngredientIds((prev) =>
-                                    toggleInArray(prev, ingredient.id),
-                                  );
-                                  setShowNewIngredientResults(false);
-                                  setNewIngredientSearch("");
-                                }}
-                              >
-                                <div>
-                                  <strong>{ingredient.name}</strong>
-                                  {ingredient.allergeni.length > 0 ? (
-                                    <div className="chip-wrap">
-                                      {ingredient.allergeni.map((key) => (
-                                        <span
-                                          className="allergen-chip"
-                                          key={`${ingredient.id}-${key}`}
-                                        >
+                      {filteredNewIngredientOptions.length > 0
+                        ? filteredNewIngredientOptions
+                            .slice(0, 10)
+                            .map((ingredient) => {
+                              const active = newItemIngredientIds.includes(
+                                ingredient.id,
+                              );
+                              return (
+                                <button
+                                  type="button"
+                                  key={ingredient.id}
+                                  className={
+                                    active
+                                      ? "ingredient-search-item active"
+                                      : "ingredient-search-item"
+                                  }
+                                  onMouseDown={(event) => {
+                                    event.preventDefault();
+                                    setNewItemIngredientIds((prev) =>
+                                      toggleInArray(prev, ingredient.id),
+                                    );
+                                    setShowNewIngredientResults(false);
+                                    setNewIngredientSearch("");
+                                  }}
+                                >
+                                  <div>
+                                    <strong>{ingredient.name}</strong>
+                                    {ingredient.allergeni.length > 0 ? (
+                                      <div className="chip-wrap">
+                                        {ingredient.allergeni.map((key) => (
                                           <span
-                                            className="allergen-mini-icon"
-                                            aria-hidden
+                                            className="allergen-chip"
+                                            key={`${ingredient.id}-${key}`}
                                           >
-                                            <AllergenIcon type={key} />
+                                            <span
+                                              className="allergen-mini-icon"
+                                              aria-hidden
+                                            >
+                                              <AllergenIcon type={key} />
+                                            </span>
+                                            <span>
+                                              {allergenMap[key]?.label ?? key}
+                                            </span>
                                           </span>
-                                          <span>
-                                            {allergenMap[key]?.label ?? key}
-                                          </span>
-                                        </span>
-                                      ))}
-                                    </div>
-                                  ) : null}
-                                </div>
-                              </button>
+                                        ))}
+                                      </div>
+                                    ) : null}
+                                  </div>
+                                </button>
+                              );
+                            })
+                        : null}
+                      {!newIngredientExactMatch &&
+                      newIngredientSearch.trim().length >= 2 ? (
+                        <button
+                          type="button"
+                          className="ingredient-search-item create-item"
+                          onMouseDown={(event) => {
+                            event.preventDefault();
+                            openQuickCreateIngredient(
+                              newIngredientSearch,
+                              "new",
                             );
-                          })
-                      ) : (
+                            setShowNewIngredientResults(false);
+                            setNewIngredientSearch("");
+                          }}
+                        >
+                          + Crea "{newIngredientSearch.trim()}"
+                        </button>
+                      ) : null}
+                      {filteredNewIngredientOptions.length === 0 &&
+                      !(
+                        !newIngredientExactMatch &&
+                        newIngredientSearch.trim().length >= 2
+                      ) ? (
                         <div className="ingredient-empty-state">
                           <p>Nessun ingrediente trovato</p>
-                          <button
-                            type="button"
-                            className="admin-mini-btn"
-                            onMouseDown={(event) => {
-                              event.preventDefault();
-                              openQuickCreateIngredient(
-                                newIngredientSearch,
-                                "new",
-                              );
-                            }}
-                          >
-                            + Crea "
-                            {newIngredientSearch.trim() || "Nuovo ingrediente"}"
-                          </button>
                         </div>
-                      )}
+                      ) : null}
                     </div>
                   ) : null}
                 </div>
@@ -2229,6 +2455,23 @@ export function AdminMenuPanel() {
               </div>
 
               <label>
+                Piccantezza (opzionale)
+                <select
+                  value={String(editItemSpiceLevel)}
+                  onChange={(event) => {
+                    setEditItemSpiceLevel(
+                      parseSpiceLevel(event.currentTarget.value),
+                    );
+                  }}
+                >
+                  <option value="0">Non specificata</option>
+                  <option value="1">🌶 Poco piccante</option>
+                  <option value="2">🌶🌶 Piccante</option>
+                  <option value="3">🌶🌶🌶 Molto piccante</option>
+                </select>
+              </label>
+
+              <label>
                 Ingredienti
                 <div className="ingredient-picker-wrap">
                   <input
@@ -2247,12 +2490,13 @@ export function AdminMenuPanel() {
                     onKeyDown={(event) => {
                       if (event.key !== "Enter") return;
                       event.preventDefault();
-                      const added = addIngredientFromQuery(
+                      const result = addIngredientFromQuery(
                         editIngredientSearch,
                         editItemIngredientIds,
                         setEditItemIngredientIds,
+                        "edit",
                       );
-                      if (added) {
+                      if (result === "added" || result === "create") {
                         setEditIngredientSearch("");
                         setShowEditIngredientResults(false);
                       }
@@ -2262,77 +2506,85 @@ export function AdminMenuPanel() {
                   {showEditIngredientResults &&
                   editIngredientSearch.trim().length >= 3 ? (
                     <div className="ingredient-search-dropdown">
-                      {filteredEditIngredientOptions.length > 0 ? (
-                        filteredEditIngredientOptions
-                          .slice(0, 10)
-                          .map((ingredient) => {
-                            const active = editItemIngredientIds.includes(
-                              ingredient.id,
-                            );
-                            return (
-                              <button
-                                type="button"
-                                key={ingredient.id}
-                                className={
-                                  active
-                                    ? "ingredient-search-item active"
-                                    : "ingredient-search-item"
-                                }
-                                onMouseDown={(event) => {
-                                  event.preventDefault();
-                                  setEditItemIngredientIds((prev) =>
-                                    toggleInArray(prev, ingredient.id),
-                                  );
-                                  setShowEditIngredientResults(false);
-                                  setEditIngredientSearch("");
-                                }}
-                              >
-                                <div>
-                                  <strong>{ingredient.name}</strong>
-                                  {ingredient.allergeni.length > 0 ? (
-                                    <div className="chip-wrap">
-                                      {ingredient.allergeni.map((key) => (
-                                        <span
-                                          className="allergen-chip"
-                                          key={`${ingredient.id}-${key}`}
-                                        >
+                      {filteredEditIngredientOptions.length > 0
+                        ? filteredEditIngredientOptions
+                            .slice(0, 10)
+                            .map((ingredient) => {
+                              const active = editItemIngredientIds.includes(
+                                ingredient.id,
+                              );
+                              return (
+                                <button
+                                  type="button"
+                                  key={ingredient.id}
+                                  className={
+                                    active
+                                      ? "ingredient-search-item active"
+                                      : "ingredient-search-item"
+                                  }
+                                  onMouseDown={(event) => {
+                                    event.preventDefault();
+                                    setEditItemIngredientIds((prev) =>
+                                      toggleInArray(prev, ingredient.id),
+                                    );
+                                    setShowEditIngredientResults(false);
+                                    setEditIngredientSearch("");
+                                  }}
+                                >
+                                  <div>
+                                    <strong>{ingredient.name}</strong>
+                                    {ingredient.allergeni.length > 0 ? (
+                                      <div className="chip-wrap">
+                                        {ingredient.allergeni.map((key) => (
                                           <span
-                                            className="allergen-mini-icon"
-                                            aria-hidden
+                                            className="allergen-chip"
+                                            key={`${ingredient.id}-${key}`}
                                           >
-                                            <AllergenIcon type={key} />
+                                            <span
+                                              className="allergen-mini-icon"
+                                              aria-hidden
+                                            >
+                                              <AllergenIcon type={key} />
+                                            </span>
+                                            <span>
+                                              {allergenMap[key]?.label ?? key}
+                                            </span>
                                           </span>
-                                          <span>
-                                            {allergenMap[key]?.label ?? key}
-                                          </span>
-                                        </span>
-                                      ))}
-                                    </div>
-                                  ) : null}
-                                </div>
-                              </button>
+                                        ))}
+                                      </div>
+                                    ) : null}
+                                  </div>
+                                </button>
+                              );
+                            })
+                        : null}
+                      {!editIngredientExactMatch &&
+                      editIngredientSearch.trim().length >= 2 ? (
+                        <button
+                          type="button"
+                          className="ingredient-search-item create-item"
+                          onMouseDown={(event) => {
+                            event.preventDefault();
+                            openQuickCreateIngredient(
+                              editIngredientSearch,
+                              "edit",
                             );
-                          })
-                      ) : (
+                            setShowEditIngredientResults(false);
+                            setEditIngredientSearch("");
+                          }}
+                        >
+                          + Crea "{editIngredientSearch.trim()}"
+                        </button>
+                      ) : null}
+                      {filteredEditIngredientOptions.length === 0 &&
+                      !(
+                        !editIngredientExactMatch &&
+                        editIngredientSearch.trim().length >= 2
+                      ) ? (
                         <div className="ingredient-empty-state">
                           <p>Nessun ingrediente trovato</p>
-                          <button
-                            type="button"
-                            className="admin-mini-btn"
-                            onMouseDown={(event) => {
-                              event.preventDefault();
-                              openQuickCreateIngredient(
-                                editIngredientSearch,
-                                "edit",
-                              );
-                            }}
-                          >
-                            + Crea "
-                            {editIngredientSearch.trim() || "Nuovo ingrediente"}
-                            "
-                          </button>
                         </div>
-                      )}
+                      ) : null}
                     </div>
                   ) : null}
                 </div>
@@ -2569,6 +2821,110 @@ export function AdminMenuPanel() {
                   {busy ? "Salvataggio..." : "Salva"}
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {showReorderMode ? (
+        <div
+          className="admin-modal-backdrop reorder-backdrop"
+          role="presentation"
+        >
+          <div
+            className="admin-modal reorder-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Riordina piatti"
+          >
+            <div className="reorder-header-wrap">
+              <div className="admin-modal-head reorder-head">
+                <h3>Riordina piatti</h3>
+                <button
+                  type="button"
+                  className="icon-btn"
+                  onClick={() => {
+                    setShowReorderMode(false);
+                    setReorderDropTargetId(null);
+                    setDraggingReorderItemId(null);
+                  }}
+                  aria-label="Chiudi modalita riordino"
+                >
+                  ×
+                </button>
+              </div>
+
+              <p className="section-subtitle reorder-subtitle">
+                Categoria: {activeCategory || "Nessuna"}
+              </p>
+            </div>
+
+            <div
+              className="reorder-list"
+              role="list"
+              aria-label="Ordine piatti"
+            >
+              {visibleItems.map((item) => {
+                const isDragging = draggingReorderItemId === item.id;
+                const isDropTarget =
+                  reorderDropTargetId === item.id && !isDragging;
+
+                return (
+                  <article
+                    key={`reorder-${item.id}`}
+                    className={
+                      isDragging
+                        ? "reorder-row is-dragging"
+                        : isDropTarget
+                          ? "reorder-row is-drop-target"
+                          : "reorder-row"
+                    }
+                    role="listitem"
+                    draggable
+                    onDragStart={(event) => {
+                      setReorderDragGhost(event, item.nome);
+                      setDraggingReorderItemId(item.id);
+                      setReorderDropTargetId(item.id);
+                    }}
+                    onDragEnter={() => {
+                      setReorderDropTargetId(item.id);
+                    }}
+                    onDragOver={(event) => {
+                      event.preventDefault();
+                      setReorderDropTargetId(item.id);
+                    }}
+                    onDrop={() => {
+                      if (!draggingReorderItemId) return;
+                      void reorderCategoryItems(draggingReorderItemId, item.id);
+                      setDraggingReorderItemId(null);
+                      setReorderDropTargetId(null);
+                    }}
+                    onDragEnd={() => {
+                      setDraggingReorderItemId(null);
+                      setReorderDropTargetId(null);
+                    }}
+                  >
+                    <span className="reorder-title">{item.nome}</span>
+                    {isDropTarget ? (
+                      <span className="reorder-slot-placeholder" aria-hidden />
+                    ) : null}
+                  </article>
+                );
+              })}
+            </div>
+
+            <div className="admin-menu-toolbar minimal-right reorder-footer-bar">
+              <button
+                type="button"
+                className="btn-success"
+                onClick={() => {
+                  setShowReorderMode(false);
+                  setReorderDropTargetId(null);
+                  setDraggingReorderItemId(null);
+                }}
+              >
+                Fine
+              </button>
             </div>
           </div>
         </div>

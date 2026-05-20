@@ -1,3 +1,4 @@
+import { useEffect, useRef } from "react";
 import type { MenuCategory } from "@/types/menu-app";
 
 type MenuCategoriesBarProps = {
@@ -20,13 +21,23 @@ export function MenuCategoriesBar({
   activeCategory,
   onSelectCategory,
 }: MenuCategoriesBarProps) {
+  const chipRefs = useRef<Record<string, HTMLButtonElement | null>>({});
+
+  useEffect(() => {
+    const key = activeCategory.toLowerCase().trim();
+    if (!key) return;
+    const target = chipRefs.current[key];
+    if (!target) return;
+    target.scrollIntoView({
+      behavior: "smooth",
+      inline: "center",
+      block: "nearest",
+    });
+  }, [activeCategory]);
+
   return (
     <div className="qr-categories-sticky">
-      <div
-        className="qr-categories-scroll"
-        role="tablist"
-        aria-label="Categorie menu"
-      >
+      <div className="qr-categories-scroll" aria-label="Categorie menu">
         {categories.map((category) => {
           const active =
             activeCategory.toLowerCase() === category.name.toLowerCase();
@@ -34,7 +45,10 @@ export function MenuCategoriesBar({
             <button
               key={category.id}
               type="button"
-              role="tab"
+              ref={(node) => {
+                chipRefs.current[category.name.toLowerCase().trim()] = node;
+              }}
+              aria-pressed={active}
               className={
                 active ? "qr-category-chip active" : "qr-category-chip"
               }

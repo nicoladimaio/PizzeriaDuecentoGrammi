@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { collection, onSnapshot } from "firebase/firestore";
 import { getClientDb } from "@/lib/firebase";
 import { getMenuItems } from "@/lib/menu";
@@ -36,6 +36,14 @@ type RawMenuItemDoc = {
   novita?: boolean;
   visible?: boolean;
   visibile?: boolean;
+  piccantezza?: number | string;
+  Piccantezza?: number | string;
+  livelloPiccantezza?: number | string;
+  piccante?: number | string | boolean;
+  spiceLevel?: number | string;
+  SpiceLevel?: number | string;
+  spicyLevel?: number | string;
+  SpicyLevel?: number | string;
   ordine?: number;
   order?: number;
 };
@@ -88,6 +96,135 @@ const parsePrice = (value: unknown): number => {
   return parsed;
 };
 
+const parseSpiceLevel = (value: unknown): number => {
+  if (typeof value === "boolean") return value ? 1 : 0;
+
+  if (value && typeof value === "object") {
+    const asObject = value as Record<string, unknown>;
+    const nested =
+      asObject.level ?? asObject.value ?? asObject.intensity ?? asObject.degree;
+    if (nested !== undefined) return parseSpiceLevel(nested);
+    return 0;
+  }
+
+  const raw = String(value ?? "")
+    .trim()
+    .toLowerCase();
+  if (!raw) return 0;
+
+  if (
+    raw === "si" ||
+    raw === "sì" ||
+    raw === "yes" ||
+    raw === "true" ||
+    raw === "on"
+  ) {
+    return 1;
+  }
+
+  const parsed = Number(raw.replace(",", "."));
+  if (!Number.isFinite(parsed)) {
+    const peppers = (raw.match(/🌶/g) || []).length;
+    if (peppers > 0) return Math.min(3, peppers);
+
+    if (
+      raw.includes("poco") ||
+      raw.includes("lieve") ||
+      raw.includes("basso") ||
+      raw.includes("low")
+    ) {
+      return 1;
+    }
+    if (
+      raw.includes("medio") ||
+      raw.includes("media") ||
+      raw.includes("medium")
+    ) {
+      return 2;
+    }
+    if (
+      raw.includes("molto") ||
+      raw.includes("alto") ||
+      raw.includes("forte") ||
+      raw.includes("high")
+    ) {
+      return 3;
+    }
+    if (raw.includes("piccante") || raw.includes("spicy")) {
+      return 2;
+    }
+    return 0;
+  }
+  if (parsed <= 0) return 0;
+  if (parsed >= 3) return 3;
+  return Math.round(parsed);
+};
+
+const extractSpiceLevelFromRaw = (raw: Record<string, unknown>): number => {
+  const direct = parseSpiceLevel(
+    raw.piccantezza ??
+      raw.Piccantezza ??
+      raw.livelloPiccantezza ??
+      raw.piccante ??
+      raw.spiceLevel ??
+      raw.SpiceLevel ??
+      raw.spicyLevel ??
+      raw.SpicyLevel,
+  );
+  if (direct > 0) return direct;
+
+  let best = 0;
+  const seen = new WeakSet<object>();
+
+  const visit = (value: unknown, depth: number) => {
+    if (depth > 5 || best >= 3) return;
+
+    if (Array.isArray(value)) {
+      value.forEach((entry) => visit(entry, depth + 1));
+      return;
+    }
+
+    if (!value || typeof value !== "object") return;
+    const obj = value as Record<string, unknown>;
+    if (seen.has(obj)) return;
+    seen.add(obj);
+
+    Object.entries(obj).forEach(([key, entry]) => {
+      if (/piccant|spic/i.test(key)) {
+        best = Math.max(best, parseSpiceLevel(entry));
+      }
+      if (entry && typeof entry === "object") {
+        visit(entry, depth + 1);
+      }
+    });
+  };
+
+  visit(raw, 0);
+  return best;
+};
+
+const inferSpiceFromText = (value: string): number => {
+  const raw = value.trim().toLowerCase();
+  if (!raw) return 0;
+  const normalized = raw.replace(/[’']/g, "");
+
+  if (
+    normalized.includes("nduja") ||
+    normalized.includes("peperoncino") ||
+    normalized.includes("chili") ||
+    normalized.includes("chilli") ||
+    normalized.includes("jalapeno")
+  ) {
+    return 2;
+  }
+
+  if (normalized.includes("piccante") || normalized.includes("spicy")) {
+    return 1;
+  }
+
+  return 0;
+};
+
 const normalizeImage = (image: string): string => {
   if (!image) return "/assets/logo1.png";
   if (image.startsWith("http")) return image;
@@ -108,14 +245,27 @@ const unique = (values: string[]): string[] => {
 const toEmojiCategory = (name: string): string =>
   `cat-${name.toLowerCase().replace(/\s+/g, "-")}`;
 
+const normalizeCategoryKey = (name: string): string =>
+  name.toLowerCase().trim();
+
 const getFallbackProducts = (): MenuProduct[] =>
   getMenuItems().map((entry, index) => {
     const desc = normalizeText(entry.Ingredienti);
+    const explicitSpice = parseSpiceLevel(
+      entry.piccantezza ??
+        entry.Piccantezza ??
+        entry.spiceLevel ??
+        entry.spicyLevel,
+    );
     return {
       id: `fallback-${index}`,
       name: normalizeText(entry.Nome),
       price: parsePrice(entry.Prezzo),
       category: normalizeText(entry.Categoria) || "Menu",
+      spiceLevel:
+        explicitSpice > 0
+          ? explicitSpice
+          : inferSpiceFromText(`${entry.Nome} ${entry.Ingredienti}`),
       image: normalizeImage(
         normalizeText(entry.Immagine) || "assets/logo1.png",
       ),
@@ -152,6 +302,7 @@ export function LiveMenu() {
     null,
   );
   const [loading, setLoading] = useState(true);
+  const sectionRefs = useRef<Record<string, HTMLElement | null>>({});
 
   useEffect(() => {
     let db;
@@ -212,11 +363,19 @@ export function LiveMenu() {
               .map((entry) => entry.trim())
               .filter((entry) => entry.length > 0);
 
+            const explicitSpice = extractSpiceLevelFromRaw(
+              raw as Record<string, unknown>,
+            );
+            const inferredSpice = inferSpiceFromText(
+              `${name} ${description} ${ingredients.join(" ")}`,
+            );
+
             return {
               id: doc.id,
               name,
               price: parsePrice(raw.Prezzo ?? raw.prezzo),
               category,
+              spiceLevel: explicitSpice > 0 ? explicitSpice : inferredSpice,
               image: normalizeImage(
                 normalizeText(raw.Immagine ?? raw.immagine) ||
                   "assets/logo1.png",
@@ -467,10 +626,6 @@ export function LiveMenu() {
     const query = searchQuery.trim().toLowerCase();
     return products
       .filter((product) => {
-        if (!activeCategory) return true;
-        return product.category.toLowerCase() === activeCategory.toLowerCase();
-      })
-      .filter((product) => {
         if (!query) return true;
         const searchText = [
           product.name,
@@ -490,7 +645,95 @@ export function LiveMenu() {
             ),
         );
       });
-  }, [products, activeCategory, searchQuery, selectedExclusions]);
+  }, [products, searchQuery, selectedExclusions]);
+
+  const categorySections = useMemo(
+    () =>
+      dynamicCategories
+        .map((category) => ({
+          category,
+          products: filteredProducts.filter(
+            (product) =>
+              normalizeCategoryKey(product.category) ===
+              normalizeCategoryKey(category.name),
+          ),
+        }))
+        .filter((section) => section.products.length > 0),
+    [dynamicCategories, filteredProducts],
+  );
+
+  useEffect(() => {
+    if (categorySections.length === 0) {
+      setActiveCategory("");
+      return;
+    }
+
+    const exists = categorySections.some(
+      (section) =>
+        normalizeCategoryKey(section.category.name) ===
+        normalizeCategoryKey(activeCategory),
+    );
+    if (!exists) setActiveCategory(categorySections[0].category.name);
+  }, [categorySections, activeCategory]);
+
+  useEffect(() => {
+    if (categorySections.length === 0) return;
+
+    const visibilityMap = new Map<string, number>();
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          const categoryName = entry.target.getAttribute("data-category-name");
+          if (!categoryName) return;
+          const key = normalizeCategoryKey(categoryName);
+          visibilityMap.set(
+            key,
+            entry.isIntersecting ? entry.intersectionRatio : 0,
+          );
+        });
+
+        let nextCategory = "";
+        let bestRatio = 0;
+
+        categorySections.forEach((section) => {
+          const key = normalizeCategoryKey(section.category.name);
+          const ratio = visibilityMap.get(key) ?? 0;
+          if (ratio > bestRatio) {
+            bestRatio = ratio;
+            nextCategory = section.category.name;
+          }
+        });
+
+        if (nextCategory) {
+          setActiveCategory((current) =>
+            normalizeCategoryKey(current) === normalizeCategoryKey(nextCategory)
+              ? current
+              : nextCategory,
+          );
+        }
+      },
+      {
+        root: null,
+        rootMargin: "-132px 0px -55% 0px",
+        threshold: [0.1, 0.25, 0.5, 0.75],
+      },
+    );
+
+    categorySections.forEach((section) => {
+      const target =
+        sectionRefs.current[normalizeCategoryKey(section.category.name)];
+      if (target) observer.observe(target);
+    });
+
+    return () => observer.disconnect();
+  }, [categorySections]);
+
+  const scrollToCategorySection = (categoryName: string) => {
+    setActiveCategory(categoryName);
+    const target = sectionRefs.current[normalizeCategoryKey(categoryName)];
+    if (!target) return;
+    target.scrollIntoView({ behavior: "smooth", block: "start" });
+  };
 
   const currentExtras = useMemo(() => {
     if (!selectedProduct) return [];
@@ -524,10 +767,10 @@ export function LiveMenu() {
       />
 
       <MenuCategoriesBar
-        categories={dynamicCategories}
+        categories={categorySections.map((section) => section.category)}
         activeCategory={activeCategory}
         onSelectCategory={(category) => {
-          setActiveCategory(category);
+          scrollToCategorySection(category);
         }}
       />
 
@@ -567,15 +810,41 @@ export function LiveMenu() {
         </div>
       </div>
 
-      <div className="qr-products-list">
-        {filteredProducts.map((product, index) => (
-          <div
-            className="qr-fade-item"
-            key={product.id}
-            style={{ animationDelay: `${Math.min(index * 40, 280)}ms` }}
+      <div className="qr-products-list qr-products-list-sections">
+        {categorySections.map((section) => (
+          <section
+            key={section.category.id}
+            id={toEmojiCategory(section.category.name)}
+            data-category-name={section.category.name}
+            ref={(node) => {
+              sectionRefs.current[normalizeCategoryKey(section.category.name)] =
+                node;
+            }}
+            className="qr-category-section"
+            aria-labelledby={`${toEmojiCategory(section.category.name)}-title`}
           >
-            <MenuProductCard product={product} onOpen={setSelectedProduct} />
-          </div>
+            <h2
+              id={`${toEmojiCategory(section.category.name)}-title`}
+              className="qr-category-title"
+            >
+              {section.category.name}
+            </h2>
+
+            <div className="qr-category-products">
+              {section.products.map((product, index) => (
+                <div
+                  className="qr-fade-item"
+                  key={product.id}
+                  style={{ animationDelay: `${Math.min(index * 40, 280)}ms` }}
+                >
+                  <MenuProductCard
+                    product={product}
+                    onOpen={setSelectedProduct}
+                  />
+                </div>
+              ))}
+            </div>
+          </section>
         ))}
       </div>
 
