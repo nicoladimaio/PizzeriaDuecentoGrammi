@@ -26,6 +26,11 @@ export const metadata: Metadata = {
   title: "Duecento Grammi",
   description:
     "Pizzeria Duecento Grammi - prenotazioni, menu e atmosfera napoletana.",
+  icons: {
+    icon: "/assets/logo1_tab.png",
+    shortcut: "/assets/logo1_tab.png",
+    apple: "/assets/logo1_tab.png",
+  },
 };
 
 export default function RootLayout({
