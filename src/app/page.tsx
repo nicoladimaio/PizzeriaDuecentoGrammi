@@ -47,7 +47,7 @@ export default function HomePage() {
           </div>
           <HomeFeaturedStrip />
           <div className="home-signature-cta-wrap">
-            <Link href="/menu" className="btn-primary">
+            <Link href="/menu" className="btn-primary home-cta home-cta-menu">
               SCOPRI IL MENU
             </Link>
           </div>
