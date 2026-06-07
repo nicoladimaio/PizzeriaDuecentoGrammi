@@ -1,52 +1,270 @@
 "use client";
 
-import { FormEvent, useMemo, useState } from "react";
-import { addDoc, collection, doc, setDoc } from "firebase/firestore";
+import { FormEvent, useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { z } from "zod";
-import { getClientDb } from "@/lib/firebase";
 
 const reservationSchema = z.object({
   customerName: z.string().min(2, "Inserisci nome e cognome."),
   phone: z.string().min(8, "Inserisci un numero valido."),
-  email: z.string().email("Email non valida."),
   date: z.string().min(1, "Seleziona una data."),
   time: z.string().min(1, "Seleziona un orario."),
   guests: z.coerce.number().int().min(1).max(20),
   notes: z.string().max(300).optional(),
 });
 
-const buildCode = () => {
-  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
-  let value = "DG-";
-  for (let i = 0; i < 6; i += 1) {
-    value += chars[Math.floor(Math.random() * chars.length)];
-  }
-  return value;
+type AvailabilityResponse = {
+  days: Array<{
+    date: string;
+    hasAvailability: boolean;
+    availableSlots: number;
+  }>;
+  slotsByDate: Record<
+    string,
+    Array<{ time: string; available: boolean; remainingSeats: number }>
+  >;
+  config: {
+    maxDays: number;
+    openTime: string;
+    closeTime: string;
+    slotMinutes: number;
+    sameDayClosedAfterOpen?: boolean;
+  };
+  error?: string;
 };
 
+type BookingStep = 1 | 2 | 3;
+type BookingStep2View = "date" | "time";
+
+const weekDayLabels = ["Lun", "Mar", "Mer", "Gio", "Ven", "Sab", "Dom"];
+
+const toDate = (dateKey: string): Date => {
+  const [year, month, day] = dateKey.split("-").map(Number);
+  return new Date(year, month - 1, day);
+};
+
+const dateKey = (date: Date): string => {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, "0");
+  const d = String(date.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
+};
+
+const getMonthKey = (date: Date): string => {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
+};
+
+const monthLabel = (monthKey: string): string => {
+  const [year, month] = monthKey.split("-").map(Number);
+  const date = new Date(year, month - 1, 1);
+  return date.toLocaleDateString("it-IT", { month: "long", year: "numeric" });
+};
+
+const calendarCells = (monthKey: string) => {
+  const [year, month] = monthKey.split("-").map(Number);
+  const first = new Date(year, month - 1, 1);
+  const last = new Date(year, month, 0);
+
+  const firstWeekday = (first.getDay() + 6) % 7;
+  const cells: Array<{ kind: "empty" } | { kind: "day"; date: string }> = [];
+
+  for (let i = 0; i < firstWeekday; i += 1) {
+    cells.push({ kind: "empty" });
+  }
+
+  for (let day = 1; day <= last.getDate(); day += 1) {
+    const date = dateKey(new Date(year, month - 1, day));
+    cells.push({ kind: "day", date });
+  }
+
+  return cells;
+};
+
+const guestOptions = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
+
 export function ReservationForm() {
+  const router = useRouter();
+  const [step, setStep] = useState<BookingStep>(1);
   const [pending, setPending] = useState(false);
-  const [feedback, setFeedback] = useState<string | null>(null);
+  const [redirecting, setRedirecting] = useState(false);
+  const [loadingAvailability, setLoadingAvailability] = useState(false);
+
+  const [guests, setGuests] = useState<number | null>(null);
+  const [customGuestsOpen, setCustomGuestsOpen] = useState(false);
+  const [customGuestsValue, setCustomGuestsValue] = useState("");
+  const [customGuestsError, setCustomGuestsError] = useState<string | null>(
+    null,
+  );
+  const [selectedDate, setSelectedDate] = useState("");
+  const [selectedTime, setSelectedTime] = useState("");
+  const [step2View, setStep2View] = useState<BookingStep2View>("date");
+
+  const [customerName, setCustomerName] = useState("");
+  const [phone, setPhone] = useState("");
+  const [notes, setNotes] = useState("");
+
+  const [availability, setAvailability] = useState<AvailabilityResponse | null>(
+    null,
+  );
+
   const [error, setError] = useState<string | null>(null);
-  const [reservationCode, setReservationCode] = useState<string | null>(null);
+  const [reviewOpen, setReviewOpen] = useState(false);
 
-  const minDate = useMemo(() => new Date().toISOString().slice(0, 10), []);
+  const [selectedMonth, setSelectedMonth] = useState<string>("");
 
-  const onSubmit = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
+  const selectedDaySlots = useMemo(() => {
+    if (!availability || !selectedDate) return [];
+    return availability.slotsByDate[selectedDate] ?? [];
+  }, [availability, selectedDate]);
+
+  const availableTimeOptions = useMemo(
+    () =>
+      selectedDaySlots
+        .filter((slot) => slot.available)
+        .map((slot) => slot.time),
+    [selectedDaySlots],
+  );
+
+  const availableMonthKeys = useMemo(() => {
+    if (!availability) return [] as string[];
+    const set = new Set<string>();
+    for (const day of availability.days) {
+      set.add(getMonthKey(toDate(day.date)));
+    }
+    return [...set];
+  }, [availability]);
+
+  const dayAvailabilityMap = useMemo(() => {
+    const map = new Map<string, boolean>();
+    for (const day of availability?.days ?? []) {
+      map.set(day.date, day.hasAvailability);
+    }
+    return map;
+  }, [availability]);
+
+  const calendarGrid = useMemo(() => {
+    if (!selectedMonth) return [];
+    return calendarCells(selectedMonth);
+  }, [selectedMonth]);
+
+  const selectedDateLabel = useMemo(() => {
+    if (!selectedDate) return "";
+    return toDate(selectedDate).toLocaleDateString("it-IT", {
+      weekday: "long",
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+    });
+  }, [selectedDate]);
+
+  const canProceedStep1 = guests !== null && !customGuestsError;
+  const canProceedStep2 = Boolean(selectedDate && selectedTime);
+  const canOpenReview =
+    guests !== null &&
+    Boolean(customerName.trim()) &&
+    Boolean(phone.trim()) &&
+    Boolean(selectedDate) &&
+    Boolean(selectedTime) &&
+    !pending;
+
+  useEffect(() => {
+    if (!guests) {
+      setAvailability(null);
+      setSelectedDate("");
+      setSelectedTime("");
+      setStep2View("date");
+      setSelectedMonth("");
+      setLoadingAvailability(false);
+      return;
+    }
+
+    let ignore = false;
+
+    const loadAvailability = async () => {
+      setLoadingAvailability(true);
+      setError(null);
+
+      try {
+        const response = await fetch(
+          `/api/reservations/availability?guests=${guests}`,
+        );
+        const data = (await response.json()) as AvailabilityResponse;
+
+        if (ignore) return;
+
+        if (!response.ok) {
+          setError(data.error ?? "Impossibile caricare disponibilita.");
+          setAvailability(null);
+          return;
+        }
+
+        setAvailability(data);
+
+        const firstDay = data.days[0]?.date;
+        if (firstDay) {
+          setSelectedMonth(getMonthKey(toDate(firstDay)));
+        }
+      } catch {
+        if (!ignore) {
+          setError("Impossibile caricare disponibilita.");
+          setAvailability(null);
+        }
+      } finally {
+        if (!ignore) {
+          setLoadingAvailability(false);
+        }
+      }
+    };
+
+    void loadAvailability();
+
+    return () => {
+      ignore = true;
+    };
+  }, [guests]);
+
+  useEffect(() => {
+    if (!availability) return;
+
+    if (!selectedDate || !dayAvailabilityMap.has(selectedDate)) {
+      setSelectedDate("");
+      setSelectedTime("");
+      setStep2View("date");
+      return;
+    }
+
+    if (!dayAvailabilityMap.get(selectedDate)) {
+      setSelectedTime("");
+      return;
+    }
+
+    if (selectedTime && !availableTimeOptions.includes(selectedTime)) {
+      setSelectedTime("");
+    }
+  }, [
+    availability,
+    selectedDate,
+    selectedTime,
+    dayAvailabilityMap,
+    availableTimeOptions,
+  ]);
+
+  const submitReservation = async () => {
+    if (!selectedDate || !selectedTime || !canOpenReview) {
+      setError("Completa tutti i campi prima di inviare.");
+      return;
+    }
+
     setPending(true);
     setError(null);
-    setFeedback(null);
 
-    const formData = new FormData(event.currentTarget);
     const payload = {
-      customerName: String(formData.get("customerName") ?? "").trim(),
-      phone: String(formData.get("phone") ?? "").trim(),
-      email: String(formData.get("email") ?? "").trim(),
-      date: String(formData.get("date") ?? "").trim(),
-      time: String(formData.get("time") ?? "").trim(),
-      guests: Number(formData.get("guests") ?? 0),
-      notes: String(formData.get("notes") ?? "").trim(),
+      customerName: customerName.trim(),
+      phone: phone.trim(),
+      date: selectedDate,
+      time: selectedTime,
+      guests: guests ?? 0,
+      notes: notes.trim(),
     };
 
     const parsed = reservationSchema.safeParse(payload);
@@ -59,108 +277,464 @@ export function ReservationForm() {
     }
 
     try {
-      const db = getClientDb();
-      const code = buildCode();
-      const now = new Date().toISOString();
-      const reservationDoc = {
-        ...parsed.data,
-        code,
-        status: "pending" as const,
-        ownerResponse: "",
-        createdAt: now,
-        updatedAt: now,
-      };
-
-      await addDoc(collection(db, "reservations"), reservationDoc);
-      await setDoc(doc(db, "reservation_status", code), {
-        code,
-        customerName: parsed.data.customerName,
-        date: parsed.data.date,
-        time: parsed.data.time,
-        guests: parsed.data.guests,
-        status: "pending",
-        ownerResponse: "",
-        updatedAt: now,
+      const response = await fetch("/api/reservations", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(parsed.data),
       });
 
-      event.currentTarget.reset();
-      setReservationCode(code);
-      setFeedback(
-        "Richiesta inviata correttamente. Ti risponderemo appena possibile.",
-      );
+      const data = (await response.json()) as {
+        ok?: boolean;
+        error?: string;
+      };
+
+      if (!data.ok) {
+        setError(data.error ?? "Errore durante l'invio. Riprova tra poco.");
+        return;
+      }
+
+      if (!response.ok) {
+        setError(data.error ?? "Errore durante l'invio. Riprova tra poco.");
+        return;
+      }
+
+      setReviewOpen(false);
+      setRedirecting(true);
+      router.push("/prenotazioni/confermata");
+      return;
     } catch {
-      setError("Errore durante l'invio. Riprova tra poco.");
+      setError(
+        "Invio non confermato dal server. Se hai dubbi, riprova tra poco o contatta la pizzeria.",
+      );
     } finally {
       setPending(false);
     }
   };
 
+  const onSubmit = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!canOpenReview) {
+      setError("Completa tutti i campi obbligatori.");
+      return;
+    }
+    setError(null);
+    setReviewOpen(true);
+  };
+
   return (
     <section className="card-block" aria-labelledby="prenota-title">
-      <h2 id="prenota-title" className="section-title">
-        Prenota Un Tavolo
-      </h2>
-      <p className="section-subtitle">
-        Invia una richiesta. Il proprietario la approvera o rifiutera dalla
-        dashboard.
-      </p>
+      <div className="reservation-card-head">
+        <h2 id="prenota-title" className="section-title">
+          Prenota Un Tavolo
+        </h2>
+      </div>
+      <p className="section-subtitle">Procedi in 3 passaggi rapidi.</p>
 
       <form className="booking-form" onSubmit={onSubmit}>
-        <label>
-          Nome e cognome
-          <input name="customerName" type="text" required />
-        </label>
-
-        <label>
-          Telefono
-          <input name="phone" type="tel" required />
-        </label>
-
-        <label>
-          Email
-          <input name="email" type="email" required />
-        </label>
-
-        <div className="two-cols">
-          <label>
-            Data
-            <input name="date" type="date" min={minDate} required />
-          </label>
-
-          <label>
-            Orario
-            <input name="time" type="time" required />
-          </label>
+        <div
+          className="booking-wizard-head"
+          role="status"
+          aria-live="polite"
+          aria-label={`Step ${step} di 3`}
+        >
+          <span
+            className={step >= 1 ? "wizard-line active" : "wizard-line"}
+            aria-hidden="true"
+          />
+          <span
+            className={step >= 2 ? "wizard-line active" : "wizard-line"}
+            aria-hidden="true"
+          />
+          <span
+            className={step >= 3 ? "wizard-line active" : "wizard-line"}
+            aria-hidden="true"
+          />
         </div>
 
-        <label>
-          Numero persone
-          <input
-            name="guests"
-            type="number"
-            min={1}
-            max={20}
-            defaultValue={2}
-            required
-          />
-        </label>
+        {step === 1 ? (
+          <div className="booking-step booking-step-screen">
+            <p className="booking-step-title">Quante persone siete?</p>
+            <div
+              className="booking-guests-grid"
+              role="group"
+              aria-label="Numero persone"
+            >
+              {guestOptions.map((option) => (
+                <button
+                  key={option}
+                  type="button"
+                  className={
+                    guests === option
+                      ? "booking-guest-square active"
+                      : "booking-guest-square"
+                  }
+                  onClick={() => {
+                    setGuests(option);
+                    setCustomGuestsOpen(false);
+                    setCustomGuestsValue("");
+                    setCustomGuestsError(null);
+                  }}
+                >
+                  {option}
+                </button>
+              ))}
 
-        <label>
-          Note (opzionale)
-          <textarea name="notes" rows={4} maxLength={300} />
-        </label>
+              <button
+                type="button"
+                className={
+                  customGuestsOpen
+                    ? "booking-guest-square booking-guest-other active"
+                    : "booking-guest-square booking-guest-other"
+                }
+                onClick={() => {
+                  setCustomGuestsOpen((prev) => {
+                    const next = !prev;
+                    if (next) {
+                      setGuests(null);
+                      setCustomGuestsValue("");
+                      setCustomGuestsError(null);
+                    }
+                    return next;
+                  });
+                }}
+              >
+                Altro
+              </button>
+            </div>
 
-        <button className="btn-primary" type="submit" disabled={pending}>
-          {pending ? "Invio in corso..." : "Invia richiesta"}
-        </button>
+            {customGuestsOpen ? (
+              <div className="booking-custom-input-pop">
+                <label>
+                  Numero persone (1-20)
+                  <input
+                    type="number"
+                    min={1}
+                    max={20}
+                    value={customGuestsValue}
+                    onChange={(event) => {
+                      const nextValue = event.target.value;
+                      setCustomGuestsValue(nextValue);
+
+                      if (nextValue === "") {
+                        setGuests(null);
+                        setCustomGuestsError(null);
+                        return;
+                      }
+
+                      const value = Number(nextValue);
+                      if (!Number.isFinite(value) || value < 1) {
+                        setGuests(null);
+                        setCustomGuestsError("Inserisci un numero tra 1 e 20.");
+                        return;
+                      }
+
+                      if (value > 20) {
+                        setGuests(null);
+                        setCustomGuestsError(
+                          "Non puoi inserire piu di 20 persone in questo campo.",
+                        );
+                        return;
+                      }
+
+                      if (value >= 1 && value <= 20) {
+                        setGuests(value);
+                        setCustomGuestsError(null);
+                      }
+                    }}
+                  />
+                </label>
+                {customGuestsError ? (
+                  <p className="booking-inline-error">{customGuestsError}</p>
+                ) : null}
+              </div>
+            ) : null}
+
+            <div className="booking-step-actions">
+              <button
+                type="button"
+                className="btn-primary"
+                disabled={!canProceedStep1}
+                onClick={() => setStep(2)}
+              >
+                Avanti
+              </button>
+            </div>
+          </div>
+        ) : null}
+
+        {step === 2 ? (
+          <div className="booking-step booking-step-screen">
+            <p className="booking-step-title">Scegli giorno e orario</p>
+            {loadingAvailability ? (
+              <p className="section-subtitle">Caricamento disponibilita...</p>
+            ) : null}
+
+            {step2View === "date" ? (
+              <>
+                {availableMonthKeys.length > 1 ? (
+                  <div
+                    className="booking-month-switch"
+                    role="tablist"
+                    aria-label="Mesi disponibili"
+                  >
+                    {availableMonthKeys.map((monthKey) => (
+                      <button
+                        key={monthKey}
+                        type="button"
+                        className={
+                          monthKey === selectedMonth
+                            ? "booking-month-pill active"
+                            : "booking-month-pill"
+                        }
+                        onClick={() => setSelectedMonth(monthKey)}
+                      >
+                        {monthLabel(monthKey)}
+                      </button>
+                    ))}
+                  </div>
+                ) : null}
+
+                <div
+                  className="booking-calendar"
+                  role="grid"
+                  aria-label="Calendario prenotazioni"
+                >
+                  {weekDayLabels.map((label) => (
+                    <div key={label} className="booking-calendar-weekday">
+                      {label}
+                    </div>
+                  ))}
+
+                  {calendarGrid.map((cell, index) => {
+                    if (cell.kind === "empty") {
+                      return (
+                        <div
+                          key={`empty-${index}`}
+                          className="booking-calendar-empty"
+                        />
+                      );
+                    }
+
+                    const currentDate = toDate(cell.date);
+                    const disabled = !dayAvailabilityMap.get(cell.date);
+                    const isSelected = cell.date === selectedDate;
+
+                    return (
+                      <button
+                        key={cell.date}
+                        type="button"
+                        className={
+                          isSelected
+                            ? "booking-calendar-day active"
+                            : "booking-calendar-day"
+                        }
+                        disabled={disabled}
+                        onClick={() => {
+                          setSelectedDate(cell.date);
+                          setSelectedTime("");
+                          setStep2View("time");
+                        }}
+                      >
+                        {currentDate.getDate()}
+                      </button>
+                    );
+                  })}
+                </div>
+
+                <div className="booking-step-actions two-buttons">
+                  <button
+                    type="button"
+                    className="btn-secondary"
+                    onClick={() => setStep(1)}
+                  >
+                    Indietro
+                  </button>
+                  <button
+                    type="button"
+                    className="btn-primary"
+                    disabled={!selectedDate}
+                    onClick={() => setStep2View("time")}
+                  >
+                    Vai agli orari
+                  </button>
+                </div>
+              </>
+            ) : selectedDate ? (
+              <div className="booking-time-section">
+                <p className="booking-step-title booking-time-title">
+                  Orari disponibili per {selectedDate}
+                </p>
+                <div
+                  className="booking-time-grid"
+                  role="listbox"
+                  aria-label="Orari disponibili"
+                >
+                  {availableTimeOptions.map((time) => (
+                    <button
+                      key={time}
+                      type="button"
+                      className={
+                        time === selectedTime
+                          ? "booking-time-pill active"
+                          : "booking-time-pill"
+                      }
+                      onClick={() => setSelectedTime(time)}
+                    >
+                      <span>{time}</span>
+                    </button>
+                  ))}
+                </div>
+                {availableTimeOptions.length === 0 ? (
+                  <p className="section-subtitle">
+                    Nessun orario disponibile per il giorno selezionato.
+                  </p>
+                ) : null}
+
+                <div className="booking-step-actions two-buttons">
+                  <button
+                    type="button"
+                    className="btn-secondary"
+                    onClick={() => {
+                      setStep2View("date");
+                      setSelectedTime("");
+                    }}
+                  >
+                    Cambia giorno
+                  </button>
+                  <button
+                    type="button"
+                    className="btn-primary"
+                    disabled={!canProceedStep2}
+                    onClick={() => setStep(3)}
+                  >
+                    Avanti
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <p className="section-subtitle">
+                Seleziona prima un giorno dal calendario.
+              </p>
+            )}
+          </div>
+        ) : null}
+
+        {step === 3 ? (
+          <div className="booking-step booking-step-screen">
+            <p className="booking-step-title">Inserisci i tuoi dati</p>
+            <label>
+              Nome e cognome
+              <input
+                name="customerName"
+                type="text"
+                required
+                value={customerName}
+                onChange={(event) => setCustomerName(event.target.value)}
+              />
+            </label>
+
+            <label>
+              Telefono
+              <input
+                name="phone"
+                type="tel"
+                required
+                value={phone}
+                onChange={(event) => setPhone(event.target.value)}
+              />
+            </label>
+
+            <label>
+              Note (opzionale)
+              <textarea
+                name="notes"
+                rows={3}
+                maxLength={300}
+                value={notes}
+                onChange={(event) => setNotes(event.target.value)}
+              />
+            </label>
+
+            <div className="booking-step-actions two-buttons">
+              <button
+                type="button"
+                className="btn-secondary"
+                onClick={() => setStep(2)}
+              >
+                Indietro
+              </button>
+              <button
+                className="btn-primary"
+                type="submit"
+                disabled={!canOpenReview}
+              >
+                {pending ? "Invio in corso..." : "Riepilogo"}
+              </button>
+            </div>
+          </div>
+        ) : null}
       </form>
 
-      {feedback ? <p className="success-text">{feedback}</p> : null}
+      {reviewOpen ? (
+        <div className="admin-modal-backdrop" role="dialog" aria-modal="true">
+          <div className="admin-modal status-popup-modal">
+            <div className="admin-modal-head">
+              <h3>Riepilogo prenotazione</h3>
+            </div>
+            <div className="status-popup-body">
+              <p className="booking-selection-summary">
+                Persone: <strong>{guests}</strong>
+              </p>
+              <p className="booking-selection-summary">
+                Giorno: <strong>{selectedDateLabel || selectedDate}</strong>
+              </p>
+              <p className="booking-selection-summary">
+                Orario: <strong>{selectedTime}</strong>
+              </p>
+              <p className="booking-selection-summary">
+                Cliente: <strong>{customerName}</strong>
+              </p>
+              <p className="booking-selection-summary">
+                Telefono: <strong>{phone}</strong>
+              </p>
+            </div>
+            <div className="booking-step-actions two-buttons booking-review-actions">
+              <button
+                type="button"
+                className="btn-secondary"
+                onClick={() => setReviewOpen(false)}
+                disabled={pending}
+              >
+                Indietro
+              </button>
+              <button
+                type="button"
+                className="btn-primary"
+                onClick={() => void submitReservation()}
+                disabled={!canOpenReview}
+              >
+                {pending ? "Invio in corso..." : "Conferma e invia"}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
       {error ? <p className="error-text">{error}</p> : null}
-      {reservationCode ? (
-        <p className="booking-code">
-          Codice prenotazione: <strong>{reservationCode}</strong>
-        </p>
+
+      {redirecting ? (
+        <div className="app-loader-overlay" role="status" aria-live="polite">
+          <div className="app-loader-card">
+            <img
+              src="/assets/loader.gif"
+              alt="Caricamento"
+              className="app-loader-gif"
+            />
+            <p>Conferma prenotazione in corso...</p>
+          </div>
+        </div>
       ) : null}
     </section>
   );

@@ -1,6 +1,7 @@
 import Link from "next/link";
 import Image from "next/image";
 import { HomeHeroVideo } from "@/components/home-hero-video";
+import { HomeFeaturedStrip } from "@/components/home-featured-strip";
 
 export default function HomePage() {
   return (
@@ -42,99 +43,14 @@ export default function HomePage() {
       <section className="home-signature-section">
         <div className="container">
           <div className="home-section-head">
-            <h2>I nostri sapori</h2>
-            <p className="home-curation-subtitle">
-              Una selezione che parte dalla tradizione e arriva a una cucina
-              nitida, contemporanea e riconoscibile.
-            </p>
+            <h2>Le nostre firme</h2>
           </div>
-
-          <div className="home-signature-grid">
-            <article className="home-signature-card">
-              <div className="home-signature-media">
-                <Image
-                  src="/assets/frittatina.jpg"
-                  alt="Fritti artigianali"
-                  fill
-                  sizes="(max-width: 760px) 92vw, 33vw"
-                />
-              </div>
-              <div className="home-signature-body">
-                <h3>I fritti</h3>
-                <p>
-                  Frittatine, crocchè e montanare preparati al momento,
-                  croccanti fuori e pieni di gusto.
-                </p>
-              </div>
-            </article>
-
-            <article className="home-signature-card">
-              <div className="home-signature-media">
-                <Image
-                  src="/assets/pizze_speciali.jpg"
-                  alt="Pizze speciali"
-                  fill
-                  sizes="(max-width: 760px) 92vw, 33vw"
-                />
-              </div>
-              <div className="home-signature-body">
-                <h3>Pizze speciali</h3>
-                <p>
-                  Impasti leggeri e topping ricercati per un equilibrio preciso
-                  tra tradizione e identita.
-                </p>
-              </div>
-            </article>
-
-            <article className="home-signature-card">
-              <div className="home-signature-media">
-                <Image
-                  src="/assets/pizze_classiche.jpg"
-                  alt="Ingredienti selezionati"
-                  fill
-                  sizes="(max-width: 760px) 92vw, 33vw"
-                />
-              </div>
-              <div className="home-signature-body">
-                <h3>Ingredienti selezionati</h3>
-                <p>
-                  Materie prime scelte con attenzione: filiera affidabile,
-                  sapori netti, qualita costante.
-                </p>
-              </div>
-            </article>
+          <HomeFeaturedStrip />
+          <div className="home-signature-cta-wrap">
+            <Link href="/menu" className="btn-primary">
+              SCOPRI IL MENU
+            </Link>
           </div>
-        </div>
-      </section>
-
-      <section className="home-craft-band">
-        <div className="container home-craft-grid">
-          <article className="home-craft-copy">
-            <p className="home-craft-kicker">La nostra cucina</p>
-            <h3>Precisione nei dettagli, identita nel gusto</h3>
-            <p>
-              Ogni proposta nasce da un equilibrio semplice: tecnica pulita,
-              ingredienti riconoscibili e una linea di sapore coerente.
-            </p>
-            <ul className="home-craft-list">
-              <li>Impasti maturati per leggerezza e struttura</li>
-              <li>Fritture espresse con croccantezza asciutta</li>
-              <li>Ingredienti selezionati in base a qualita e stagionalita</li>
-            </ul>
-          </article>
-
-          <figure className="home-craft-photo">
-            <Image
-              src="/assets/pizze_classiche.jpg"
-              alt="Ingredienti e pizza appena preparata"
-              fill
-              sizes="(max-width: 760px) 92vw, 40vw"
-            />
-            <figcaption>
-              Farine selezionate, pomodoro e latticini scelti con cura ogni
-              giorno.
-            </figcaption>
-          </figure>
         </div>
       </section>
 
@@ -188,17 +104,10 @@ export default function HomePage() {
               </span>
               Lun - Dom 19:00 - 00:00
             </p>
-            <p className="home-footer-line">
-              <span className="home-footer-line-icon" aria-hidden>
-                <svg viewBox="0 0 24 24" role="img">
-                  <path d="M4 11h16" />
-                </svg>
-              </span>
-              Asporto e sala
-            </p>
           </article>
 
           <article className="home-footer-minimal-block home-footer-minimal-block-social">
+            <p className="home-footer-minimal-label">Seguici</p>
             <div className="home-footer-social-icons" aria-label="Social">
               <a
                 href="https://instagram.com"
@@ -238,15 +147,6 @@ export default function HomePage() {
               </a>
             </div>
           </article>
-
-          <div className="home-footer-minimal-block home-footer-minimal-block-actions">
-            <Link
-              href="/prenotazioni"
-              className="btn-primary home-footer-minimal-cta"
-            >
-              Prenota ora
-            </Link>
-          </div>
         </div>
 
         <div className="container home-footer-signature">

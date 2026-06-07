@@ -2,6 +2,7 @@ export type MenuItem = {
   Nome: string;
   Prezzo: string | number;
   Ingredienti: string;
+  Descrizione?: string;
   Categoria: string;
   Immagine: string;
   piccantezza?: string | number | boolean;

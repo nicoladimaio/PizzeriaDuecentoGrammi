@@ -11,6 +11,9 @@ type MenuProductSheetProps = {
 
 const formatPrice = (price: number): string => `${price.toFixed(2)} €`;
 
+const normalizeComparableText = (value: string): string =>
+  value.trim().toLowerCase().replace(/\s+/g, " ");
+
 const toReadableAllergen = (value: string): string => {
   return value
     .replace(/_/g, " ")
@@ -52,54 +55,72 @@ export function MenuProductSheet({ product, onClose }: MenuProductSheetProps) {
       >
         {product ? (
           <>
-            <button
-              type="button"
-              className="qr-sheet-close"
-              onClick={onClose}
-              aria-label="Chiudi dettaglio"
-            >
-              ✕
-            </button>
-            <div className="qr-sheet-image-wrap">
-              <Image
-                src={product.image}
-                alt={product.name}
-                fill
-                sizes="100vw"
-                className="qr-sheet-image"
-              />
-            </div>
-            <div className="qr-sheet-content">
-              <div className="qr-sheet-title-row">
-                <h3>{product.name}</h3>
-                <span className="qr-product-price">
-                  {formatPrice(product.price)}
-                </span>
-              </div>
-              <p className="qr-sheet-desc">{product.description}</p>
-              <SpiceLevelIndicator
-                level={product.spiceLevel}
-                className="qr-spice-row qr-spice-row-detail"
-                showLabel
-                hideWhenZero
-              />
-              {product.allergens.length > 0 ? (
-                <div
-                  className="qr-sheet-allergens"
-                  aria-label="Allergeni del piatto"
-                >
-                  {product.allergens.map((allergen) => (
-                    <AllergenBadge
-                      key={`${product.id}-${allergen}`}
-                      allergen={toReadableAllergen(allergen)}
-                      showLabel
-                      showTooltip={false}
-                      className="qr-sheet-allergen-chip"
+            {(() => {
+              const ingredientsText = product.ingredients.join(", ");
+              const showIngredientsRow =
+                product.ingredients.length > 0 &&
+                normalizeComparableText(product.description) !==
+                  normalizeComparableText(ingredientsText);
+
+              return (
+                <>
+                  <button
+                    type="button"
+                    className="qr-sheet-close"
+                    onClick={onClose}
+                    aria-label="Chiudi dettaglio"
+                  >
+                    ✕
+                  </button>
+                  <div className="qr-sheet-image-wrap">
+                    <Image
+                      src={product.image}
+                      alt={product.name}
+                      fill
+                      sizes="100vw"
+                      className="qr-sheet-image"
                     />
-                  ))}
-                </div>
-              ) : null}
-            </div>
+                  </div>
+                  <div className="qr-sheet-content">
+                    <div className="qr-sheet-title-row">
+                      <h3>{product.name}</h3>
+                      <span className="qr-product-price">
+                        {formatPrice(product.price)}
+                      </span>
+                    </div>
+                    <p className="qr-sheet-desc">{product.description}</p>
+                    {showIngredientsRow ? (
+                      <div className="qr-sheet-ingredients">
+                        <strong>Ingredienti:</strong>{" "}
+                        {product.ingredients.join(", ")}
+                      </div>
+                    ) : null}
+                    <SpiceLevelIndicator
+                      level={product.spiceLevel}
+                      className="qr-spice-row qr-spice-row-detail"
+                      showLabel
+                      hideWhenZero
+                    />
+                    {product.allergens.length > 0 ? (
+                      <div
+                        className="qr-sheet-allergens"
+                        aria-label="Allergeni del piatto"
+                      >
+                        {product.allergens.map((allergen) => (
+                          <AllergenBadge
+                            key={`${product.id}-${allergen}`}
+                            allergen={toReadableAllergen(allergen)}
+                            showLabel
+                            showTooltip={false}
+                            className="qr-sheet-allergen-chip"
+                          />
+                        ))}
+                      </div>
+                    ) : null}
+                  </div>
+                </>
+              );
+            })()}
           </>
         ) : null}
       </aside>

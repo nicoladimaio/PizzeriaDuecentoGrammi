@@ -21,6 +21,11 @@ export const getMenuItems = (): MenuItem[] => {
           (item as { ingredienti?: string }).ingredienti ??
           "",
       ).trim(),
+      Descrizione: String(
+        (item as { Descrizione?: string; descrizione?: string }).Descrizione ??
+          (item as { descrizione?: string }).descrizione ??
+          "",
+      ).trim(),
       Categoria: String(
         (item as { Categoria?: string; categoria?: string }).Categoria ??
           (item as { categoria?: string }).categoria ??

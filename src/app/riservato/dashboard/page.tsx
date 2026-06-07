@@ -9,7 +9,21 @@ export const metadata: Metadata = {
   },
 };
 
-export default function AdminDashboardPage() {
+export default async function AdminDashboardPage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
+  const resolved = await searchParams;
+  const tabRaw = resolved.tab;
+  const codeRaw = resolved.code;
+
+  const initialTab =
+    typeof tabRaw === "string" && tabRaw === "reservations"
+      ? "reservations"
+      : "menu";
+  const highlightedCode = typeof codeRaw === "string" ? codeRaw : undefined;
+
   return (
     <main className="page-main admin-page-main">
       <section className="hero-mini admin-hero">
@@ -20,7 +34,10 @@ export default function AdminDashboardPage() {
       </section>
 
       <div className="container">
-        <AdminDashboard />
+        <AdminDashboard
+          initialSection={initialTab}
+          highlightedCode={highlightedCode}
+        />
       </div>
     </main>
   );

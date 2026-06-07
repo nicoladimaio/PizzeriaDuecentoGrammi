@@ -33,9 +33,11 @@ import { getClientDb, getClientStorage } from "@/lib/firebase";
 type AdminMenuItem = {
   id: string;
   nome: string;
+  descrizione: string;
   ingredienti: string;
   prezzo: number;
   categoria: string;
+  specialita: boolean;
   spiceLevel: number;
   immagine: string;
   ordine: number;
@@ -381,8 +383,10 @@ export function AdminMenuPanel() {
   >([]);
 
   const [newItemName, setNewItemName] = useState("");
+  const [newItemDescription, setNewItemDescription] = useState("");
   const [newItemPrice, setNewItemPrice] = useState("");
   const [newItemCategory, setNewItemCategory] = useState("");
+  const [newItemSpecial, setNewItemSpecial] = useState(false);
   const [newItemSpiceLevel, setNewItemSpiceLevel] = useState(0);
   const [newItemIngredientIds, setNewItemIngredientIds] = useState<string[]>(
     [],
@@ -397,8 +401,10 @@ export function AdminMenuPanel() {
   const [newImageFile, setNewImageFile] = useState<File | null>(null);
 
   const [editItemName, setEditItemName] = useState("");
+  const [editItemDescription, setEditItemDescription] = useState("");
   const [editItemPrice, setEditItemPrice] = useState("");
   const [editItemCategory, setEditItemCategory] = useState("");
+  const [editItemSpecial, setEditItemSpecial] = useState(false);
   const [editItemSpiceLevel, setEditItemSpiceLevel] = useState(0);
   const [editItemIngredientIds, setEditItemIngredientIds] = useState<string[]>(
     [],
@@ -451,11 +457,13 @@ export function AdminMenuPanel() {
           return {
             id: entry.id,
             nome: toString(data.nome ?? data.Nome),
+            descrizione: toString(data.descrizione ?? data.Descrizione),
             ingredienti: toString(data.ingredienti ?? data.Ingredienti),
             prezzo: normalizePrice(data.prezzo ?? data.Prezzo) ?? 0,
             categoria: toString(
               (data.categoria ?? data.Categoria) || "Pizze classiche",
             ),
+            specialita: Boolean(data.specialita ?? data.special),
             spiceLevel: extractSpiceLevelFromRaw(
               data as Record<string, unknown>,
             ),
@@ -564,11 +572,7 @@ export function AdminMenuPanel() {
             };
           })
           .filter((entry) => entry.name.length > 0)
-          .sort((a, b) => {
-            const orderDiff = a.ordine - b.ordine;
-            if (orderDiff !== 0) return orderDiff;
-            return a.name.localeCompare(b.name, "it");
-          });
+          .sort((a, b) => a.name.localeCompare(b.name, "it"));
 
         setIngredients(next);
       },
@@ -644,16 +648,16 @@ export function AdminMenuPanel() {
     if (!showItemModal) return;
     if (newItemCategory) return;
 
+    if (activeCategory) {
+      setNewItemCategory(activeCategory);
+      return;
+    }
+
     const firstVisibleCategory = categories.find(
       (category) => category.visible,
     )?.name;
     if (firstVisibleCategory) {
       setNewItemCategory(firstVisibleCategory);
-      return;
-    }
-
-    if (activeCategory) {
-      setNewItemCategory(activeCategory);
       return;
     }
 
@@ -1106,11 +1110,6 @@ export function AdminMenuPanel() {
     }
 
     const ingredientIds = uniqueInsensitive(newItemIngredientIds);
-    if (ingredientIds.length === 0) {
-      setBusy(false);
-      setError("Seleziona almeno un ingrediente.");
-      return;
-    }
 
     try {
       const db = getClientDb();
@@ -1132,9 +1131,12 @@ export function AdminMenuPanel() {
 
       await addDoc(collection(db, "menu_items"), {
         nome: newItemName.trim(),
+        descrizione: newItemDescription.trim(),
         ingredienti: ingredientiText,
         prezzo,
         categoria,
+        specialita: newItemSpecial,
+        special: newItemSpecial,
         piccantezza: newItemSpiceLevel,
         spiceLevel: newItemSpiceLevel,
         immagine: uploadedImage,
@@ -1147,8 +1149,10 @@ export function AdminMenuPanel() {
       });
 
       setNewItemName("");
+      setNewItemDescription("");
       setNewItemPrice("");
       setNewItemCategory(categoria);
+      setNewItemSpecial(false);
       setNewItemSpiceLevel(0);
       setNewItemIngredientIds([]);
       setNewItemAllergens([]);
@@ -1165,8 +1169,10 @@ export function AdminMenuPanel() {
   const openEditItem = (item: AdminMenuItem) => {
     setEditingItemId(item.id);
     setEditItemName(item.nome);
+    setEditItemDescription(item.descrizione ?? "");
     setEditItemPrice(String(item.prezzo));
     setEditItemCategory(item.categoria);
+    setEditItemSpecial(item.specialita ?? false);
     setEditItemSpiceLevel(item.spiceLevel ?? 0);
     setEditItemIngredientIds(item.ingredientIds);
     const detected = inferAllergensFromIngredientIds(item.ingredientIds);
@@ -1203,10 +1209,6 @@ export function AdminMenuPanel() {
     }
 
     const ingredientIds = uniqueInsensitive(editItemIngredientIds);
-    if (ingredientIds.length === 0) {
-      setError("Seleziona almeno un ingrediente.");
-      return;
-    }
 
     setSavingId(editingItemId);
     setError(null);
@@ -1226,9 +1228,12 @@ export function AdminMenuPanel() {
 
       await updateDoc(doc(db, "menu_items", editingItemId), {
         nome: editItemName.trim(),
+        descrizione: editItemDescription.trim(),
         ingredienti: ingredientiText,
         prezzo,
         categoria: editItemCategory.trim(),
+        specialita: editItemSpecial,
+        special: editItemSpecial,
         piccantezza: editItemSpiceLevel,
         spiceLevel: editItemSpiceLevel,
         immagine: uploadedImage,
@@ -1239,6 +1244,7 @@ export function AdminMenuPanel() {
 
       setEditingItemId(null);
       setEditImageFile(null);
+      setEditItemSpecial(false);
       setEditItemSpiceLevel(0);
       setEditItemIngredientIds([]);
       setEditItemAllergens([]);
@@ -1342,6 +1348,24 @@ export function AdminMenuPanel() {
       });
     } catch {
       setError("Errore durante aggiornamento visibilita.");
+    } finally {
+      setSavingId(null);
+    }
+  };
+
+  const toggleItemSpecialty = async (item: AdminMenuItem) => {
+    setSavingId(item.id);
+    setError(null);
+    setFeedback(null);
+    try {
+      const db = getClientDb();
+      await updateDoc(doc(db, "menu_items", item.id), {
+        specialita: !item.specialita,
+        special: !item.specialita,
+        updatedAt: new Date().toISOString(),
+      });
+    } catch {
+      setError("Errore durante aggiornamento stella.");
     } finally {
       setSavingId(null);
     }
@@ -1458,6 +1482,9 @@ export function AdminMenuPanel() {
               type="button"
               className="admin-mini-btn"
               onClick={() => {
+                if (activeCategory) {
+                  setNewItemCategory(activeCategory);
+                }
                 setShowItemModal(true);
               }}
             >
@@ -1554,13 +1581,18 @@ export function AdminMenuPanel() {
                   </div>
                   <div className="admin-dish-body compact">
                     <div className="admin-dish-head">
-                      <h3>{item.nome}</h3>
+                      <h3>
+                        {item.nome}
+                        {item.specialita ? " ★" : ""}
+                      </h3>
                       <span className="dish-price compact">
                         {item.prezzo.toFixed(2)} EUR
                       </span>
                     </div>
                     <p className="admin-dish-desc compact">
-                      {item.ingredienti || "Nessuna descrizione"}
+                      {item.descrizione ||
+                        item.ingredienti ||
+                        "Nessuna descrizione"}
                     </p>
                     <SpiceLevelIndicator
                       level={item.spiceLevel}
@@ -1590,6 +1622,19 @@ export function AdminMenuPanel() {
                         }}
                       >
                         ✎
+                      </button>
+                      <button
+                        type="button"
+                        className={
+                          item.specialita ? "icon-btn star-active" : "icon-btn"
+                        }
+                        aria-label={`Stella homepage ${item.nome}`}
+                        disabled={savingId === item.id}
+                        onClick={() => {
+                          void toggleItemSpecialty(item);
+                        }}
+                      >
+                        {item.specialita ? "★" : "☆"}
                       </button>
                       <button
                         type="button"
@@ -2084,6 +2129,19 @@ export function AdminMenuPanel() {
                 />
               </label>
 
+              <label>
+                Descrizione (opzionale)
+                <textarea
+                  rows={3}
+                  maxLength={240}
+                  value={newItemDescription}
+                  onChange={(event) => {
+                    setNewItemDescription(event.currentTarget.value);
+                  }}
+                  placeholder="Es. Impasto leggero, cottura croccante e gusto deciso."
+                />
+              </label>
+
               <div className="two-cols">
                 <label>
                   Prezzo
@@ -2119,6 +2177,19 @@ export function AdminMenuPanel() {
                   </select>
                 </label>
               </div>
+
+              <label>
+                Mostra in Le nostre firme
+                <select
+                  value={newItemSpecial ? "1" : "0"}
+                  onChange={(event) => {
+                    setNewItemSpecial(event.currentTarget.value === "1");
+                  }}
+                >
+                  <option value="0">No</option>
+                  <option value="1">Si, metti la stella</option>
+                </select>
+              </label>
 
               <label>
                 Piccantezza (opzionale)
@@ -2418,6 +2489,19 @@ export function AdminMenuPanel() {
                 />
               </label>
 
+              <label>
+                Descrizione (opzionale)
+                <textarea
+                  rows={3}
+                  maxLength={240}
+                  value={editItemDescription}
+                  onChange={(event) => {
+                    setEditItemDescription(event.currentTarget.value);
+                  }}
+                  placeholder="Es. Impasto leggero, cottura croccante e gusto deciso."
+                />
+              </label>
+
               <div className="two-cols">
                 <label>
                   Prezzo
@@ -2453,6 +2537,19 @@ export function AdminMenuPanel() {
                   </select>
                 </label>
               </div>
+
+              <label>
+                Mostra in Le nostre firme
+                <select
+                  value={editItemSpecial ? "1" : "0"}
+                  onChange={(event) => {
+                    setEditItemSpecial(event.currentTarget.value === "1");
+                  }}
+                >
+                  <option value="0">No</option>
+                  <option value="1">Si, metti la stella</option>
+                </select>
+              </label>
 
               <label>
                 Piccantezza (opzionale)
@@ -2864,10 +2961,12 @@ export function AdminMenuPanel() {
               role="list"
               aria-label="Ordine piatti"
             >
-              {visibleItems.map((item) => {
+              {visibleItems.map((item, index) => {
                 const isDragging = draggingReorderItemId === item.id;
                 const isDropTarget =
                   reorderDropTargetId === item.id && !isDragging;
+                const isFirst = index === 0;
+                const isLast = index === visibleItems.length - 1;
 
                 return (
                   <article
@@ -2880,12 +2979,6 @@ export function AdminMenuPanel() {
                           : "reorder-row"
                     }
                     role="listitem"
-                    draggable
-                    onDragStart={(event) => {
-                      setReorderDragGhost(event, item.nome);
-                      setDraggingReorderItemId(item.id);
-                      setReorderDropTargetId(item.id);
-                    }}
                     onDragEnter={() => {
                       setReorderDropTargetId(item.id);
                     }}
@@ -2904,7 +2997,54 @@ export function AdminMenuPanel() {
                       setReorderDropTargetId(null);
                     }}
                   >
-                    <span className="reorder-title">{item.nome}</span>
+                    <div className="reorder-name-box">
+                      <span className="reorder-title">{item.nome}</span>
+                    </div>
+                    <div
+                      className="reorder-actions"
+                      aria-label="Azioni riordino"
+                    >
+                      <button
+                        type="button"
+                        className="reorder-shift-btn"
+                        disabled={isFirst || busy}
+                        onClick={() => {
+                          void moveItemByStep(item.id, -1);
+                        }}
+                        aria-label={`Sposta su ${item.nome}`}
+                      >
+                        ↑
+                      </button>
+                      <button
+                        type="button"
+                        className="reorder-shift-btn"
+                        disabled={isLast || busy}
+                        onClick={() => {
+                          void moveItemByStep(item.id, 1);
+                        }}
+                        aria-label={`Sposta giu ${item.nome}`}
+                      >
+                        ↓
+                      </button>
+                      <button
+                        type="button"
+                        className="reorder-drag-handle"
+                        draggable
+                        onDragStart={(event) => {
+                          setReorderDragGhost(event, item.nome);
+                          setDraggingReorderItemId(item.id);
+                          setReorderDropTargetId(item.id);
+                        }}
+                        onDragEnd={() => {
+                          setDraggingReorderItemId(null);
+                          setReorderDropTargetId(null);
+                        }}
+                        aria-label={`Trascina ${item.nome}`}
+                        title="Trascina da qui per riordinare"
+                      >
+                        ⋮⋮
+                      </button>
+                    </div>
                     {isDropTarget ? (
                       <span className="reorder-slot-placeholder" aria-hidden />
                     ) : null}

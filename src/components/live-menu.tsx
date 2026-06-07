@@ -18,6 +18,8 @@ type RawMenuItemDoc = {
   prezzo?: number | string;
   Ingredienti?: string;
   ingredienti?: string;
+  Descrizione?: string;
+  descrizione?: string;
   Categoria?: string;
   categoria?: string;
   Immagine?: string;
@@ -250,7 +252,8 @@ const normalizeCategoryKey = (name: string): string =>
 
 const getFallbackProducts = (): MenuProduct[] =>
   getMenuItems().map((entry, index) => {
-    const desc = normalizeText(entry.Ingredienti);
+    const ingredientsText = normalizeText(entry.Ingredienti);
+    const desc = normalizeText(entry.Descrizione);
     const explicitSpice = parseSpiceLevel(
       entry.piccantezza ??
         entry.Piccantezza ??
@@ -269,8 +272,8 @@ const getFallbackProducts = (): MenuProduct[] =>
       image: normalizeImage(
         normalizeText(entry.Immagine) || "assets/logo1.png",
       ),
-      description: desc,
-      ingredients: desc
+      description: desc || ingredientsText,
+      ingredients: ingredientsText
         .split(",")
         .map((ingredient) => ingredient.trim())
         .filter((ingredient) => ingredient.length > 0),
@@ -335,6 +338,9 @@ export function LiveMenu() {
             if (!name) return null;
 
             const description = normalizeText(
+              raw.Descrizione ?? raw.descrizione,
+            );
+            const ingredientsText = normalizeText(
               raw.Ingredienti ?? raw.ingredienti,
             );
             const category =
@@ -358,7 +364,7 @@ export function LiveMenu() {
                   : true;
             if (!isVisible) return null;
 
-            const ingredients = description
+            const ingredients = ingredientsText
               .split(",")
               .map((entry) => entry.trim())
               .filter((entry) => entry.length > 0);
@@ -367,7 +373,7 @@ export function LiveMenu() {
               raw as Record<string, unknown>,
             );
             const inferredSpice = inferSpiceFromText(
-              `${name} ${description} ${ingredients.join(" ")}`,
+              `${name} ${description} ${ingredientsText} ${ingredients.join(" ")}`,
             );
 
             return {
@@ -380,7 +386,8 @@ export function LiveMenu() {
                 normalizeText(raw.Immagine ?? raw.immagine) ||
                   "assets/logo1.png",
               ),
-              description: description || ingredients.join(", "),
+              description:
+                description || ingredientsText || ingredients.join(", "),
               ingredients,
               allergens,
               extras,

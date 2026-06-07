@@ -3,16 +3,35 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { onAuthStateChanged, signOut } from "firebase/auth";
-import { getClientAuth } from "@/lib/firebase";
+import { collection, onSnapshot, query, where } from "firebase/firestore";
+import { getClientAuth, getClientDb } from "@/lib/firebase";
 import { isAllowedAdminEmail } from "@/lib/auth";
 import { AdminMenuPanel } from "@/components/admin-menu-panel";
+import { AdminReservationsPanel } from "@/components/admin-reservations-panel";
 
 type AdminSection = "reservations" | "menu";
 
-export function AdminDashboard() {
+const todayKey = () => {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, "0");
+  const day = String(now.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+};
+
+export function AdminDashboard({
+  initialSection,
+  highlightedCode,
+}: {
+  initialSection?: AdminSection;
+  highlightedCode?: string;
+}) {
   const router = useRouter();
   const [booting, setBooting] = useState(true);
-  const [activeSection, setActiveSection] = useState<AdminSection>("menu");
+  const [activeSection, setActiveSection] = useState<AdminSection>(
+    initialSection ?? "menu",
+  );
+  const [pendingReservationsCount, setPendingReservationsCount] = useState(0);
 
   useEffect(() => {
     const auth = getClientAuth();
@@ -28,6 +47,31 @@ export function AdminDashboard() {
 
     return () => unsubscribeAuth();
   }, [router]);
+
+  useEffect(() => {
+    const db = getClientDb();
+    const pendingQuery = query(
+      collection(db, "reservations"),
+      where("status", "==", "pending"),
+    );
+
+    const unsubscribe = onSnapshot(
+      pendingQuery,
+      (snapshot) => {
+        const currentDay = todayKey();
+        const validCount = snapshot.docs.filter((doc) => {
+          const data = doc.data() as { date?: unknown };
+          return typeof data.date === "string" && data.date >= currentDay;
+        }).length;
+        setPendingReservationsCount(validCount);
+      },
+      () => {
+        setPendingReservationsCount(0);
+      },
+    );
+
+    return () => unsubscribe();
+  }, []);
 
   const onLogout = async () => {
     const auth = getClientAuth();
@@ -48,12 +92,7 @@ export function AdminDashboard() {
       {activeSection === "menu" ? <AdminMenuPanel /> : null}
 
       {activeSection === "reservations" ? (
-        <article className="card-block">
-          <h3>Prenotazioni</h3>
-          <p className="section-subtitle">
-            Sezione in standby. La riprendiamo dopo aver completato Menu e Home.
-          </p>
-        </article>
+        <AdminReservationsPanel highlightedCode={highlightedCode} />
       ) : null}
 
       <div
@@ -70,6 +109,11 @@ export function AdminDashboard() {
           }
           onClick={() => setActiveSection("reservations")}
         >
+          {pendingReservationsCount > 0 ? (
+            <span className="admin-bottom-badge">
+              {pendingReservationsCount}
+            </span>
+          ) : null}
           <span className="admin-bottom-symbol" aria-hidden>
             ◷
           </span>

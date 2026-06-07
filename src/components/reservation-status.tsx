@@ -10,17 +10,24 @@ type StatusDoc = {
   date: string;
   time: string;
   guests: number;
-  status: "pending" | "confirmed" | "rejected";
+  status: "pending" | "confirmed" | "rejected" | "proposed";
   ownerResponse: string;
+  proposedDate?: string;
+  proposedTime?: string;
 };
 
 const statusMap: Record<StatusDoc["status"], string> = {
   pending: "In attesa di risposta",
   confirmed: "Confermata",
   rejected: "Non confermata",
+  proposed: "Nuovo orario proposto",
 };
 
-export function ReservationStatusChecker() {
+export function ReservationStatusChecker({
+  compact = false,
+}: {
+  compact?: boolean;
+}) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<StatusDoc | null>(null);
@@ -58,13 +65,24 @@ export function ReservationStatusChecker() {
   };
 
   return (
-    <section className="card-block" aria-labelledby="stato-title">
-      <h2 id="stato-title" className="section-title">
-        Controlla Lo Stato
-      </h2>
-      <p className="section-subtitle">
-        Inserisci il codice ricevuto al momento della richiesta.
-      </p>
+    <section
+      className={compact ? "status-popup-body" : "card-block"}
+      aria-labelledby="stato-title"
+    >
+      {!compact ? (
+        <>
+          <h2 id="stato-title" className="section-title">
+            Stato prenotazione
+          </h2>
+          <p className="section-subtitle">
+            Inserisci il codice ricevuto al momento della richiesta.
+          </p>
+        </>
+      ) : (
+        <p className="section-subtitle">
+          Inserisci il codice ricevuto al momento della richiesta.
+        </p>
+      )}
 
       <form className="status-form" onSubmit={onCheck}>
         <input name="code" placeholder="Es. DG-A2K9QW" maxLength={9} required />
@@ -96,6 +114,14 @@ export function ReservationStatusChecker() {
             <strong>Messaggio del proprietario:</strong>{" "}
             {result.ownerResponse || "Nessun messaggio al momento."}
           </p>
+          {result.status === "proposed" &&
+          result.proposedDate &&
+          result.proposedTime ? (
+            <p>
+              <strong>Nuova proposta:</strong> {result.proposedDate} alle{" "}
+              {result.proposedTime}
+            </p>
+          ) : null}
         </div>
       ) : null}
     </section>
