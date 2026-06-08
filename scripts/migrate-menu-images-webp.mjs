@@ -134,12 +134,22 @@ const fetchSourceBuffer = async (rawImage) => {
 const optimizeBuffers = async (sourceBuffer) => {
   const full = await sharp(sourceBuffer)
     .rotate()
-    .resize({ width: 1600, height: 1600, fit: "inside", withoutEnlargement: true })
+    .resize({
+      width: 1600,
+      height: 1600,
+      fit: "inside",
+      withoutEnlargement: true,
+    })
     .webp({ quality: 82 })
     .toBuffer();
 
   const thumb = await sharp(full)
-    .resize({ width: 560, height: 560, fit: "inside", withoutEnlargement: true })
+    .resize({
+      width: 560,
+      height: 560,
+      fit: "inside",
+      withoutEnlargement: true,
+    })
     .webp({ quality: 74 })
     .toBuffer();
 
@@ -169,7 +179,10 @@ const run = async () => {
   );
 
   const snapshot = await db.collection("menu_items").get();
-  const docs = snapshot.docs.slice(0, Number.isFinite(limit) ? limit : undefined);
+  const docs = snapshot.docs.slice(
+    0,
+    Number.isFinite(limit) ? limit : undefined,
+  );
 
   let processed = 0;
   let skipped = 0;
@@ -233,7 +246,9 @@ const run = async () => {
   }
 
   console.log("[webp-migrate] Completato");
-  console.log(`[webp-migrate] processed=${processed} skipped=${skipped} failed=${failed}`);
+  console.log(
+    `[webp-migrate] processed=${processed} skipped=${skipped} failed=${failed}`,
+  );
 
   if (failed > 0) {
     process.exitCode = 1;
@@ -241,7 +256,8 @@ const run = async () => {
 };
 
 run().catch((error) => {
-  const message = error instanceof Error ? error.stack || error.message : String(error);
+  const message =
+    error instanceof Error ? error.stack || error.message : String(error);
   console.error(`[webp-migrate] fatal: ${message}`);
   process.exit(1);
 });

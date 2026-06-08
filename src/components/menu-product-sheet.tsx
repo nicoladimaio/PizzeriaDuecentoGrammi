@@ -1,5 +1,4 @@
-import { useEffect } from "react";
-import Image from "next/image";
+import { useEffect, useState } from "react";
 import { AllergenBadge } from "@/components/allergens/allergen-badge";
 import { SpiceLevelIndicator } from "@/components/spice-level-indicator";
 import type { MenuProduct } from "@/types/menu-app";
@@ -25,6 +24,10 @@ const toReadableAllergen = (value: string): string => {
 };
 
 export function MenuProductSheet({ product, onClose }: MenuProductSheetProps) {
+  const [readyImageProductId, setReadyImageProductId] = useState<string | null>(
+    null,
+  );
+
   useEffect(() => {
     if (!product) return;
 
@@ -39,6 +42,28 @@ export function MenuProductSheet({ product, onClose }: MenuProductSheetProps) {
       document.body.style.touchAction = previousTouchAction;
     };
   }, [product]);
+
+  useEffect(() => {
+    if (!product) return;
+
+    const thumb = product.imageThumb || product.image;
+    if (!product.image || product.image === thumb) return;
+
+    const currentProductId = product.id;
+    const img = new window.Image();
+    img.decoding = "async";
+    img.onload = () => setReadyImageProductId(currentProductId);
+    img.onerror = () => setReadyImageProductId(currentProductId);
+    img.src = product.image;
+  }, [product]);
+
+  const activeProduct = product;
+  const fullImageReady =
+    activeProduct === null
+      ? false
+      : ((activeProduct.imageThumb || activeProduct.image) ===
+          activeProduct.image ||
+          readyImageProductId === activeProduct.id);
 
   return (
     <div
@@ -73,12 +98,18 @@ export function MenuProductSheet({ product, onClose }: MenuProductSheetProps) {
                     ✕
                   </button>
                   <div className="qr-sheet-image-wrap">
-                    <Image
-                      src={product.image}
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={
+                        fullImageReady
+                          ? product.image
+                          : (product.imageThumb || product.image)
+                      }
                       alt={product.name}
-                      fill
-                      sizes="100vw"
                       className="qr-sheet-image"
+                      loading="eager"
+                      fetchPriority="high"
+                      decoding="async"
                     />
                   </div>
                   <div className="qr-sheet-content">

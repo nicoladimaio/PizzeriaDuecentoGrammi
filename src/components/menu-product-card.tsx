@@ -9,17 +9,34 @@ type MenuProductCardProps = {
 };
 
 const formatPrice = (price: number): string => `${price.toFixed(2)} €`;
+const warmedImages = new Set<string>();
+
+const warmImage = (src: string) => {
+  if (!src || typeof window === "undefined") return;
+  if (warmedImages.has(src)) return;
+  const img = new window.Image();
+  img.decoding = "async";
+  img.src = src;
+  warmedImages.add(src);
+};
 
 export function MenuProductCard({ product, onOpen }: MenuProductCardProps) {
   return (
     <article
       className="qr-product-card"
-      onClick={() => onOpen(product)}
+      onClick={() => {
+        warmImage(product.image);
+        onOpen(product);
+      }}
+      onMouseEnter={() => warmImage(product.image)}
+      onTouchStart={() => warmImage(product.image)}
+      onFocus={() => warmImage(product.image)}
       role="button"
       tabIndex={0}
       onKeyDown={(event) => {
         if (event.key === "Enter" || event.key === " ") {
           event.preventDefault();
+          warmImage(product.image);
           onOpen(product);
         }
       }}
@@ -37,11 +54,13 @@ export function MenuProductCard({ product, onOpen }: MenuProductCardProps) {
       <div className="qr-product-body">
         <div className="qr-product-head">
           <h3>{product.name}</h3>
+          <div className="qr-product-badges">
+            {product.badges.special ? <span>⭐ Specialita</span> : null}
+          </div>
           <span className="qr-product-price">{formatPrice(product.price)}</span>
         </div>
         <p>{product.description}</p>
         <div className="qr-product-badges">
-          {product.badges.special ? <span>⭐ Specialita</span> : null}
           {product.badges.hot ? <span>🔥 Piu richiesta</span> : null}
           {product.badges.recent ? <span>🆕 Novita</span> : null}
         </div>

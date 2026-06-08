@@ -53,5 +53,5 @@ npm run images:migrate:webp
 ```
 
 - Opzioni utili:
-	- `--limit=20` per processare solo i primi 20 documenti.
-	- `--force` per riconvertire anche record gia in webp.
+  - `--limit=20` per processare solo i primi 20 documenti.
+  - `--force` per riconvertire anche record gia in webp.
