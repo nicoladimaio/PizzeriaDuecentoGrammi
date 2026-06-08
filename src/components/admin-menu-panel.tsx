@@ -40,6 +40,7 @@ type AdminMenuItem = {
   specialita: boolean;
   spiceLevel: number;
   immagine: string;
+  immagineThumb: string;
   ordine: number;
   ingredientIds: string[];
   allergeni: string[];
@@ -290,6 +291,99 @@ const getSpiceLabel = (level: number): string => {
 const sanitizeFileName = (name: string): string =>
   name.replace(/[^a-zA-Z0-9._-]/g, "_");
 
+const loadImageFromUrl = (url: string): Promise<HTMLImageElement> =>
+  new Promise((resolve, reject) => {
+    const image = new Image();
+    image.decoding = "async";
+    image.onload = () => resolve(image);
+    image.onerror = () => reject(new Error("Impossibile leggere l'immagine."));
+    image.src = url;
+  });
+
+const convertImageToWebp = async (file: File): Promise<File> => {
+  if (!file.type.startsWith("image/") || file.type === "image/webp") {
+    return file;
+  }
+
+  const objectUrl = URL.createObjectURL(file);
+  try {
+    const image = await loadImageFromUrl(objectUrl);
+    const sourceWidth = Math.max(1, image.naturalWidth || image.width || 1);
+    const sourceHeight = Math.max(1, image.naturalHeight || image.height || 1);
+    const maxSide = 1600;
+    const scale = Math.min(1, maxSide / Math.max(sourceWidth, sourceHeight));
+    const targetWidth = Math.max(1, Math.round(sourceWidth * scale));
+    const targetHeight = Math.max(1, Math.round(sourceHeight * scale));
+
+    const canvas = document.createElement("canvas");
+    canvas.width = targetWidth;
+    canvas.height = targetHeight;
+
+    const context = canvas.getContext("2d");
+    if (!context) return file;
+
+    context.drawImage(image, 0, 0, targetWidth, targetHeight);
+    const blob = await new Promise<Blob | null>((resolve) => {
+      canvas.toBlob(resolve, "image/webp", 0.82);
+    });
+    if (!blob) return file;
+
+    const baseName = sanitizeFileName(file.name).replace(/\.[^.]+$/, "");
+    const finalName = `${baseName || `menu-${Date.now()}`}.webp`;
+    return new File([blob], finalName, {
+      type: "image/webp",
+      lastModified: Date.now(),
+    });
+  } catch {
+    return file;
+  } finally {
+    URL.revokeObjectURL(objectUrl);
+  }
+};
+
+const convertImageToWebpWithThumb = async (
+  file: File,
+): Promise<{ full: File; thumb: File }> => {
+  const full = await convertImageToWebp(file);
+  const objectUrl = URL.createObjectURL(full);
+
+  try {
+    const image = await loadImageFromUrl(objectUrl);
+    const sourceWidth = Math.max(1, image.naturalWidth || image.width || 1);
+    const sourceHeight = Math.max(1, image.naturalHeight || image.height || 1);
+    const maxSide = 560;
+    const scale = Math.min(1, maxSide / Math.max(sourceWidth, sourceHeight));
+    const targetWidth = Math.max(1, Math.round(sourceWidth * scale));
+    const targetHeight = Math.max(1, Math.round(sourceHeight * scale));
+
+    const canvas = document.createElement("canvas");
+    canvas.width = targetWidth;
+    canvas.height = targetHeight;
+
+    const context = canvas.getContext("2d");
+    if (!context) return { full, thumb: full };
+
+    context.drawImage(image, 0, 0, targetWidth, targetHeight);
+    const thumbBlob = await new Promise<Blob | null>((resolve) => {
+      canvas.toBlob(resolve, "image/webp", 0.76);
+    });
+    if (!thumbBlob) return { full, thumb: full };
+
+    const baseName = sanitizeFileName(full.name).replace(/\.[^.]+$/, "");
+    const thumbName = `${baseName || `menu-${Date.now()}`}-thumb.webp`;
+    const thumb = new File([thumbBlob], thumbName, {
+      type: "image/webp",
+      lastModified: Date.now(),
+    });
+
+    return { full, thumb };
+  } catch {
+    return { full, thumb: full };
+  } finally {
+    URL.revokeObjectURL(objectUrl);
+  }
+};
+
 const reorderIds = (ids: string[], movingId: string, targetId: string) => {
   if (movingId === targetId) return ids;
   const next = [...ids];
@@ -469,6 +563,11 @@ export function AdminMenuPanel() {
             ),
             immagine: toString(
               (data.immagine ?? data.Immagine) || "assets/logo1.png",
+            ),
+            immagineThumb: toString(
+              (data.immagineThumb ?? data.ImmagineThumb ?? data.imageThumb) ||
+                (data.immagine ?? data.Immagine) ||
+                "assets/logo1.png",
             ),
             ordine: Number.isFinite(Number(data.ordine))
               ? Number(data.ordine)
@@ -803,12 +902,29 @@ export function AdminMenuPanel() {
     };
   }, [editImagePreview]);
 
-  const uploadImage = async (file: File): Promise<string> => {
+  const uploadImage = async (
+    file: File,
+  ): Promise<{ imageUrl: string; thumbUrl: string }> => {
+    const optimized = await convertImageToWebpWithThumb(file);
     const storage = getClientStorage();
-    const path = `menu-items/${Date.now()}-${sanitizeFileName(file.name)}`;
-    const imageRef = ref(storage, path);
-    await uploadBytes(imageRef, file);
-    return getDownloadURL(imageRef);
+    const ts = Date.now();
+    const fullPath = `menu-items/${ts}-${sanitizeFileName(optimized.full.name)}`;
+    const thumbPath = `menu-items/thumbs/${ts}-${sanitizeFileName(optimized.thumb.name)}`;
+    const imageRef = ref(storage, fullPath);
+    const thumbRef = ref(storage, thumbPath);
+    await uploadBytes(imageRef, optimized.full, {
+      contentType: optimized.full.type || "image/webp",
+      cacheControl: "public,max-age=31536000,immutable",
+    });
+    await uploadBytes(thumbRef, optimized.thumb, {
+      contentType: optimized.thumb.type || "image/webp",
+      cacheControl: "public,max-age=31536000,immutable",
+    });
+    const [imageUrl, thumbUrl] = await Promise.all([
+      getDownloadURL(imageRef),
+      getDownloadURL(thumbRef),
+    ]);
+    return { imageUrl, thumbUrl };
   };
 
   const ensureCategoryExists = async (name: string) => {
@@ -1114,9 +1230,9 @@ export function AdminMenuPanel() {
     try {
       const db = getClientDb();
       await ensureCategoryExists(categoria);
-      const uploadedImage = newImageFile
-        ? await uploadImage(newImageFile)
-        : "assets/logo1.png";
+      const uploaded = newImageFile ? await uploadImage(newImageFile) : null;
+      const uploadedImage = uploaded?.imageUrl ?? "assets/logo1.png";
+      const uploadedThumb = uploaded?.thumbUrl ?? uploadedImage;
 
       const currentCategoryItems = items.filter(
         (item) => item.categoria.toLowerCase() === categoria.toLowerCase(),
@@ -1140,6 +1256,7 @@ export function AdminMenuPanel() {
         piccantezza: newItemSpiceLevel,
         spiceLevel: newItemSpiceLevel,
         immagine: uploadedImage,
+        immagineThumb: uploadedThumb,
         ordine: currentCategoryItems.length,
         ingredientIds,
         allergeni,
@@ -1215,9 +1332,10 @@ export function AdminMenuPanel() {
     setFeedback(null);
     try {
       const db = getClientDb();
-      const uploadedImage = editImageFile
-        ? await uploadImage(editImageFile)
-        : editingItem.immagine;
+      const uploaded = editImageFile ? await uploadImage(editImageFile) : null;
+      const uploadedImage = uploaded?.imageUrl ?? editingItem.immagine;
+      const uploadedThumb =
+        uploaded?.thumbUrl ?? editingItem.immagineThumb ?? editingItem.immagine;
 
       const inferredAllergens = inferAllergensFromIngredientIds(ingredientIds);
       const allergeni = uniqueInsensitive([
@@ -1237,6 +1355,7 @@ export function AdminMenuPanel() {
         piccantezza: editItemSpiceLevel,
         spiceLevel: editItemSpiceLevel,
         immagine: uploadedImage,
+        immagineThumb: uploadedThumb,
         ingredientIds,
         allergeni,
         updatedAt: new Date().toISOString(),
@@ -2435,6 +2554,9 @@ export function AdminMenuPanel() {
                     setNewImageFile(file);
                   }}
                 />
+                <span className="section-subtitle">
+                  Ottimizzazione automatica: upload convertito in WebP.
+                </span>
               </label>
 
               {newImagePreview ? (
@@ -2802,6 +2924,9 @@ export function AdminMenuPanel() {
                 >
                   Cambia immagine
                 </label>
+                <p className="section-subtitle">
+                  Ottimizzazione automatica: upload convertito in WebP.
+                </p>
                 {editImageFile ? (
                   <p className="section-subtitle">{editImageFile.name}</p>
                 ) : null}

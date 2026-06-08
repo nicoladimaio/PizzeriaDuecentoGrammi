@@ -11,6 +11,7 @@ export type MenuProduct = {
   category: string;
   spiceLevel: number;
   image: string;
+  imageThumb?: string;
   description: string;
   ingredients: string[];
   allergens: string[];

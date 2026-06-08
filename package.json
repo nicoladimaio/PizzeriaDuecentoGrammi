@@ -7,7 +7,9 @@
     "dev": "next dev -H 0.0.0.0",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "images:migrate:webp": "node scripts/migrate-menu-images-webp.mjs",
+    "images:migrate:webp:dry": "node scripts/migrate-menu-images-webp.mjs --dry"
   },
   "keywords": [
     "nextjs",
@@ -24,6 +26,7 @@
     "next": "^16.2.6",
     "react": "^19.2.6",
     "react-dom": "^19.2.6",
+    "sharp": "^0.34.5",
     "zod": "^4.4.3"
   },
   "devDependencies": {

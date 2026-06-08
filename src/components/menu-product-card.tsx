@@ -26,11 +26,12 @@ export function MenuProductCard({ product, onOpen }: MenuProductCardProps) {
     >
       <div className="qr-product-image-wrap">
         <Image
-          src={product.image}
+          src={product.imageThumb || product.image}
           alt={product.name}
           fill
           sizes="(max-width: 760px) 42vw, 240px"
           className="qr-product-image"
+          quality={68}
         />
       </div>
       <div className="qr-product-body">

@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { useEffect, useRef, useState } from "react";
 import { collection, onSnapshot } from "firebase/firestore";
 import { getClientDb } from "@/lib/firebase";
@@ -39,9 +40,9 @@ const imagePath = (value: string): string => {
 
 export function HomeFeaturedStrip() {
   const [items, setItems] = useState<FeaturedItem[]>([]);
-  const [canScrollLeft, setCanScrollLeft] = useState(false);
-  const [canScrollRight, setCanScrollRight] = useState(false);
+  const [activeItemId, setActiveItemId] = useState("");
   const stripRef = useRef<HTMLDivElement | null>(null);
+  const cardRefs = useRef<Record<string, HTMLElement | null>>({});
 
   useEffect(() => {
     const db = getClientDb();
@@ -96,33 +97,59 @@ export function HomeFeaturedStrip() {
     return () => unsubscribe();
   }, []);
 
+  const resolvedActiveItemId =
+    activeItemId && items.some((item) => item.id === activeItemId)
+      ? activeItemId
+      : (items[0]?.id ?? "");
+
   useEffect(() => {
     const container = stripRef.current;
-    if (!container) return;
+    if (!container || items.length === 0) return;
 
-    const updateArrows = () => {
-      const maxScrollLeft = container.scrollWidth - container.clientWidth;
-      setCanScrollLeft(container.scrollLeft > 8);
-      setCanScrollRight(container.scrollLeft < maxScrollLeft - 8);
-    };
+    const visibilityById = new Map<string, number>();
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          const id = (entry.target as HTMLElement).dataset.featuredId;
+          if (!id) return;
+          visibilityById.set(id, entry.isIntersecting ? entry.intersectionRatio : 0);
+        });
 
-    updateArrows();
-    container.addEventListener("scroll", updateArrows, { passive: true });
-    window.addEventListener("resize", updateArrows);
+        let nextActive = "";
+        let bestRatio = 0;
+        items.forEach((item) => {
+          const ratio = visibilityById.get(item.id) ?? 0;
+          if (ratio > bestRatio) {
+            bestRatio = ratio;
+            nextActive = item.id;
+          }
+        });
 
-    return () => {
-      container.removeEventListener("scroll", updateArrows);
-      window.removeEventListener("resize", updateArrows);
-    };
-  }, [items.length]);
+        if (nextActive) {
+          setActiveItemId((current) => (current === nextActive ? current : nextActive));
+        }
+      },
+      {
+        root: container,
+        threshold: [0.5, 0.7, 0.9],
+      },
+    );
 
-  const scrollByPage = (direction: "left" | "right") => {
-    const container = stripRef.current;
-    if (!container) return;
-    const delta = Math.max(280, Math.round(container.clientWidth * 0.86));
-    container.scrollBy({
-      left: direction === "left" ? -delta : delta,
+    items.forEach((item) => {
+      const node = cardRefs.current[item.id];
+      if (node) observer.observe(node);
+    });
+
+    return () => observer.disconnect();
+  }, [items]);
+
+  const jumpToItem = (itemId: string) => {
+    const target = cardRefs.current[itemId];
+    if (!target) return;
+    target.scrollIntoView({
       behavior: "smooth",
+      block: "nearest",
+      inline: "center",
     });
   };
 
@@ -136,15 +163,25 @@ export function HomeFeaturedStrip() {
 
   return (
     <div className="home-featured-shell">
-      <button
-        type="button"
-        className="home-featured-nav home-featured-nav-left"
-        aria-label="Scorri firme a sinistra"
-        disabled={!canScrollLeft}
-        onClick={() => scrollByPage("left")}
-      >
-        ←
-      </button>
+      <div className="home-featured-smart-menu" aria-label="Seleziona firma">
+        {items.map((item) => {
+          const active = item.id === resolvedActiveItemId;
+          return (
+            <button
+              key={`jump-${item.id}`}
+              type="button"
+              className={
+                active
+                  ? "home-featured-smart-chip active"
+                  : "home-featured-smart-chip"
+              }
+              onClick={() => jumpToItem(item.id)}
+            >
+              {item.name}
+            </button>
+          );
+        })}
+      </div>
 
       <div
         ref={stripRef}
@@ -153,9 +190,24 @@ export function HomeFeaturedStrip() {
         aria-label="Le nostre firme"
       >
         {items.map((item) => (
-          <article key={item.id} className="home-featured-card" role="listitem">
+          <article
+            key={item.id}
+            className="home-featured-card"
+            role="listitem"
+            ref={(node) => {
+              cardRefs.current[item.id] = node;
+            }}
+            data-featured-id={item.id}
+          >
             <div className="home-featured-media">
-              <img src={item.image} alt={item.name} />
+              <Image
+                src={item.image}
+                alt={item.name}
+                fill
+                sizes="(max-width: 760px) 84vw, 270px"
+                className="home-featured-media-image"
+                quality={74}
+              />
             </div>
             <div className="home-featured-body">
               <h3>{item.name}</h3>
@@ -164,16 +216,6 @@ export function HomeFeaturedStrip() {
           </article>
         ))}
       </div>
-
-      <button
-        type="button"
-        className="home-featured-nav home-featured-nav-right"
-        aria-label="Scorri firme a destra"
-        disabled={!canScrollRight}
-        onClick={() => scrollByPage("right")}
-      >
-        →
-      </button>
     </div>
   );
 }

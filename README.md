@@ -41,3 +41,17 @@ npm run dev
 - Aggiorna la whitelist admin in [firestore.rules](firestore.rules) sostituendo `admin@example.com`.
 - Verifica e pubblica le regole Firestore con Firebase CLI.
 - Non indicizzare le route admin (gia configurato via metadata robots).
+
+## Ottimizzazione immagini menu
+
+- Nuovi upload da admin: conversione automatica in WebP + thumbnail.
+- Migrazione immagini gia presenti:
+
+```bash
+npm run images:migrate:webp:dry
+npm run images:migrate:webp
+```
+
+- Opzioni utili:
+	- `--limit=20` per processare solo i primi 20 documenti.
+	- `--force` per riconvertire anche record gia in webp.

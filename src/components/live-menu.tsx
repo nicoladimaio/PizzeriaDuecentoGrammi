@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import type { CSSProperties } from "react";
 import { collection, onSnapshot } from "firebase/firestore";
 import { getClientDb } from "@/lib/firebase";
 import { getMenuItems } from "@/lib/menu";
@@ -24,6 +25,10 @@ type RawMenuItemDoc = {
   categoria?: string;
   Immagine?: string;
   immagine?: string;
+  immagineThumb?: string;
+  ImmagineThumb?: string;
+  imageThumb?: string;
+  thumbnail?: string;
   allergeni?: unknown;
   allergens?: unknown;
   extras?: unknown;
@@ -252,6 +257,7 @@ const normalizeCategoryKey = (name: string): string =>
 
 const getFallbackProducts = (): MenuProduct[] =>
   getMenuItems().map((entry, index) => {
+    const entryRecord = entry as Record<string, unknown>;
     const ingredientsText = normalizeText(entry.Ingredienti);
     const desc = normalizeText(entry.Descrizione);
     const explicitSpice = parseSpiceLevel(
@@ -271,6 +277,15 @@ const getFallbackProducts = (): MenuProduct[] =>
           : inferSpiceFromText(`${entry.Nome} ${entry.Ingredienti}`),
       image: normalizeImage(
         normalizeText(entry.Immagine) || "assets/logo1.png",
+      ),
+      imageThumb: normalizeImage(
+        normalizeText(
+          entryRecord.ImmagineThumb ??
+            entryRecord.immagineThumb ??
+            entryRecord.imageThumb,
+        ) ||
+          normalizeText(entry.Immagine) ||
+          "assets/logo1.png",
       ),
       description: desc || ingredientsText,
       ingredients: ingredientsText
@@ -384,6 +399,16 @@ export function LiveMenu() {
               spiceLevel: explicitSpice > 0 ? explicitSpice : inferredSpice,
               image: normalizeImage(
                 normalizeText(raw.Immagine ?? raw.immagine) ||
+                  "assets/logo1.png",
+              ),
+              imageThumb: normalizeImage(
+                normalizeText(
+                  raw.ImmagineThumb ??
+                    raw.immagineThumb ??
+                    raw.imageThumb ??
+                    raw.thumbnail,
+                ) ||
+                  normalizeText(raw.Immagine ?? raw.immagine) ||
                   "assets/logo1.png",
               ),
               description:
@@ -758,8 +783,16 @@ export function LiveMenu() {
     );
   }
 
+  const menuShellStyle = useMemo(
+    () =>
+      ({
+        "--qr-header-offset": showSearch ? "106px" : "56px",
+      }) as CSSProperties,
+    [showSearch],
+  );
+
   return (
-    <section className="qr-menu-shell">
+    <section className="qr-menu-shell" style={menuShellStyle}>
       <MenuMobileTopbar
         showSearch={showSearch}
         searchValue={searchQuery}

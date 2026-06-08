@@ -446,6 +446,8 @@ a {
 
 .home-featured-shell {
   position: relative;
+  display: grid;
+  gap: 0.52rem;
 }
 
 .home-featured-shell::before,
@@ -473,7 +475,7 @@ a {
   display: flex;
   gap: 0.8rem;
   overflow-x: auto;
-  padding: 0.2rem 2.45rem 0.45rem;
+  padding: 0.12rem 0.2rem 0.45rem;
   scroll-snap-type: x mandatory;
   scroll-behavior: smooth;
   scrollbar-width: none;
@@ -518,6 +520,10 @@ a {
   display: block;
 }
 
+.home-featured-media-image {
+  object-fit: cover;
+}
+
 .home-featured-body {
   padding: 0.82rem 0.9rem;
   display: grid;
@@ -552,6 +558,43 @@ a {
   color: #45626d;
   font-size: 0.9rem;
   padding: 0.9rem;
+}
+
+.home-featured-smart-menu {
+  display: flex;
+  gap: 0.45rem;
+  overflow-x: auto;
+  padding: 0 0.1rem 0.08rem;
+  scrollbar-width: none;
+}
+
+.home-featured-smart-menu::-webkit-scrollbar {
+  display: none;
+}
+
+.home-featured-smart-chip {
+  flex: 0 0 auto;
+  border: 1px solid rgba(39, 66, 78, 0.2);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.76);
+  color: #2f4a55;
+  padding: 0.38rem 0.74rem;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  transition:
+    background 180ms ease,
+    color 180ms ease,
+    border-color 180ms ease,
+    transform 180ms ease;
+}
+
+.home-featured-smart-chip.active {
+  background: linear-gradient(130deg, #2f4f6b, #243f56);
+  border-color: rgba(36, 63, 86, 0.66);
+  color: #fff;
+  transform: translateY(-1px);
 }
 
 .home-featured-nav {
@@ -4064,7 +4107,7 @@ p {
   position: sticky;
   top: 0;
   z-index: 55;
-  padding: 10px 14px 10px;
+  padding: 8px 14px 8px;
   border-bottom: 1px solid var(--qr-line);
   backdrop-filter: blur(12px);
   background: rgba(248, 250, 253, 0.92);
@@ -4172,7 +4215,7 @@ p {
 
 .qr-categories-sticky {
   position: sticky;
-  top: 62px;
+  top: var(--qr-header-offset, 56px);
   z-index: 50;
   background: rgba(241, 244, 248, 0.95);
   border-bottom: 1px solid var(--qr-line);
@@ -4278,11 +4321,11 @@ p {
 
 .qr-products-list-sections {
   display: block;
-  padding: 6px 14px 14px;
+  padding: 2px 14px 14px;
 }
 
 .qr-category-section {
-  scroll-margin-top: 126px;
+  scroll-margin-top: calc(var(--qr-header-offset, 56px) + 62px);
   margin-bottom: 18px;
 }
 
