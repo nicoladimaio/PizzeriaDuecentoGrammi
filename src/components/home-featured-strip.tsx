@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { collection, onSnapshot } from "firebase/firestore";
 import { getClientDb } from "@/lib/firebase";
 
@@ -40,9 +40,6 @@ const imagePath = (value: string): string => {
 
 export function HomeFeaturedStrip() {
   const [items, setItems] = useState<FeaturedItem[]>([]);
-  const [activeItemId, setActiveItemId] = useState("");
-  const stripRef = useRef<HTMLDivElement | null>(null);
-  const cardRefs = useRef<Record<string, HTMLElement | null>>({});
 
   useEffect(() => {
     const db = getClientDb();
@@ -97,62 +94,6 @@ export function HomeFeaturedStrip() {
     return () => unsubscribe();
   }, []);
 
-  const resolvedActiveItemId =
-    activeItemId && items.some((item) => item.id === activeItemId)
-      ? activeItemId
-      : (items[0]?.id ?? "");
-
-  useEffect(() => {
-    const container = stripRef.current;
-    if (!container || items.length === 0) return;
-
-    const visibilityById = new Map<string, number>();
-    const observer = new IntersectionObserver(
-      (entries) => {
-        entries.forEach((entry) => {
-          const id = (entry.target as HTMLElement).dataset.featuredId;
-          if (!id) return;
-          visibilityById.set(id, entry.isIntersecting ? entry.intersectionRatio : 0);
-        });
-
-        let nextActive = "";
-        let bestRatio = 0;
-        items.forEach((item) => {
-          const ratio = visibilityById.get(item.id) ?? 0;
-          if (ratio > bestRatio) {
-            bestRatio = ratio;
-            nextActive = item.id;
-          }
-        });
-
-        if (nextActive) {
-          setActiveItemId((current) => (current === nextActive ? current : nextActive));
-        }
-      },
-      {
-        root: container,
-        threshold: [0.5, 0.7, 0.9],
-      },
-    );
-
-    items.forEach((item) => {
-      const node = cardRefs.current[item.id];
-      if (node) observer.observe(node);
-    });
-
-    return () => observer.disconnect();
-  }, [items]);
-
-  const jumpToItem = (itemId: string) => {
-    const target = cardRefs.current[itemId];
-    if (!target) return;
-    target.scrollIntoView({
-      behavior: "smooth",
-      block: "nearest",
-      inline: "center",
-    });
-  };
-
   if (items.length === 0) {
     return (
       <div className="home-featured-empty">
@@ -163,42 +104,10 @@ export function HomeFeaturedStrip() {
 
   return (
     <div className="home-featured-shell">
-      <div className="home-featured-smart-menu" aria-label="Seleziona firma">
-        {items.map((item) => {
-          const active = item.id === resolvedActiveItemId;
-          return (
-            <button
-              key={`jump-${item.id}`}
-              type="button"
-              className={
-                active
-                  ? "home-featured-smart-chip active"
-                  : "home-featured-smart-chip"
-              }
-              onClick={() => jumpToItem(item.id)}
-            >
-              {item.name}
-            </button>
-          );
-        })}
-      </div>
 
-      <div
-        ref={stripRef}
-        className="home-featured-strip"
-        role="list"
-        aria-label="Le nostre firme"
-      >
+      <div className="home-featured-strip" role="list" aria-label="Le nostre firme">
         {items.map((item) => (
-          <article
-            key={item.id}
-            className="home-featured-card"
-            role="listitem"
-            ref={(node) => {
-              cardRefs.current[item.id] = node;
-            }}
-            data-featured-id={item.id}
-          >
+          <article key={item.id} className="home-featured-card" role="listitem">
             <div className="home-featured-media">
               <Image
                 src={item.image}

@@ -773,6 +773,14 @@ export function LiveMenu() {
     return globalExtras;
   }, [selectedProduct, globalExtras]);
 
+  const menuShellStyle = useMemo(
+    () =>
+      ({
+        "--qr-header-offset": showSearch ? "106px" : "56px",
+      }) as CSSProperties,
+    [showSearch],
+  );
+
   if (loading) {
     return (
       <section className="menu-section">
@@ -782,14 +790,6 @@ export function LiveMenu() {
       </section>
     );
   }
-
-  const menuShellStyle = useMemo(
-    () =>
-      ({
-        "--qr-header-offset": showSearch ? "106px" : "56px",
-      }) as CSSProperties,
-    [showSearch],
-  );
 
   return (
     <section className="qr-menu-shell" style={menuShellStyle}>

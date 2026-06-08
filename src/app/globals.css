@@ -475,9 +475,11 @@ a {
   display: flex;
   gap: 0.8rem;
   overflow-x: auto;
-  padding: 0.12rem 0.2rem 0.45rem;
+  padding: 0.12rem max(0.2rem, calc((100% - min(84vw, 270px)) / 2)) 0.45rem;
   scroll-snap-type: x mandatory;
   scroll-behavior: smooth;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-x;
   scrollbar-width: none;
 }
 
@@ -496,7 +498,7 @@ a {
     rgba(245, 250, 250, 0.88)
   );
   box-shadow: 0 14px 28px rgba(24, 45, 52, 0.1);
-  scroll-snap-align: start;
+  scroll-snap-align: center;
   transition:
     transform 180ms ease,
     box-shadow 180ms ease;
@@ -558,72 +560,6 @@ a {
   color: #45626d;
   font-size: 0.9rem;
   padding: 0.9rem;
-}
-
-.home-featured-smart-menu {
-  display: flex;
-  gap: 0.45rem;
-  overflow-x: auto;
-  padding: 0 0.1rem 0.08rem;
-  scrollbar-width: none;
-}
-
-.home-featured-smart-menu::-webkit-scrollbar {
-  display: none;
-}
-
-.home-featured-smart-chip {
-  flex: 0 0 auto;
-  border: 1px solid rgba(39, 66, 78, 0.2);
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.76);
-  color: #2f4a55;
-  padding: 0.38rem 0.74rem;
-  font-size: 0.72rem;
-  font-weight: 700;
-  letter-spacing: 0.03em;
-  text-transform: uppercase;
-  transition:
-    background 180ms ease,
-    color 180ms ease,
-    border-color 180ms ease,
-    transform 180ms ease;
-}
-
-.home-featured-smart-chip.active {
-  background: linear-gradient(130deg, #2f4f6b, #243f56);
-  border-color: rgba(36, 63, 86, 0.66);
-  color: #fff;
-  transform: translateY(-1px);
-}
-
-.home-featured-nav {
-  position: absolute;
-  top: 50%;
-  transform: translateY(-50%);
-  z-index: 3;
-  width: 34px;
-  height: 34px;
-  border-radius: 999px;
-  border: 1px solid rgba(39, 66, 78, 0.22);
-  background: rgba(255, 255, 255, 0.92);
-  color: #2b4450;
-  font-weight: 800;
-  font-size: 0.95rem;
-  box-shadow: 0 10px 20px rgba(24, 45, 52, 0.14);
-}
-
-.home-featured-nav:disabled {
-  opacity: 0.38;
-  cursor: not-allowed;
-}
-
-.home-featured-nav-left {
-  left: 0.3rem;
-}
-
-.home-featured-nav-right {
-  right: 0.3rem;
 }
 
 .home-signature-card {
@@ -2785,12 +2721,6 @@ p {
   .home-featured-shell::before,
   .home-featured-shell::after {
     width: 24px;
-  }
-
-  .home-featured-nav {
-    width: 30px;
-    height: 30px;
-    font-size: 0.86rem;
   }
 }
 
