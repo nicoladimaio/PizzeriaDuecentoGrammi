@@ -207,7 +207,10 @@ export function HomeFeaturedStrip() {
           const leadingBoundary = items.length;
           const trailingBoundary = items.length * (loopCycles - 1);
 
-          if (closestIndex < leadingBoundary || closestIndex >= trailingBoundary) {
+          if (
+            closestIndex < leadingBoundary ||
+            closestIndex >= trailingBoundary
+          ) {
             const origin = slides[closestIndex]?.originIndex ?? 0;
             const jumped = middleCycle * items.length + origin;
             pendingJumpRef.current = jumped;

@@ -61,9 +61,8 @@ export function MenuProductSheet({ product, onClose }: MenuProductSheetProps) {
   const fullImageReady =
     activeProduct === null
       ? false
-      : ((activeProduct.imageThumb || activeProduct.image) ===
-          activeProduct.image ||
-          readyImageProductId === activeProduct.id);
+      : (activeProduct.imageThumb || activeProduct.image) ===
+          activeProduct.image || readyImageProductId === activeProduct.id;
 
   return (
     <div
@@ -103,7 +102,7 @@ export function MenuProductSheet({ product, onClose }: MenuProductSheetProps) {
                       src={
                         fullImageReady
                           ? product.image
-                          : (product.imageThumb || product.image)
+                          : product.imageThumb || product.image
                       }
                       alt={product.name}
                       className="qr-sheet-image"

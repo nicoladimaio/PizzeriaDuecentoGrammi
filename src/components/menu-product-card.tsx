@@ -54,9 +54,9 @@ export function MenuProductCard({ product, onOpen }: MenuProductCardProps) {
       <div className="qr-product-body">
         <div className="qr-product-head">
           <h3>{product.name}</h3>
-          <div className="qr-product-badges">
+          {/* <div className="qr-product-badges">
             {product.badges.special ? <span>⭐ Specialita</span> : null}
-          </div>
+          </div> */}
           <span className="qr-product-price">{formatPrice(product.price)}</span>
         </div>
         <p>{product.description}</p>
