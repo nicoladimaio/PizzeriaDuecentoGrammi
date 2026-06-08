@@ -88,6 +88,7 @@ export function ReservationForm() {
   const [pending, setPending] = useState(false);
   const [redirecting, setRedirecting] = useState(false);
   const [loadingAvailability, setLoadingAvailability] = useState(false);
+  const [showLoadingOverlay, setShowLoadingOverlay] = useState(false);
 
   const [guests, setGuests] = useState<number | null>(null);
   const [customGuestsOpen, setCustomGuestsOpen] = useState(false);
@@ -249,6 +250,21 @@ export function ReservationForm() {
     availableTimeOptions,
   ]);
 
+  useEffect(() => {
+    if (!loadingAvailability || step < 2) {
+      setShowLoadingOverlay(false);
+      return;
+    }
+
+    const timeout = window.setTimeout(() => {
+      setShowLoadingOverlay(true);
+    }, 250);
+
+    return () => {
+      window.clearTimeout(timeout);
+    };
+  }, [loadingAvailability, step]);
+
   const submitReservation = async () => {
     if (!selectedDate || !selectedTime || !canOpenReview) {
       setError("Completa tutti i campi prima di inviare.");
@@ -354,7 +370,7 @@ export function ReservationForm() {
         </div>
 
         {step === 1 ? (
-          <div className="booking-step booking-step-screen">
+          <div className="booking-step booking-step-screen booking-step-screen-1">
             <p className="booking-step-title">Quante persone siete?</p>
             <div
               className="booking-guests-grid"
@@ -465,11 +481,8 @@ export function ReservationForm() {
         ) : null}
 
         {step === 2 ? (
-          <div className="booking-step booking-step-screen">
+          <div className="booking-step booking-step-screen booking-step-screen-2">
             <p className="booking-step-title">Scegli giorno e orario</p>
-            {loadingAvailability ? (
-              <p className="section-subtitle">Caricamento disponibilita...</p>
-            ) : null}
 
             {step2View === "date" ? (
               <>
@@ -622,7 +635,7 @@ export function ReservationForm() {
         ) : null}
 
         {step === 3 ? (
-          <div className="booking-step booking-step-screen">
+          <div className="booking-step booking-step-screen booking-step-screen-3 booking-step-final">
             <p className="booking-step-title">Inserisci i tuoi dati</p>
             <label>
               Nome e cognome
@@ -723,6 +736,19 @@ export function ReservationForm() {
       ) : null}
 
       {error ? <p className="error-text">{error}</p> : null}
+
+      {showLoadingOverlay ? (
+        <div className="booking-loader-overlay" role="status" aria-live="polite">
+          <div className="booking-loader-card">
+            <img
+              src="/assets/loader.gif"
+              alt="Caricamento calendario"
+              className="app-loader-gif"
+            />
+            <p>Sto caricando il calendario...</p>
+          </div>
+        </div>
+      ) : null}
 
       {redirecting ? (
         <div className="app-loader-overlay" role="status" aria-live="polite">
