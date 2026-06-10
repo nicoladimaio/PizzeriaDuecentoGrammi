@@ -1551,6 +1551,16 @@ export function AdminMenuPanel() {
     await reorderCategoryItems(itemId, targetId);
   };
 
+  const moveCategoryByStep = async (categoryId: string, step: -1 | 1) => {
+    const currentIds = categories.map((entry) => entry.id);
+    const currentIndex = currentIds.indexOf(categoryId);
+    if (currentIndex < 0) return;
+    const targetIndex = currentIndex + step;
+    if (targetIndex < 0 || targetIndex >= currentIds.length) return;
+    const targetId = currentIds[targetIndex];
+    await reorderCategories(categoryId, targetId);
+  };
+
   return (
     <section className="admin-shell">
       {feedback ? <p className="success-text">{feedback}</p> : null}
@@ -1897,7 +1907,7 @@ export function AdminMenuPanel() {
             </form>
 
             <div className="category-list drag-sort-category-list">
-              {categories.map((category) => (
+              {categories.map((category, index) => (
                 <div
                   className="category-row draggable"
                   key={category.id}
@@ -1944,6 +1954,32 @@ export function AdminMenuPanel() {
                     }}
                   >
                     <VisibilityIcon visible={category.visible} />
+                  </button>
+                  <button
+                    type="button"
+                    className="reorder-shift-btn"
+                    aria-label={`Sposta su categoria ${category.name}`}
+                    disabled={busy || savingId === category.id || index === 0}
+                    onClick={() => {
+                      void moveCategoryByStep(category.id, -1);
+                    }}
+                  >
+                    ↑
+                  </button>
+                  <button
+                    type="button"
+                    className="reorder-shift-btn"
+                    aria-label={`Sposta giu categoria ${category.name}`}
+                    disabled={
+                      busy ||
+                      savingId === category.id ||
+                      index === categories.length - 1
+                    }
+                    onClick={() => {
+                      void moveCategoryByStep(category.id, 1);
+                    }}
+                  >
+                    ↓
                   </button>
                   <button
                     type="button"

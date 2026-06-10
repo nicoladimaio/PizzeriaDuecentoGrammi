@@ -16,14 +16,10 @@ const isAllowedAdminEmail = (email: string | undefined): boolean => {
   return whitelist.includes(email.toLowerCase());
 };
 
-const toDateKey = (date: Date): string => {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
-};
-
-export async function POST(request: Request) {
+export async function DELETE(
+  request: Request,
+  context: { params: Promise<{ code: string }> },
+) {
   try {
     const token = getBearerToken(request);
     if (!token) {
@@ -32,46 +28,39 @@ export async function POST(request: Request) {
 
     const auth = getAdminAuth();
     const decoded = await auth.verifyIdToken(token);
+
     if (!isAllowedAdminEmail(decoded.email)) {
       return NextResponse.json({ error: "Accesso negato." }, { status: 403 });
     }
 
+    const { code } = await context.params;
     const db = getAdminDb();
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const todayKey = toDateKey(today);
 
-    const oldReservations = await db
+    const reservationQuery = await db
       .collection("reservations")
-      .where("date", "<", todayKey)
+      .where("code", "==", code)
+      .limit(1)
       .get();
 
-    if (oldReservations.empty) {
-      return NextResponse.json({ ok: true, deletedCount: 0 });
+    const statusRef = db.collection("reservation_status").doc(code);
+    const batch = db.batch();
+
+    if (!reservationQuery.empty) {
+      batch.delete(reservationQuery.docs[0].ref);
     }
 
-    const batch = db.batch();
-    let deletedCount = 0;
-
-    for (const doc of oldReservations.docs) {
-      const data = doc.data() as { code?: string };
-
-      batch.delete(doc.ref);
-      deletedCount += 1;
-
-      if (data.code) {
-        const statusRef = db.collection("reservation_status").doc(data.code);
-        batch.delete(statusRef);
-      }
+    const statusSnapshot = await statusRef.get();
+    if (statusSnapshot.exists) {
+      batch.delete(statusRef);
     }
 
     await batch.commit();
 
-    return NextResponse.json({ ok: true, deletedCount });
+    return NextResponse.json({ ok: true });
   } catch (error) {
-    console.error("Errore POST /api/admin/reservations/cleanup", error);
+    console.error("Errore DELETE /api/admin/reservations/[code]", error);
     return NextResponse.json(
-      { error: "Impossibile eliminare le prenotazioni vecchie." },
+      { error: "Impossibile eliminare la prenotazione." },
       { status: 500 },
     );
   }

@@ -5,6 +5,12 @@ import type { MenuProduct } from "@/types/menu-app";
 
 type MenuProductSheetProps = {
   product: MenuProduct | null;
+  labels?: {
+    detailAria: string;
+    closeAria: string;
+    ingredients: string;
+    allergensAria: string;
+  };
   onClose: () => void;
 };
 
@@ -23,7 +29,11 @@ const toReadableAllergen = (value: string): string => {
     .join(" ");
 };
 
-export function MenuProductSheet({ product, onClose }: MenuProductSheetProps) {
+export function MenuProductSheet({
+  product,
+  labels,
+  onClose,
+}: MenuProductSheetProps) {
   const [readyImageProductId, setReadyImageProductId] = useState<string | null>(
     null,
   );
@@ -75,7 +85,7 @@ export function MenuProductSheet({ product, onClose }: MenuProductSheetProps) {
         onClick={(event) => event.stopPropagation()}
         role="dialog"
         aria-modal="true"
-        aria-label="Dettaglio prodotto"
+        aria-label={labels?.detailAria ?? "Dettaglio prodotto"}
       >
         {product ? (
           <>
@@ -92,7 +102,7 @@ export function MenuProductSheet({ product, onClose }: MenuProductSheetProps) {
                     type="button"
                     className="qr-sheet-close"
                     onClick={onClose}
-                    aria-label="Chiudi dettaglio"
+                    aria-label={labels?.closeAria ?? "Chiudi dettaglio"}
                   >
                     ✕
                   </button>
@@ -121,7 +131,7 @@ export function MenuProductSheet({ product, onClose }: MenuProductSheetProps) {
                     <p className="qr-sheet-desc">{product.description}</p>
                     {showIngredientsRow ? (
                       <div className="qr-sheet-ingredients">
-                        <strong>Ingredienti:</strong>{" "}
+                        <strong>{labels?.ingredients ?? "Ingredienti"}:</strong>{" "}
                         {product.ingredients.join(", ")}
                       </div>
                     ) : null}
@@ -134,7 +144,9 @@ export function MenuProductSheet({ product, onClose }: MenuProductSheetProps) {
                     {product.allergens.length > 0 ? (
                       <div
                         className="qr-sheet-allergens"
-                        aria-label="Allergeni del piatto"
+                        aria-label={
+                          labels?.allergensAria ?? "Allergeni del piatto"
+                        }
                       >
                         {product.allergens.map((allergen) => (
                           <AllergenBadge

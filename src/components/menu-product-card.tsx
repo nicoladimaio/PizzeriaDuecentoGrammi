@@ -5,6 +5,11 @@ import type { MenuProduct } from "@/types/menu-app";
 
 type MenuProductCardProps = {
   product: MenuProduct;
+  labels?: {
+    special: string;
+    hot: string;
+    recent: string;
+  };
   onOpen: (product: MenuProduct) => void;
 };
 
@@ -20,7 +25,11 @@ const warmImage = (src: string) => {
   warmedImages.add(src);
 };
 
-export function MenuProductCard({ product, onOpen }: MenuProductCardProps) {
+export function MenuProductCard({
+  product,
+  labels,
+  onOpen,
+}: MenuProductCardProps) {
   return (
     <article
       className="qr-product-card"
@@ -42,6 +51,11 @@ export function MenuProductCard({ product, onOpen }: MenuProductCardProps) {
       }}
     >
       <div className="qr-product-image-wrap">
+        {product.badges.special ? (
+          <span className="qr-speciality-chip qr-speciality-chip-overlay">
+            ⭐ {labels?.special ?? "Specialita del mese"}
+          </span>
+        ) : null}
         <Image
           src={product.imageThumb || product.image}
           alt={product.name}
@@ -54,15 +68,16 @@ export function MenuProductCard({ product, onOpen }: MenuProductCardProps) {
       <div className="qr-product-body">
         <div className="qr-product-head">
           <h3>{product.name}</h3>
-          {/* <div className="qr-product-badges">
-            {product.badges.special ? <span>⭐ Specialita</span> : null}
-          </div> */}
           <span className="qr-product-price">{formatPrice(product.price)}</span>
         </div>
         <p>{product.description}</p>
         <div className="qr-product-badges">
-          {product.badges.hot ? <span>🔥 Piu richiesta</span> : null}
-          {product.badges.recent ? <span>🆕 Novita</span> : null}
+          {product.badges.hot ? (
+            <span>🔥 {labels?.hot ?? "Piu richiesta"}</span>
+          ) : null}
+          {product.badges.recent ? (
+            <span>🆕 {labels?.recent ?? "Novita"}</span>
+          ) : null}
         </div>
         {product.allergens.length > 0 || product.spiceLevel > 0 ? (
           <div

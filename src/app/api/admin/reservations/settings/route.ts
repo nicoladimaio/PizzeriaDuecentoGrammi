@@ -8,6 +8,10 @@ const settingsSchema = z.object({
   closeTime: z.string().regex(/^([01]\d|2[0-3]):([0-5]\d)$/),
   slotMinutes: z.union([z.literal(15), z.literal(30)]),
   capacityPerSlot: z.number().int().min(1).max(500),
+  insideActive: z.boolean(),
+  outsideActive: z.boolean(),
+  insideCapacityPerSlot: z.number().int().min(1).max(500),
+  outsideCapacityPerSlot: z.number().int().min(1).max(500),
   workingDays: z.array(z.number().int().min(0).max(6)).max(7),
   holidays: z.array(z.string().regex(/^\d{4}-\d{2}-\d{2}$/)).max(80),
   specialOpenings: z.array(z.string().regex(/^\d{4}-\d{2}-\d{2}$/)).max(80),
@@ -38,6 +42,14 @@ const defaultSettings = () => ({
   closeTime: process.env.RESERVATION_CLOSE_TIME ?? "23:00",
   slotMinutes: 30 as 15 | 30,
   capacityPerSlot: Number(process.env.RESERVATION_CAPACITY_PER_SLOT ?? 40),
+  insideActive: true,
+  outsideActive: true,
+  insideCapacityPerSlot: Number(
+    process.env.RESERVATION_CAPACITY_INSIDE_PER_SLOT ?? 40,
+  ),
+  outsideCapacityPerSlot: Number(
+    process.env.RESERVATION_CAPACITY_OUTSIDE_PER_SLOT ?? 24,
+  ),
   workingDays: [1, 2, 3, 4, 5, 6, 0],
   holidays: [] as string[],
   specialOpenings: [] as string[],
@@ -112,6 +124,13 @@ export async function POST(request: Request) {
     if (close <= open) {
       return NextResponse.json(
         { error: "L'orario di chiusura deve essere successivo all'apertura." },
+        { status: 400 },
+      );
+    }
+
+    if (!parsed.data.insideActive && !parsed.data.outsideActive) {
+      return NextResponse.json(
+        { error: "Attiva almeno una sala tra interno ed esterno." },
         { status: 400 },
       );
     }

@@ -4,6 +4,8 @@ import type { MenuCategory } from "@/types/menu-app";
 type MenuCategoriesBarProps = {
   categories: MenuCategory[];
   activeCategory: string;
+  categoriesAriaLabel?: string;
+  getCategoryLabel?: (name: string) => string;
   onSelectCategory: (name: string) => void;
 };
 
@@ -19,6 +21,8 @@ const iconForCategory = (name: string): string => {
 export function MenuCategoriesBar({
   categories,
   activeCategory,
+  categoriesAriaLabel,
+  getCategoryLabel,
   onSelectCategory,
 }: MenuCategoriesBarProps) {
   const chipRefs = useRef<Record<string, HTMLButtonElement | null>>({});
@@ -37,10 +41,16 @@ export function MenuCategoriesBar({
 
   return (
     <div className="qr-categories-sticky">
-      <div className="qr-categories-scroll" aria-label="Categorie menu">
+      <div
+        className="qr-categories-scroll"
+        aria-label={categoriesAriaLabel ?? "Categorie menu"}
+      >
         {categories.map((category) => {
           const active =
             activeCategory.toLowerCase() === category.name.toLowerCase();
+          const label = getCategoryLabel
+            ? getCategoryLabel(category.name)
+            : category.name;
           return (
             <button
               key={category.id}
@@ -57,7 +67,7 @@ export function MenuCategoriesBar({
               {iconForCategory(category.name) ? (
                 <span aria-hidden>{iconForCategory(category.name)}</span>
               ) : null}
-              <span>{category.name}</span>
+              <span>{label}</span>
             </button>
           );
         })}

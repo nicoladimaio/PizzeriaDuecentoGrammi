@@ -1,11 +1,11 @@
 "use client";
 
 import { FormEvent, useState } from "react";
-import { doc, getDoc } from "firebase/firestore";
+import { collection, getDocs, query, where } from "firebase/firestore";
 import { getClientDb } from "@/lib/firebase";
 
 type StatusDoc = {
-  code: string;
+  email: string;
   customerName: string;
   date: string;
   time: string;
@@ -14,6 +14,7 @@ type StatusDoc = {
   ownerResponse: string;
   proposedDate?: string;
   proposedTime?: string;
+  updatedAt?: string;
 };
 
 const statusMap: Record<StatusDoc["status"], string> = {
@@ -39,23 +40,41 @@ export function ReservationStatusChecker({
     setResult(null);
 
     const form = new FormData(event.currentTarget);
-    const code = String(form.get("code") ?? "")
+    const email = String(form.get("email") ?? "")
       .trim()
-      .toUpperCase();
+      .toLowerCase();
 
-    if (!code) {
+    if (!email) {
       setLoading(false);
-      setError("Inserisci un codice prenotazione.");
+      setError("Inserisci una email valida.");
+      return;
+    }
+
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      setLoading(false);
+      setError("Inserisci una email valida.");
       return;
     }
 
     try {
       const db = getClientDb();
-      const snapshot = await getDoc(doc(db, "reservation_status", code));
-      if (!snapshot.exists()) {
-        setError("Nessuna prenotazione trovata con questo codice.");
+      const q = query(
+        collection(db, "reservation_status"),
+        where("email", "==", email),
+      );
+      const snapshot = await getDocs(q);
+
+      if (snapshot.empty) {
+        setError("Nessuna prenotazione trovata con questa email.");
       } else {
-        setResult(snapshot.data() as StatusDoc);
+        const rows = snapshot.docs.map(
+          (docSnapshot) => docSnapshot.data() as StatusDoc,
+        );
+        rows.sort((a, b) =>
+          (b.updatedAt ?? "").localeCompare(a.updatedAt ?? ""),
+        );
+        setResult(rows[0]);
       }
     } catch {
       setError("Impossibile recuperare lo stato in questo momento.");
@@ -75,17 +94,22 @@ export function ReservationStatusChecker({
             Stato prenotazione
           </h2>
           <p className="section-subtitle">
-            Inserisci il codice ricevuto al momento della richiesta.
+            Inserisci l'email usata per la richiesta.
           </p>
         </>
       ) : (
         <p className="section-subtitle">
-          Inserisci il codice ricevuto al momento della richiesta.
+          Inserisci l'email usata per la richiesta.
         </p>
       )}
 
       <form className="status-form" onSubmit={onCheck}>
-        <input name="code" placeholder="Es. DG-A2K9QW" maxLength={9} required />
+        <input
+          name="email"
+          type="email"
+          placeholder="Es. nome@email.com"
+          required
+        />
         <button className="btn-secondary" type="submit" disabled={loading}>
           {loading ? "Verifica..." : "Verifica stato"}
         </button>

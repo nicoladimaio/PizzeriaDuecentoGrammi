@@ -4,6 +4,7 @@ import { getAdminDb } from "@/lib/firebase-admin";
 
 const querySchema = z.object({
   guests: z.coerce.number().int().min(1).max(20),
+  room: z.enum(["inside", "outside"]).optional(),
 });
 
 const MAX_DAYS = 31;
@@ -40,6 +41,12 @@ const getSlotSettings = () => {
   const capacityPerSlot = Number(
     process.env.RESERVATION_CAPACITY_PER_SLOT ?? 40,
   );
+  const insideCapacityPerSlot = Number(
+    process.env.RESERVATION_CAPACITY_INSIDE_PER_SLOT ?? capacityPerSlot,
+  );
+  const outsideCapacityPerSlot = Number(
+    process.env.RESERVATION_CAPACITY_OUTSIDE_PER_SLOT ?? 24,
+  );
 
   const openMinutes = parseMinutes(openTime);
   const closeMinutes = parseMinutes(closeTime);
@@ -56,6 +63,14 @@ const getSlotSettings = () => {
     closeTime,
     slotMinutes: safeSlot,
     capacityPerSlot: safeCapacity,
+    insideCapacityPerSlot:
+      Number.isFinite(insideCapacityPerSlot) && insideCapacityPerSlot > 0
+        ? Math.round(insideCapacityPerSlot)
+        : safeCapacity,
+    outsideCapacityPerSlot:
+      Number.isFinite(outsideCapacityPerSlot) && outsideCapacityPerSlot > 0
+        ? Math.round(outsideCapacityPerSlot)
+        : 24,
     openMinutes,
     closeMinutes,
   };
@@ -90,6 +105,10 @@ const resolveSlotSettings = async (db: ReturnType<typeof getAdminDb>) => {
           closeTime?: unknown;
           slotMinutes?: unknown;
           capacityPerSlot?: unknown;
+          insideActive?: unknown;
+          outsideActive?: unknown;
+          insideCapacityPerSlot?: unknown;
+          outsideCapacityPerSlot?: unknown;
           workingDays?: unknown;
           holidays?: unknown;
           specialOpenings?: unknown;
@@ -122,6 +141,23 @@ const resolveSlotSettings = async (db: ReturnType<typeof getAdminDb>) => {
         ? Math.round(data.capacityPerSlot)
         : envSettings.capacityPerSlot;
 
+    const insideActive =
+      typeof data?.insideActive === "boolean" ? data.insideActive : true;
+    const outsideActive =
+      typeof data?.outsideActive === "boolean" ? data.outsideActive : true;
+    const insideCapacityPerSlot =
+      typeof data?.insideCapacityPerSlot === "number" &&
+      Number.isFinite(data.insideCapacityPerSlot) &&
+      data.insideCapacityPerSlot > 0
+        ? Math.round(data.insideCapacityPerSlot)
+        : envSettings.insideCapacityPerSlot;
+    const outsideCapacityPerSlot =
+      typeof data?.outsideCapacityPerSlot === "number" &&
+      Number.isFinite(data.outsideCapacityPerSlot) &&
+      data.outsideCapacityPerSlot > 0
+        ? Math.round(data.outsideCapacityPerSlot)
+        : envSettings.outsideCapacityPerSlot;
+
     const workingDays = uniqueWeekdays(data?.workingDays);
     const holidays = Array.isArray(data?.holidays)
       ? data.holidays
@@ -140,6 +176,10 @@ const resolveSlotSettings = async (db: ReturnType<typeof getAdminDb>) => {
       closeTime,
       slotMinutes,
       capacityPerSlot,
+      insideActive,
+      outsideActive,
+      insideCapacityPerSlot,
+      outsideCapacityPerSlot,
       openMinutes: parseMinutes(openTime),
       closeMinutes: parseMinutes(closeTime),
       workingDays: workingDays.length > 0 ? workingDays : defaultWorkingDays,
@@ -151,6 +191,10 @@ const resolveSlotSettings = async (db: ReturnType<typeof getAdminDb>) => {
       ...envSettings,
       slotMinutes: envSettings.slotMinutes === 15 ? 15 : 30,
       capacityPerSlot: envSettings.capacityPerSlot,
+      insideActive: true,
+      outsideActive: true,
+      insideCapacityPerSlot: envSettings.insideCapacityPerSlot,
+      outsideCapacityPerSlot: envSettings.outsideCapacityPerSlot,
       workingDays: defaultWorkingDays,
       holidays: new Set<string>(),
       specialOpenings: new Set<string>(),
@@ -172,9 +216,24 @@ export async function GET(request: Request) {
       );
     }
 
-    const { guests } = parsed.data;
+    const { guests, room } = parsed.data;
     const db = getAdminDb();
     const settings = await resolveSlotSettings(db);
+
+    const activeRoom: "inside" | "outside" = room
+      ? room
+      : settings.insideActive && !settings.outsideActive
+        ? "inside"
+        : settings.outsideActive && !settings.insideActive
+          ? "outside"
+          : "inside";
+
+    const roomEnabled =
+      activeRoom === "inside" ? settings.insideActive : settings.outsideActive;
+    const roomCapacity =
+      activeRoom === "inside"
+        ? settings.insideCapacityPerSlot
+        : settings.outsideCapacityPerSlot;
 
     const today = new Date();
     today.setHours(0, 0, 0, 0);
@@ -200,12 +259,14 @@ export async function GET(request: Request) {
         time?: string;
         guests?: number;
         status?: string;
+        diningArea?: "inside" | "outside";
       };
 
       if (!data.date || !data.time || !data.guests || !data.status) continue;
       if (!ACTIVE_STATUSES.has(data.status)) continue;
 
-      const key = `${data.date}|${data.time}`;
+      const area = data.diningArea === "outside" ? "outside" : "inside";
+      const key = `${data.date}|${data.time}|${area}`;
       occupancy.set(key, (occupancy.get(key) ?? 0) + data.guests);
     }
 
@@ -246,18 +307,22 @@ export async function GET(request: Request) {
             available: false,
             remainingSeats: 0,
           }))
-        : slotTimes.map((time) => {
-            const reserved = occupancy.get(`${date}|${time}`) ?? 0;
-            const remainingSeats = Math.max(
-              settings.capacityPerSlot - reserved,
-              0,
-            );
-            return {
+        : !roomEnabled
+          ? slotTimes.map((time) => ({
               time,
-              available: remainingSeats >= guests,
-              remainingSeats,
-            };
-          });
+              available: false,
+              remainingSeats: 0,
+            }))
+          : slotTimes.map((time) => {
+              const reserved =
+                occupancy.get(`${date}|${time}|${activeRoom}`) ?? 0;
+              const remainingSeats = Math.max(roomCapacity - reserved, 0);
+              return {
+                time,
+                available: remainingSeats >= guests,
+                remainingSeats,
+              };
+            });
 
       const availableSlots = slots.filter((slot) => slot.available).length;
 
@@ -278,6 +343,11 @@ export async function GET(request: Request) {
         closeTime: settings.closeTime,
         slotMinutes: settings.slotMinutes,
         capacityPerSlot: settings.capacityPerSlot,
+        activeRoom,
+        insideActive: settings.insideActive,
+        outsideActive: settings.outsideActive,
+        insideCapacityPerSlot: settings.insideCapacityPerSlot,
+        outsideCapacityPerSlot: settings.outsideCapacityPerSlot,
         workingDays: settings.workingDays,
         sameDayClosedAfterOpen,
       },

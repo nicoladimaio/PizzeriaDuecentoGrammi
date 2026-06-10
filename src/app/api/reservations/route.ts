@@ -2,12 +2,13 @@ import { NextResponse } from "next/server";
 import { FieldValue } from "firebase-admin/firestore";
 import { z } from "zod";
 import { getAdminDb } from "@/lib/firebase-admin";
-import { normalizePhoneE164 } from "@/lib/phone";
-import { WhatsAppSendError, sendWhatsAppMessage } from "@/lib/whatsapp";
+import { sendOwnerNewReservationEmail } from "@/lib/email";
 
 const createReservationSchema = z.object({
   customerName: z.string().min(2),
   phone: z.string().min(8),
+  email: z.string().email(),
+  diningArea: z.enum(["inside", "outside"]),
   date: z.string().min(1),
   time: z.string().min(1),
   guests: z.number().int().min(1).max(20),
@@ -21,31 +22,6 @@ const buildCode = () => {
     value += chars[Math.floor(Math.random() * chars.length)];
   }
   return value;
-};
-
-const buildOwnerMessage = (params: {
-  code: string;
-  customerName: string;
-  phone: string;
-  date: string;
-  time: string;
-  guests: number;
-  notes?: string;
-  dashboardLink: string;
-}) => {
-  const lines = [
-    "Nuova richiesta prenotazione",
-    `Codice: ${params.code}`,
-    `Nome: ${params.customerName}`,
-    `Telefono: ${params.phone}`,
-    `Quando: ${params.date} alle ${params.time}`,
-    `Persone: ${params.guests}`,
-    `Note: ${params.notes || "-"}`,
-    "",
-    `Apri dashboard: ${params.dashboardLink}`,
-  ];
-
-  return lines.join("\n");
 };
 
 export async function POST(request: Request) {
@@ -64,7 +40,6 @@ export async function POST(request: Request) {
     const nowIso = new Date().toISOString();
     const code = buildCode();
     const reservationId = db.collection("reservations").doc().id;
-    const notificationPhone = normalizePhoneE164(parsed.data.phone);
 
     const reservationDoc = {
       ...parsed.data,
@@ -73,7 +48,6 @@ export async function POST(request: Request) {
       ownerResponse: "",
       proposedDate: "",
       proposedTime: "",
-      notificationPhone: notificationPhone ?? "",
       createdAt: nowIso,
       updatedAt: nowIso,
       createdAtServer: FieldValue.serverTimestamp(),
@@ -87,6 +61,8 @@ export async function POST(request: Request) {
       code,
       customerName: parsed.data.customerName,
       phone: parsed.data.phone,
+      email: parsed.data.email,
+      diningArea: parsed.data.diningArea,
       date: parsed.data.date,
       time: parsed.data.time,
       guests: parsed.data.guests,
@@ -98,7 +74,6 @@ export async function POST(request: Request) {
       updatedAtServer: FieldValue.serverTimestamp(),
     });
 
-    const ownerNumber = process.env.WHATSAPP_OWNER_TO;
     const siteUrl =
       process.env.NEXT_PUBLIC_SITE_URL ??
       process.env.SITE_URL ??
@@ -107,10 +82,10 @@ export async function POST(request: Request) {
     let ownerNotificationSent = false;
     let ownerNotificationError: string | undefined;
 
-    if (ownerNumber) {
-      const dashboardLink = `${siteUrl}/riservato/dashboard?tab=reservations&code=${code}`;
-      const message = buildOwnerMessage({
-        code,
+    try {
+      const dashboardLink = `${siteUrl}/riservato/dashboard?tab=reservations`;
+      const logoUrl = `${siteUrl}/assets/Centro.png`;
+      await sendOwnerNewReservationEmail({
         customerName: parsed.data.customerName,
         phone: parsed.data.phone,
         date: parsed.data.date,
@@ -118,31 +93,18 @@ export async function POST(request: Request) {
         guests: parsed.data.guests,
         notes: parsed.data.notes,
         dashboardLink,
+        logoUrl,
       });
-
-      try {
-        await sendWhatsAppMessage(ownerNumber, message);
-        ownerNotificationSent = true;
-      } catch (error) {
-        console.error("Errore notifica WhatsApp proprietario", error);
-        if (error instanceof WhatsAppSendError) {
-          if (error.code === 63038) {
-            ownerNotificationError =
-              "Limite giornaliero Twilio raggiunto: richiesta salvata, ma notifica WhatsApp proprietario non inviata.";
-          } else {
-            ownerNotificationError =
-              "Richiesta salvata, ma notifica WhatsApp proprietario non inviata.";
-          }
-        } else {
-          ownerNotificationError =
-            "Richiesta salvata, ma notifica WhatsApp proprietario non inviata.";
-        }
-      }
+      ownerNotificationSent = true;
+    } catch (error) {
+      // The reservation remains saved even if email delivery fails.
+      console.error("Errore invio email proprietario", error);
+      ownerNotificationError =
+        "Richiesta salvata, ma email proprietario non inviata.";
     }
 
     return NextResponse.json({
       ok: true,
-      code,
       ownerNotificationSent,
       ownerNotificationError,
     });

@@ -9,7 +9,7 @@ import { isAllowedAdminEmail } from "@/lib/auth";
 import { AdminMenuPanel } from "@/components/admin-menu-panel";
 import { AdminReservationsPanel } from "@/components/admin-reservations-panel";
 
-type AdminSection = "reservations" | "menu";
+type AdminSection = "reservations" | "menu" | "settings";
 
 const todayKey = () => {
   const now = new Date();
@@ -32,6 +32,7 @@ export function AdminDashboard({
     initialSection ?? "menu",
   );
   const [pendingReservationsCount, setPendingReservationsCount] = useState(0);
+  const [proposedReservationsCount, setProposedReservationsCount] = useState(0);
 
   useEffect(() => {
     const auth = getClientAuth();
@@ -73,6 +74,31 @@ export function AdminDashboard({
     return () => unsubscribe();
   }, []);
 
+  useEffect(() => {
+    const db = getClientDb();
+    const proposedQuery = query(
+      collection(db, "reservations"),
+      where("status", "==", "proposed"),
+    );
+
+    const unsubscribe = onSnapshot(
+      proposedQuery,
+      (snapshot) => {
+        const currentDay = todayKey();
+        const validCount = snapshot.docs.filter((doc) => {
+          const data = doc.data() as { date?: unknown };
+          return typeof data.date === "string" && data.date >= currentDay;
+        }).length;
+        setProposedReservationsCount(validCount);
+      },
+      () => {
+        setProposedReservationsCount(0);
+      },
+    );
+
+    return () => unsubscribe();
+  }, []);
+
   const onLogout = async () => {
     const auth = getClientAuth();
     await signOut(auth);
@@ -83,16 +109,51 @@ export function AdminDashboard({
     return <p className="section-subtitle">Caricamento dashboard...</p>;
   }
 
+  const reservationsAttentionCount =
+    pendingReservationsCount + proposedReservationsCount;
+
+  const sectionTitle =
+    activeSection === "reservations"
+      ? "Prenotazioni"
+      : activeSection === "menu"
+        ? "Menu"
+        : "Impostazioni";
+
+  const sectionSubtitle =
+    activeSection === "reservations"
+      ? "Gestisci richieste, conferme e nuove proposte in una vista ordinata."
+      : activeSection === "menu"
+        ? "Aggiorna prodotti, categorie, ingredienti e disponibilita in tempo reale."
+        : "Configura orari, capienze, giorni lavorativi e aperture straordinarie.";
+
   return (
     <section className="admin-shell">
-      <div className="admin-head admin-head-compact">
-        <h2>{activeSection === "menu" ? "Menu" : "Prenotazioni"}</h2>
+      <div className="admin-head admin-head-premium">
+        <div>
+          <p className="admin-head-kicker">Control Center</p>
+          <h2>{sectionTitle}</h2>
+          <p className="admin-head-subtitle">{sectionSubtitle}</p>
+        </div>
+        {activeSection === "reservations" ? (
+          <div className="admin-head-stats" aria-live="polite">
+            <span className="admin-stat-pill">
+              Nuove: {pendingReservationsCount}
+            </span>
+            <span className="admin-stat-pill">
+              Proposte: {proposedReservationsCount}
+            </span>
+          </div>
+        ) : null}
       </div>
 
       {activeSection === "menu" ? <AdminMenuPanel /> : null}
 
       {activeSection === "reservations" ? (
         <AdminReservationsPanel highlightedCode={highlightedCode} />
+      ) : null}
+
+      {activeSection === "settings" ? (
+        <AdminReservationsPanel settingsOnly onLogout={onLogout} />
       ) : null}
 
       <div
@@ -109,13 +170,13 @@ export function AdminDashboard({
           }
           onClick={() => setActiveSection("reservations")}
         >
-          {pendingReservationsCount > 0 ? (
+          {reservationsAttentionCount > 0 ? (
             <span className="admin-bottom-badge">
-              {pendingReservationsCount}
+              {reservationsAttentionCount}
             </span>
           ) : null}
           <span className="admin-bottom-symbol" aria-hidden>
-            ◷
+            📅
           </span>
           <span>Prenotazioni</span>
         </button>
@@ -129,19 +190,23 @@ export function AdminDashboard({
           onClick={() => setActiveSection("menu")}
         >
           <span className="admin-bottom-symbol" aria-hidden>
-            ☰
+            🍕
           </span>
           <span>Menu</span>
         </button>
         <button
           type="button"
-          className="admin-bottom-btn danger"
-          onClick={onLogout}
+          className={
+            activeSection === "settings"
+              ? "admin-bottom-btn active"
+              : "admin-bottom-btn"
+          }
+          onClick={() => setActiveSection("settings")}
         >
           <span className="admin-bottom-symbol" aria-hidden>
-            ⎋
+            ⚙
           </span>
-          <span>Logout</span>
+          <span>Impostazioni</span>
         </button>
       </div>
     </section>

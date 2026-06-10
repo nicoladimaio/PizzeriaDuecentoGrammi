@@ -19,8 +19,9 @@ export default async function AdminDashboardPage({
   const codeRaw = resolved.code;
 
   const initialTab =
-    typeof tabRaw === "string" && tabRaw === "reservations"
-      ? "reservations"
+    typeof tabRaw === "string" &&
+    (tabRaw === "reservations" || tabRaw === "settings")
+      ? tabRaw
       : "menu";
   const highlightedCode = typeof codeRaw === "string" ? codeRaw : undefined;
 

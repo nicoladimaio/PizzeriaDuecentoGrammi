@@ -17,7 +17,8 @@ Migrazione completa del sito su stack moderno con Next.js, TypeScript e Firebase
 1. Copia il file `.env.example` in `.env.local`.
 2. Inserisci le variabili Firebase reali.
 3. Inserisci gli admin in `NEXT_PUBLIC_ADMIN_EMAILS` (email separate da virgola).
-4. Installa dipendenze:
+4. Configura SMTP Aruba per notifiche prenotazioni.
+5. Installa dipendenze:
 
 ```bash
 npm install
@@ -30,6 +31,40 @@ npm run dev
 ```
 
 6. Apri `http://localhost:3000`.
+
+## Configurazione email prenotazioni (SMTP Aruba)
+
+Nel file `.env.local` inserisci esattamente:
+
+```bash
+SMTP_HOST=smtps.aruba.it
+SMTP_PORT=465
+SMTP_USER=prenotazioni@pizzeriaduecentogrammi.it
+SMTP_PASSWORD=LA_PASSWORD_REALE_DELLA_CASELLA_PRENOTAZIONI
+OWNER_EMAIL=prenotazioni@pizzeriaduecentogrammi.it
+```
+
+Le prenotazioni vengono salvate anche se l'email fallisce; l'errore viene scritto nei log server.
+
+## Configurazione variabili ambiente Firebase (produzione)
+
+Se distribuisci su Firebase Functions, imposta i secret SMTP con CLI:
+
+```bash
+firebase functions:secrets:set SMTP_HOST
+firebase functions:secrets:set SMTP_PORT
+firebase functions:secrets:set SMTP_USER
+firebase functions:secrets:set SMTP_PASSWORD
+firebase functions:secrets:set OWNER_EMAIL
+```
+
+Valori da inserire:
+
+- `SMTP_HOST`: `smtps.aruba.it`
+- `SMTP_PORT`: `465`
+- `SMTP_USER`: `prenotazioni@pizzeriaduecentogrammi.it`
+- `SMTP_PASSWORD`: password reale della casella `prenotazioni@pizzeriaduecentogrammi.it`
+- `OWNER_EMAIL`: `prenotazioni@pizzeriaduecentogrammi.it`
 
 ## Deploy
 

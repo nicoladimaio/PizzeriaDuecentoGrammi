@@ -11,7 +11,7 @@ import {
 import { getClientAuth, getClientDb } from "@/lib/firebase";
 import type { ReservationDoc, ReservationSettings } from "@/types/reservation";
 
-type ActionType = "confirmed" | "rejected" | "proposed";
+type ActionType = "confirmed" | "rejected" | "proposed" | "delete";
 
 type ProposalDraft = {
   ownerResponse: string;
@@ -44,11 +44,27 @@ const weekdayOptions = [
   { key: 0, label: "Dom" },
 ];
 
+const rejectPresetMessages = [
+  "Ci dispiace, ma per quell'orario non abbiamo piu disponibilita.",
+  "Per motivi organizzativi non riusciamo a confermare la richiesta in questa fascia.",
+  "Stiamo gia gestendo molte prenotazioni in quell'orario e non possiamo aggiungerne altre.",
+];
+
+const proposalPresetMessages = [
+  "Ti proponiamo un nuovo orario disponibile nella stessa giornata.",
+  "Possiamo accoglierti in un orario leggermente diverso, confermi la proposta?",
+  "Abbiamo disponibilita alternativa: se per te va bene, confermala dal pulsante in email.",
+];
+
 const defaultSettings: ReservationSettings = {
   openTime: "19:00",
   closeTime: "23:00",
   slotMinutes: 30,
   capacityPerSlot: 40,
+  insideActive: true,
+  outsideActive: true,
+  insideCapacityPerSlot: 40,
+  outsideCapacityPerSlot: 24,
   workingDays: [1, 2, 3, 4, 5, 6, 0],
   holidays: [],
   specialOpenings: [],
@@ -68,6 +84,11 @@ const monthKey = (date: Date) => {
   return `${year}-${month}`;
 };
 
+const parseDateKey = (value: string) => {
+  const [year, month, day] = value.split("-").map(Number);
+  return new Date(year, (month || 1) - 1, day || 1);
+};
+
 const monthLabel = (value: string) => {
   const [year, month] = value.split("-").map(Number);
   return new Date(year, month - 1, 1).toLocaleDateString("it-IT", {
@@ -80,6 +101,30 @@ const shiftMonth = (value: string, delta: number) => {
   const [year, month] = value.split("-").map(Number);
   const date = new Date(year, month - 1 + delta, 1);
   return monthKey(date);
+};
+
+const actionLoadingLabel = (action: ActionType | null) => {
+  switch (action) {
+    case "confirmed":
+      return "Conferma prenotazione in corso...";
+    case "rejected":
+      return "Rifiuto prenotazione in corso...";
+    case "proposed":
+      return "Invio proposta in corso...";
+    case "delete":
+      return "Eliminazione prenotazione in corso...";
+    default:
+      return "Operazione in corso...";
+  }
+};
+
+const formatDateShort = (value: string) => {
+  const parsed = parseDateKey(value);
+  return parsed.toLocaleDateString("it-IT", {
+    weekday: "short",
+    day: "2-digit",
+    month: "2-digit",
+  });
 };
 
 const buildMonthCells = (value: string): CalendarCell[] => {
@@ -107,6 +152,7 @@ const mapSnapshot = (
   const data = snap.data() as ReservationDoc;
   return {
     ...data,
+    diningArea: data.diningArea === "outside" ? "outside" : "inside",
     id: snap.id,
   };
 };
@@ -121,15 +167,40 @@ const normalizeSettings = (
     settings.capacityPerSlot > 0
       ? Math.round(settings.capacityPerSlot)
       : 40,
+  insideActive: settings.insideActive !== false,
+  outsideActive: settings.outsideActive !== false,
+  insideCapacityPerSlot:
+    typeof settings.insideCapacityPerSlot === "number" &&
+    Number.isFinite(settings.insideCapacityPerSlot) &&
+    settings.insideCapacityPerSlot > 0
+      ? Math.round(settings.insideCapacityPerSlot)
+      : 40,
+  outsideCapacityPerSlot:
+    typeof settings.outsideCapacityPerSlot === "number" &&
+    Number.isFinite(settings.outsideCapacityPerSlot) &&
+    settings.outsideCapacityPerSlot > 0
+      ? Math.round(settings.outsideCapacityPerSlot)
+      : 24,
   workingDays: [...new Set(settings.workingDays)].sort((a, b) => a - b),
   holidays: [...new Set(settings.holidays)].sort(),
   specialOpenings: [...new Set(settings.specialOpenings)].sort(),
 });
 
+const deriveTotalCapacity = (settings: ReservationSettings): number => {
+  const total =
+    (settings.insideActive ? settings.insideCapacityPerSlot : 0) +
+    (settings.outsideActive ? settings.outsideCapacityPerSlot : 0);
+  return total > 0 ? total : settings.capacityPerSlot;
+};
+
 export function AdminReservationsPanel({
   highlightedCode,
+  settingsOnly,
+  onLogout,
 }: {
   highlightedCode?: string;
+  settingsOnly?: boolean;
+  onLogout?: () => void | Promise<void>;
 }) {
   const [loading, setLoading] = useState(true);
   const [rows, setRows] = useState<Array<ReservationDoc & { id: string }>>([]);
@@ -142,23 +213,26 @@ export function AdminReservationsPanel({
 
   const [settings, setSettings] =
     useState<ReservationSettings>(defaultSettings);
-  const [capacityDraft, setCapacityDraft] = useState(
-    String(defaultSettings.capacityPerSlot),
+  const [insideCapacityDraft, setInsideCapacityDraft] = useState(
+    String(defaultSettings.insideCapacityPerSlot),
+  );
+  const [outsideCapacityDraft, setOutsideCapacityDraft] = useState(
+    String(defaultSettings.outsideCapacityPerSlot),
   );
   const [settingsLoading, setSettingsLoading] = useState(true);
   const [settingsSaving, setSettingsSaving] = useState(false);
   const [settingsError, setSettingsError] = useState<string | null>(null);
   const [settingsFeedback, setSettingsFeedback] = useState<string | null>(null);
-  const [settingsOpen, setSettingsOpen] = useState(false);
   const [cleanupPending, setCleanupPending] = useState(false);
   const [calendarPickerOpen, setCalendarPickerOpen] = useState(false);
   const [calendarPickerMode, setCalendarPickerMode] = useState<
     "holiday" | "opening"
   >("holiday");
   const [holidayMonth, setHolidayMonth] = useState(monthKey(new Date()));
-  const [savedSettings, setSavedSettings] =
-    useState<ReservationSettings>(defaultSettings);
-  const [closeSettingsPromptOpen, setCloseSettingsPromptOpen] = useState(false);
+  const [reservationsView, setReservationsView] = useState<
+    "pending" | "confirmed" | "proposed"
+  >("pending");
+  const [confirmedSelectedDate, setConfirmedSelectedDate] = useState("");
   const [decisionDialogMode, setDecisionDialogMode] =
     useState<DecisionDialogMode | null>(null);
   const [decisionAvailability, setDecisionAvailability] =
@@ -167,6 +241,7 @@ export function AdminReservationsPanel({
   const [decisionError, setDecisionError] = useState<string | null>(null);
   const [activeDecisionAction, setActiveDecisionAction] =
     useState<ActionType | null>(null);
+  const [decisionMonth, setDecisionMonth] = useState(monthKey(new Date()));
 
   useEffect(() => {
     const db = getClientDb();
@@ -220,7 +295,6 @@ export function AdminReservationsPanel({
         if (!ignore && data.settings) {
           const normalized = normalizeSettings(data.settings);
           setSettings(normalized);
-          setSavedSettings(normalized);
         }
       } catch (err) {
         if (!ignore) {
@@ -267,9 +341,15 @@ export function AdminReservationsPanel({
   const newRows = useMemo(
     () =>
       orderedRows.filter(
-        (row) =>
-          row.date >= todayKey() &&
-          (row.status === "pending" || row.status === "proposed"),
+        (row) => row.date >= todayKey() && row.status === "pending",
+      ),
+    [orderedRows],
+  );
+
+  const proposedRows = useMemo(
+    () =>
+      orderedRows.filter(
+        (row) => row.date >= todayKey() && row.status === "proposed",
       ),
     [orderedRows],
   );
@@ -282,21 +362,52 @@ export function AdminReservationsPanel({
     [orderedRows],
   );
 
-  const oldRows = useMemo(
-    () => orderedRows.filter((row) => row.date < todayKey()),
-    [orderedRows],
-  );
-
   const holidayCalendarCells = useMemo(
     () => buildMonthCells(holidayMonth),
     [holidayMonth],
   );
 
-  const hasPendingSettingsChanges = useMemo(() => {
-    const current = JSON.stringify(normalizeSettings(settings));
-    const saved = JSON.stringify(normalizeSettings(savedSettings));
-    return current !== saved;
-  }, [settings, savedSettings]);
+  const decisionCalendarCells = useMemo(
+    () => buildMonthCells(decisionMonth),
+    [decisionMonth],
+  );
+
+  const confirmedDayKeys = useMemo(() => {
+    return [...new Set(confirmedRows.map((row) => row.date))].sort();
+  }, [confirmedRows]);
+
+  const confirmedRowsForSelectedDate = useMemo(() => {
+    if (!confirmedSelectedDate)
+      return [] as Array<ReservationDoc & { id: string }>;
+    return confirmedRows.filter((row) => row.date === confirmedSelectedDate);
+  }, [confirmedRows, confirmedSelectedDate]);
+
+  const confirmedRowsByTime = useMemo(() => {
+    const groups = new Map<string, Array<ReservationDoc & { id: string }>>();
+    confirmedRowsForSelectedDate.forEach((row) => {
+      const key = row.time || "--:--";
+      const existing = groups.get(key) ?? [];
+      existing.push(row);
+      groups.set(key, existing);
+    });
+
+    return [...groups.entries()]
+      .sort((a, b) => a[0].localeCompare(b[0]))
+      .map(([time, rows]) => ({
+        time,
+        rows: [...rows].sort((a, b) =>
+          a.customerName.localeCompare(b.customerName, "it"),
+        ),
+      }));
+  }, [confirmedRowsForSelectedDate]);
+
+  const recommendedProposalDays = useMemo(() => {
+    if (!decisionAvailability) return [] as string[];
+    return decisionAvailability.days
+      .filter((day) => day.hasAvailability)
+      .map((day) => day.date)
+      .slice(0, 8);
+  }, [decisionAvailability]);
 
   useEffect(() => {
     const current = todayKey();
@@ -319,13 +430,12 @@ export function AdminReservationsPanel({
   }, [settings.holidays, settings.specialOpenings]);
 
   useEffect(() => {
-    const safeCapacity =
-      typeof settings.capacityPerSlot === "number" &&
-      settings.capacityPerSlot > 0
-        ? settings.capacityPerSlot
-        : 40;
-    setCapacityDraft(String(safeCapacity));
-  }, [settings.capacityPerSlot]);
+    setInsideCapacityDraft(String(settings.insideCapacityPerSlot));
+  }, [settings.insideCapacityPerSlot]);
+
+  useEffect(() => {
+    setOutsideCapacityDraft(String(settings.outsideCapacityPerSlot));
+  }, [settings.outsideCapacityPerSlot]);
 
   const onDraftChange = (
     code: string,
@@ -343,13 +453,20 @@ export function AdminReservationsPanel({
     }));
   };
 
-  const loadDecisionAvailability = async (guests: number, code: string) => {
+  const loadDecisionAvailability = async (
+    guests: number,
+    code: string,
+    requestedDate: string,
+    requestedTime: string,
+  ) => {
     setDecisionLoading(true);
     setDecisionError(null);
 
     try {
+      const selectedRow = rows.find((row) => row.code === code);
+      const room = selectedRow?.diningArea === "outside" ? "outside" : "inside";
       const response = await fetch(
-        `/api/reservations/availability?guests=${guests}`,
+        `/api/reservations/availability?guests=${guests}&room=${room}`,
       );
       const data = (await response.json()) as DecisionAvailability;
 
@@ -381,8 +498,23 @@ export function AdminReservationsPanel({
         let nextTime = current.proposedTime;
 
         if (!validDates.has(nextDate)) {
-          nextDate = firstAvailableDate;
-          nextTime = firstAvailableTime;
+          if (validDates.has(requestedDate)) {
+            nextDate = requestedDate;
+          } else {
+            nextDate = firstAvailableDate;
+          }
+
+          const requestedSlots = nextDate
+            ? (data.slotsByDate[nextDate] ?? []).filter(
+                (slot) => slot.available,
+              )
+            : [];
+          const hasRequestedTime = requestedSlots.some(
+            (slot) => slot.time === requestedTime,
+          );
+          nextTime = hasRequestedTime
+            ? requestedTime
+            : (requestedSlots[0]?.time ?? firstAvailableTime);
         }
 
         const validTimes = nextDate
@@ -404,6 +536,12 @@ export function AdminReservationsPanel({
           },
         };
       });
+
+      if (requestedDate) {
+        setDecisionMonth(monthKey(parseDateKey(requestedDate)));
+      } else if (firstAvailableDate) {
+        setDecisionMonth(monthKey(parseDateKey(firstAvailableDate)));
+      }
     } catch (err) {
       setDecisionAvailability(null);
       setDecisionError(
@@ -424,7 +562,8 @@ export function AdminReservationsPanel({
     setDecisionDialogMode(mode);
 
     if (mode === "proposed") {
-      void loadDecisionAvailability(row.guests, row.code);
+      setDecisionMonth(monthKey(parseDateKey(row.date)));
+      void loadDecisionAvailability(row.guests, row.code, row.date, row.time);
       return;
     }
 
@@ -486,9 +625,7 @@ export function AdminReservationsPanel({
         setError(data.customerNotificationError);
       }
 
-      if (action === "confirmed") {
-        setSelectedCode(null);
-      }
+      setSelectedCode(null);
 
       setDecisionDialogMode(null);
       setDecisionError(null);
@@ -515,13 +652,18 @@ export function AdminReservationsPanel({
         throw new Error("Sessione admin non valida.");
       }
 
+      const payloadToSave = {
+        ...settings,
+        capacityPerSlot: deriveTotalCapacity(settings),
+      };
+
       const response = await fetch("/api/admin/reservations/settings", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify(settings),
+        body: JSON.stringify(payloadToSave),
       });
 
       const data = (await response.json()) as {
@@ -533,35 +675,17 @@ export function AdminReservationsPanel({
         throw new Error(data.error ?? "Salvataggio non riuscito.");
       }
 
-      const normalized = normalizeSettings(settings);
-      setSavedSettings(normalized);
+      const normalized = normalizeSettings(payloadToSave);
+      setSettings(normalized);
       setSettingsFeedback("Impostazioni prenotazioni salvate.");
       if (closeAfterSave) {
-        setCloseSettingsPromptOpen(false);
         setCalendarPickerOpen(false);
-        setSettingsOpen(false);
       }
     } catch (err) {
       setSettingsError(err instanceof Error ? err.message : "Errore inatteso.");
     } finally {
       setSettingsSaving(false);
     }
-  };
-
-  const requestCloseSettings = () => {
-    if (settingsSaving || hasPendingSettingsChanges) {
-      setCloseSettingsPromptOpen(true);
-      return;
-    }
-    setCalendarPickerOpen(false);
-    setSettingsOpen(false);
-  };
-
-  const discardAndCloseSettings = () => {
-    setSettings(savedSettings);
-    setCloseSettingsPromptOpen(false);
-    setCalendarPickerOpen(false);
-    setSettingsOpen(false);
   };
 
   const toggleWorkingDay = (day: number) => {
@@ -590,26 +714,43 @@ export function AdminReservationsPanel({
     }));
   };
 
-  const finalizeCapacityDraft = () => {
-    if (capacityDraft.trim() === "") {
-      setCapacityDraft(String(settings.capacityPerSlot ?? 40));
+  const finalizeAreaCapacityDraft = (area: "inside" | "outside") => {
+    const currentDraft =
+      area === "inside" ? insideCapacityDraft : outsideCapacityDraft;
+    const fallback =
+      area === "inside"
+        ? settings.insideCapacityPerSlot
+        : settings.outsideCapacityPerSlot;
+
+    if (currentDraft.trim() === "") {
+      if (area === "inside") setInsideCapacityDraft(String(fallback));
+      if (area === "outside") setOutsideCapacityDraft(String(fallback));
       return;
     }
 
-    const parsed = Number(capacityDraft);
+    const parsed = Number(currentDraft);
     if (!Number.isFinite(parsed) || parsed < 1) {
-      setCapacityDraft(String(settings.capacityPerSlot ?? 40));
+      if (area === "inside") setInsideCapacityDraft(String(fallback));
+      if (area === "outside") setOutsideCapacityDraft(String(fallback));
       return;
     }
 
     const normalized = Math.min(500, Math.round(parsed));
-    setCapacityDraft(String(normalized));
-    if (normalized !== settings.capacityPerSlot) {
-      setSettings((prev) => ({ ...prev, capacityPerSlot: normalized }));
+    if (area === "inside") {
+      setInsideCapacityDraft(String(normalized));
+      if (normalized !== settings.insideCapacityPerSlot) {
+        setSettings((prev) => ({ ...prev, insideCapacityPerSlot: normalized }));
+      }
+      return;
+    }
+
+    setOutsideCapacityDraft(String(normalized));
+    if (normalized !== settings.outsideCapacityPerSlot) {
+      setSettings((prev) => ({ ...prev, outsideCapacityPerSlot: normalized }));
     }
   };
 
-  const cleanupOldReservations = async () => {
+  const cleanupOldReservations = async (silent = false) => {
     setError(null);
     setCleanupPending(true);
 
@@ -617,6 +758,7 @@ export function AdminReservationsPanel({
       const auth = getClientAuth();
       const token = await auth.currentUser?.getIdToken();
       if (!token) {
+        if (silent) return;
         throw new Error("Sessione admin non valida.");
       }
 
@@ -641,6 +783,57 @@ export function AdminReservationsPanel({
       setCleanupPending(false);
     }
   };
+
+  const deleteReservation = async (code: string) => {
+    setError(null);
+    setPendingCode(code);
+    setActiveDecisionAction("delete");
+
+    try {
+      const auth = getClientAuth();
+      const token = await auth.currentUser?.getIdToken();
+      if (!token) {
+        throw new Error("Sessione admin non valida.");
+      }
+
+      const response = await fetch(`/api/admin/reservations/${code}`, {
+        method: "DELETE",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      const data = (await response.json()) as { error?: string };
+      if (!response.ok) {
+        throw new Error(data.error ?? "Eliminazione non riuscita.");
+      }
+
+      setSelectedCode(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Errore inatteso.");
+    } finally {
+      setPendingCode(null);
+      setActiveDecisionAction(null);
+    }
+  };
+
+  useEffect(() => {
+    void cleanupOldReservations(true);
+  }, []);
+
+  useEffect(() => {
+    if (confirmedDayKeys.length === 0) {
+      setConfirmedSelectedDate("");
+      return;
+    }
+
+    const stillExists = confirmedDayKeys.includes(confirmedSelectedDate);
+
+    if (!stillExists) {
+      const nextDate = confirmedDayKeys[0];
+      setConfirmedSelectedDate(nextDate);
+    }
+  }, [confirmedDayKeys, confirmedSelectedDate]);
 
   const addHolidayByDate = (dateValue: string) => {
     if (!dateValue) return;
@@ -696,121 +889,485 @@ export function AdminReservationsPanel({
 
   return (
     <article className="admin-reservations-layout">
-      <section className="card-block">
-        <div className="admin-reservations-head">
-          <h3>Prenotazioni</h3>
-          <div className="admin-reservations-head-actions">
+      {!settingsOnly ? (
+        <section className="card-block admin-reservations-card">
+          <div className="admin-reservations-head">
+            <h3>Prenotazioni</h3>
+          </div>
+
+          {error ? <p className="error-text">{error}</p> : null}
+
+          <div className="admin-reservation-tabs">
             <button
               type="button"
-              className="admin-mini-btn"
-              onClick={() => setSettingsOpen(true)}
+              className={
+                reservationsView === "pending"
+                  ? "admin-reservation-tab active"
+                  : "admin-reservation-tab"
+              }
+              onClick={() => setReservationsView("pending")}
             >
-              ⚙ Impostazioni
+              NUOVE ({newRows.length})
             </button>
             <button
               type="button"
-              className="admin-mini-btn"
-              disabled={cleanupPending}
-              onClick={() => void cleanupOldReservations()}
+              className={
+                reservationsView === "confirmed"
+                  ? "admin-reservation-tab active"
+                  : "admin-reservation-tab"
+              }
+              onClick={() => setReservationsView("confirmed")}
             >
-              {cleanupPending ? "Pulizia..." : "Elimina prenotazioni vecchie"}
+              CONFERMATE ({confirmedRows.length})
+            </button>
+            <button
+              type="button"
+              className={
+                reservationsView === "proposed"
+                  ? "admin-reservation-tab active"
+                  : "admin-reservation-tab"
+              }
+              onClick={() => setReservationsView("proposed")}
+            >
+              PROPOSTE INVIATE ({proposedRows.length})
             </button>
           </div>
-        </div>
-        {oldRows.length >= 50 ? (
-          <p className="admin-old-warning">
-            Hai {oldRows.length} prenotazioni vecchie: valuta la pulizia.
-          </p>
-        ) : null}
 
-        {error ? <p className="error-text">{error}</p> : null}
+          {reservationsView === "pending" ? (
+            <div className="admin-reservation-group">
+              <h4>Nuove</h4>
+              {newRows.length === 0 ? (
+                <p className="section-subtitle">Nessuna prenotazione nuova.</p>
+              ) : (
+                <div className="admin-reservation-list">
+                  {newRows.map((row) => (
+                    <button
+                      key={row.id}
+                      type="button"
+                      className={
+                        highlightedCode === row.code
+                          ? "admin-reservation-item highlighted"
+                          : "admin-reservation-item"
+                      }
+                      onClick={() => setSelectedCode(row.code)}
+                    >
+                      <span className="admin-reservation-main">
+                        <strong>{row.customerName}</strong>
+                        <small>
+                          {row.date} · {row.time} · {row.guests} persone
+                        </small>
+                      </span>
+                      <span className={`badge ${row.status}`}>
+                        {statusLabel(row)}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          ) : null}
 
-        <div className="admin-reservation-groups">
-          <div className="admin-reservation-group">
-            <h4>Nuove</h4>
-            {newRows.length === 0 ? (
-              <p className="section-subtitle">Nessuna prenotazione nuova.</p>
-            ) : (
-              <div className="admin-reservation-list">
-                {newRows.map((row) => (
-                  <button
-                    key={row.id}
-                    type="button"
-                    className={
-                      highlightedCode === row.code
-                        ? "admin-reservation-item highlighted"
-                        : "admin-reservation-item"
+          {reservationsView === "proposed" ? (
+            <div className="admin-reservation-group">
+              <h4>Proposte inviate</h4>
+              {proposedRows.length === 0 ? (
+                <p className="section-subtitle">
+                  Nessuna proposta in attesa di risposta.
+                </p>
+              ) : (
+                <div className="admin-reservation-list">
+                  {proposedRows.map((row) => (
+                    <button
+                      key={row.id}
+                      type="button"
+                      className="admin-reservation-item"
+                      onClick={() => setSelectedCode(row.code)}
+                    >
+                      <span className="admin-reservation-main">
+                        <strong>{row.customerName}</strong>
+                        <small>
+                          {row.date} · {row.time} · {row.guests} persone
+                        </small>
+                      </span>
+                      <span className={`badge ${row.status}`}>
+                        {statusLabel(row)}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          ) : null}
+
+          {reservationsView === "confirmed" ? (
+            <div className="admin-reservation-group admin-confirmed-group">
+              <h4>Confermate per giorno e fascia oraria</h4>
+              {confirmedRows.length === 0 ? (
+                <p className="section-subtitle">
+                  Nessuna prenotazione confermata.
+                </p>
+              ) : (
+                <>
+                  <div className="admin-confirmed-day-nav">
+                    <button
+                      type="button"
+                      className="admin-confirmed-day-btn"
+                      disabled={
+                        confirmedDayKeys.indexOf(confirmedSelectedDate) <= 0
+                      }
+                      onClick={() => {
+                        const idx = confirmedDayKeys.indexOf(
+                          confirmedSelectedDate,
+                        );
+                        if (idx > 0) {
+                          setConfirmedSelectedDate(confirmedDayKeys[idx - 1]);
+                        }
+                      }}
+                    >
+                      ←
+                    </button>
+                    <div className="admin-confirmed-day-label">
+                      <strong>
+                        {parseDateKey(
+                          confirmedSelectedDate || confirmedDayKeys[0],
+                        ).toLocaleDateString("it-IT", {
+                          weekday: "long",
+                          day: "2-digit",
+                          month: "long",
+                          year: "numeric",
+                        })}
+                      </strong>
+                      <small>
+                        Giorno{" "}
+                        {Math.max(
+                          1,
+                          confirmedDayKeys.indexOf(confirmedSelectedDate) + 1,
+                        )}{" "}
+                        di {confirmedDayKeys.length}
+                      </small>
+                    </div>
+                    <button
+                      type="button"
+                      className="admin-confirmed-day-btn"
+                      disabled={
+                        confirmedDayKeys.indexOf(confirmedSelectedDate) >=
+                        confirmedDayKeys.length - 1
+                      }
+                      onClick={() => {
+                        const idx = confirmedDayKeys.indexOf(
+                          confirmedSelectedDate,
+                        );
+                        if (idx >= 0 && idx < confirmedDayKeys.length - 1) {
+                          setConfirmedSelectedDate(confirmedDayKeys[idx + 1]);
+                        }
+                      }}
+                    >
+                      →
+                    </button>
+                  </div>
+
+                  {confirmedRowsByTime.length === 0 ? (
+                    <p className="section-subtitle">
+                      Nessuna confermata nel giorno selezionato.
+                    </p>
+                  ) : (
+                    <div className="admin-confirmed-time-groups">
+                      {confirmedRowsByTime.map((group) => (
+                        <div key={group.time} className="admin-time-slot-block">
+                          <h5>{group.time}</h5>
+                          <div className="admin-reservation-list">
+                            {group.rows.map((row) => (
+                              <button
+                                key={row.id}
+                                type="button"
+                                className="admin-reservation-item"
+                                onClick={() => setSelectedCode(row.code)}
+                              >
+                                <span className="admin-reservation-main">
+                                  <strong>{row.customerName}</strong>
+                                  <small>
+                                    {row.guests} persone ·{" "}
+                                    {row.diningArea === "outside"
+                                      ? "Sala esterna"
+                                      : "Sala interna"}
+                                  </small>
+                                </span>
+                                <span className={`badge ${row.status}`}>
+                                  {statusLabel(row)}
+                                </span>
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+          ) : null}
+        </section>
+      ) : (
+        <section className="card-block admin-settings-landing">
+          <div className="admin-reservations-head">
+            <h3>Impostazioni Prenotazioni</h3>
+            <div className="admin-reservations-head-actions">
+              {onLogout ? (
+                <button
+                  type="button"
+                  className="admin-mini-btn admin-settings-logout"
+                  onClick={() => void onLogout()}
+                >
+                  Logout
+                </button>
+              ) : null}
+            </div>
+          </div>
+
+          {settingsLoading ? (
+            <p className="section-subtitle">Caricamento impostazioni...</p>
+          ) : (
+            <div className="booking-form">
+              <div className="admin-settings-row admin-settings-row-3">
+                <label>
+                  Orario apertura
+                  <input
+                    type="time"
+                    value={settings.openTime}
+                    onChange={(event) =>
+                      setSettings((prev) => ({
+                        ...prev,
+                        openTime: event.target.value,
+                      }))
                     }
-                    onClick={() => setSelectedCode(row.code)}
+                  />
+                </label>
+                <label>
+                  Orario chiusura
+                  <input
+                    type="time"
+                    value={settings.closeTime}
+                    onChange={(event) =>
+                      setSettings((prev) => ({
+                        ...prev,
+                        closeTime: event.target.value,
+                      }))
+                    }
+                  />
+                </label>
+                <label>
+                  Intervallo slot
+                  <select
+                    value={settings.slotMinutes}
+                    onChange={(event) =>
+                      setSettings((prev) => ({
+                        ...prev,
+                        slotMinutes:
+                          Number(event.target.value) === 15 ? 15 : 30,
+                      }))
+                    }
                   >
-                    <span>
-                      <strong>{row.customerName}</strong> · {row.date} ·{" "}
-                      {row.time}
-                    </span>
-                    <span className={`badge ${row.status}`}>
-                      {statusLabel(row)}
-                    </span>
-                  </button>
-                ))}
+                    <option value={15}>15 minuti</option>
+                    <option value={30}>30 minuti</option>
+                  </select>
+                </label>
               </div>
-            )}
-          </div>
 
-          <div className="admin-reservation-group">
-            <h4>Confermate</h4>
-            {confirmedRows.length === 0 ? (
-              <p className="section-subtitle">
-                Nessuna prenotazione confermata.
-              </p>
-            ) : (
-              <div className="admin-reservation-list">
-                {confirmedRows.map((row) => (
-                  <button
-                    key={row.id}
-                    type="button"
-                    className="admin-reservation-item"
-                    onClick={() => setSelectedCode(row.code)}
-                  >
-                    <span>
-                      <strong>{row.customerName}</strong> · {row.date} ·{" "}
-                      {row.time}
-                    </span>
-                    <span className={`badge ${row.status}`}>
-                      {statusLabel(row)}
-                    </span>
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
+              <div className="admin-room-cards-grid">
+                <div className="admin-room-card">
+                  <div className="admin-room-card-head">
+                    <strong>SALA INTERNA</strong>
+                    <button
+                      type="button"
+                      className="admin-room-visibility-btn"
+                      onClick={() =>
+                        setSettings((prev) => ({
+                          ...prev,
+                          insideActive: !prev.insideActive,
+                        }))
+                      }
+                      aria-label={
+                        settings.insideActive
+                          ? "Nascondi sala interna"
+                          : "Mostra sala interna"
+                      }
+                    >
+                      {settings.insideActive ? "👁" : "🚫"}
+                    </button>
+                  </div>
+                  <label>
+                    Capienza sala interna
+                    <input
+                      type="number"
+                      min={1}
+                      max={500}
+                      value={insideCapacityDraft}
+                      onChange={(event) => {
+                        const raw = event.target.value;
+                        if (!/^\d*$/.test(raw)) return;
+                        setInsideCapacityDraft(raw);
 
-          <div className="admin-reservation-group">
-            <h4>Vecchie</h4>
-            {oldRows.length === 0 ? (
-              <p className="section-subtitle">Nessuna prenotazione vecchia.</p>
-            ) : (
-              <div className="admin-reservation-list">
-                {oldRows.map((row) => (
-                  <button
-                    key={row.id}
-                    type="button"
-                    className="admin-reservation-item"
-                    onClick={() => setSelectedCode(row.code)}
-                  >
-                    <span>
-                      <strong>{row.customerName}</strong> · {row.date} ·{" "}
-                      {row.time}
-                    </span>
-                    <span className={`badge ${row.status}`}>
-                      {statusLabel(row)}
-                    </span>
-                  </button>
-                ))}
+                        if (raw === "") return;
+                        const parsed = Number(raw);
+                        if (!Number.isFinite(parsed) || parsed < 1) return;
+
+                        const normalized = Math.min(500, Math.round(parsed));
+                        setSettings((prev) => ({
+                          ...prev,
+                          insideCapacityPerSlot: normalized,
+                        }));
+                      }}
+                      onBlur={() => finalizeAreaCapacityDraft("inside")}
+                      disabled={!settings.insideActive}
+                    />
+                  </label>
+                </div>
+
+                <div className="admin-room-card">
+                  <div className="admin-room-card-head">
+                    <strong>SALA ESTERNA</strong>
+                    <button
+                      type="button"
+                      className="admin-room-visibility-btn"
+                      onClick={() =>
+                        setSettings((prev) => ({
+                          ...prev,
+                          outsideActive: !prev.outsideActive,
+                        }))
+                      }
+                      aria-label={
+                        settings.outsideActive
+                          ? "Nascondi sala esterna"
+                          : "Mostra sala esterna"
+                      }
+                    >
+                      {settings.outsideActive ? "👁" : "🚫"}
+                    </button>
+                  </div>
+                  <label>
+                    Capienza sala esterna
+                    <input
+                      type="number"
+                      min={1}
+                      max={500}
+                      value={outsideCapacityDraft}
+                      onChange={(event) => {
+                        const raw = event.target.value;
+                        if (!/^\d*$/.test(raw)) return;
+                        setOutsideCapacityDraft(raw);
+
+                        if (raw === "") return;
+                        const parsed = Number(raw);
+                        if (!Number.isFinite(parsed) || parsed < 1) return;
+
+                        const normalized = Math.min(500, Math.round(parsed));
+                        setSettings((prev) => ({
+                          ...prev,
+                          outsideCapacityPerSlot: normalized,
+                        }));
+                      }}
+                      onBlur={() => finalizeAreaCapacityDraft("outside")}
+                      disabled={!settings.outsideActive}
+                    />
+                  </label>
+                </div>
               </div>
-            )}
-          </div>
-        </div>
-      </section>
+
+              <div>
+                <p className="booking-step-title">Giorni lavorativi</p>
+                <div className="admin-inline-chips">
+                  {weekdayOptions.map((day) => (
+                    <button
+                      key={day.key}
+                      type="button"
+                      className={
+                        settings.workingDays.includes(day.key)
+                          ? "booking-chip active"
+                          : "booking-chip"
+                      }
+                      onClick={() => toggleWorkingDay(day.key)}
+                    >
+                      {day.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <div className="admin-chip-head">
+                  <p className="booking-step-title">
+                    Festività / chiusure straordinarie
+                  </p>
+                  <button
+                    type="button"
+                    className="admin-add-chip-btn"
+                    onClick={() => openCalendarPicker("holiday")}
+                    aria-label="Aggiungi chiusura straordinaria"
+                  >
+                    +
+                  </button>
+                </div>
+
+                <div className="admin-inline-chips admin-chip-scroll">
+                  {settings.holidays.map((value) => (
+                    <button
+                      key={value}
+                      type="button"
+                      className="booking-chip"
+                      onClick={() => removeHoliday(value)}
+                    >
+                      {value} ×
+                    </button>
+                  ))}
+                </div>
+
+                <div
+                  className="admin-chip-head"
+                  style={{ marginTop: "0.65rem" }}
+                >
+                  <p className="booking-step-title">Aperture straordinarie</p>
+                  <button
+                    type="button"
+                    className="admin-add-chip-btn"
+                    onClick={() => openCalendarPicker("opening")}
+                    aria-label="Aggiungi apertura straordinaria"
+                  >
+                    +
+                  </button>
+                </div>
+                <div className="admin-inline-chips admin-chip-scroll">
+                  {settings.specialOpenings.map((value) => (
+                    <button
+                      key={value}
+                      type="button"
+                      className="booking-chip"
+                      onClick={() => removeSpecialOpening(value)}
+                    >
+                      {value} ×
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="booking-step-actions">
+                <button
+                  type="button"
+                  className="btn-primary"
+                  disabled={settingsSaving}
+                  onClick={() => void saveSettings()}
+                >
+                  {settingsSaving ? "Salvataggio..." : "Salva impostazioni"}
+                </button>
+              </div>
+            </div>
+          )}
+
+          {settingsFeedback ? (
+            <p className="section-subtitle">{settingsFeedback}</p>
+          ) : null}
+          {settingsError ? <p className="error-text">{settingsError}</p> : null}
+        </section>
+      )}
 
       {selectedReservation ? (
         <div className="admin-modal-backdrop" role="dialog" aria-modal="true">
@@ -827,9 +1384,6 @@ export function AdminReservationsPanel({
             </div>
 
             <p>
-              <strong>Codice:</strong> {selectedReservation.code}
-            </p>
-            <p>
               <strong>Cliente:</strong> {selectedReservation.customerName}
             </p>
             <p>
@@ -843,8 +1397,23 @@ export function AdminReservationsPanel({
               <strong>Persone:</strong> {selectedReservation.guests}
             </p>
             <p>
+              <strong>Sala:</strong>{" "}
+              {selectedReservation.diningArea === "outside"
+                ? "Esterno"
+                : "Interno"}
+            </p>
+            <p>
               <strong>Stato:</strong> {statusLabel(selectedReservation)}
             </p>
+            {selectedReservation.status === "proposed" &&
+            selectedReservation.proposedDate &&
+            selectedReservation.proposedTime ? (
+              <p>
+                <strong>Proposta attuale:</strong>{" "}
+                {selectedReservation.proposedDate} alle{" "}
+                {selectedReservation.proposedTime}
+              </p>
+            ) : null}
             <p>
               <strong>Note:</strong> {selectedReservation.notes || "-"}
             </p>
@@ -863,7 +1432,7 @@ export function AdminReservationsPanel({
                         void runDecision(selectedReservation, "confirmed")
                       }
                     >
-                      {isBusy ? "Attendi..." : "Conferma"}
+                      Conferma
                     </button>
                     <button
                       type="button"
@@ -873,7 +1442,7 @@ export function AdminReservationsPanel({
                         openDecisionDialog("rejected", selectedReservation)
                       }
                     >
-                      {isBusy ? "Attendi..." : "Rifiuta"}
+                      Rifiuta
                     </button>
                   </div>
 
@@ -885,7 +1454,18 @@ export function AdminReservationsPanel({
                       openDecisionDialog("proposed", selectedReservation)
                     }
                   >
-                    {isBusy ? "Attendi..." : "Proponi nuovo orario"}
+                    Proponi nuovo orario
+                  </button>
+
+                  <button
+                    type="button"
+                    className="btn-secondary admin-modal-btn admin-decision-reject"
+                    disabled={isBusy}
+                    onClick={() =>
+                      void deleteReservation(selectedReservation.code)
+                    }
+                  >
+                    Elimina prenotazione
                   </button>
                 </div>
               );
@@ -907,7 +1487,36 @@ export function AdminReservationsPanel({
 
             <div className="booking-form">
               <label>
-                Messaggio al cliente (opzionale)
+                Messaggio al cliente
+                <select
+                  value={
+                    (decisionDialogMode === "rejected"
+                      ? rejectPresetMessages
+                      : proposalPresetMessages
+                    ).includes(
+                      drafts[selectedReservation.code]?.ownerResponse ?? "",
+                    )
+                      ? (drafts[selectedReservation.code]?.ownerResponse ?? "")
+                      : ""
+                  }
+                  onChange={(event) =>
+                    onDraftChange(
+                      selectedReservation.code,
+                      "ownerResponse",
+                      event.target.value,
+                    )
+                  }
+                >
+                  <option value="">Messaggio personalizzato...</option>
+                  {(decisionDialogMode === "rejected"
+                    ? rejectPresetMessages
+                    : proposalPresetMessages
+                  ).map((preset) => (
+                    <option key={preset} value={preset}>
+                      {preset}
+                    </option>
+                  ))}
+                </select>
                 <textarea
                   value={drafts[selectedReservation.code]?.ownerResponse ?? ""}
                   rows={2}
@@ -920,6 +1529,10 @@ export function AdminReservationsPanel({
                     )
                   }
                 />
+                <small className="admin-decision-hint">
+                  Seleziona un messaggio preimpostato oppure scrivine uno
+                  personalizzato.
+                </small>
               </label>
 
               {decisionDialogMode === "proposed" ? (
@@ -931,93 +1544,193 @@ export function AdminReservationsPanel({
                   ) : null}
 
                   {!decisionLoading && decisionAvailability ? (
-                    <div className="two-cols">
-                      <label>
-                        Data proposta
-                        <select
-                          value={
-                            drafts[selectedReservation.code]?.proposedDate ?? ""
+                    <>
+                      <p className="booking-step-title">Data proposta</p>
+                      {recommendedProposalDays.length > 0 ? (
+                        <div className="admin-proposal-day-cards">
+                          {recommendedProposalDays.map((dateValue) => {
+                            const selectedDay =
+                              drafts[selectedReservation.code]?.proposedDate ===
+                              dateValue;
+                            return (
+                              <button
+                                key={dateValue}
+                                type="button"
+                                className={
+                                  selectedDay
+                                    ? "admin-proposal-day-card active"
+                                    : "admin-proposal-day-card"
+                                }
+                                onClick={() => {
+                                  const availableTimes = (
+                                    decisionAvailability.slotsByDate[
+                                      dateValue
+                                    ] ?? []
+                                  )
+                                    .filter((slot) => slot.available)
+                                    .map((slot) => slot.time);
+
+                                  setDrafts((prev) => {
+                                    const current = prev[
+                                      selectedReservation.code
+                                    ] ?? {
+                                      ownerResponse: "",
+                                      proposedDate: "",
+                                      proposedTime: "",
+                                    };
+
+                                    return {
+                                      ...prev,
+                                      [selectedReservation.code]: {
+                                        ...current,
+                                        proposedDate: dateValue,
+                                        proposedTime: availableTimes[0] ?? "",
+                                      },
+                                    };
+                                  });
+                                  setDecisionMonth(
+                                    monthKey(parseDateKey(dateValue)),
+                                  );
+                                }}
+                              >
+                                {formatDateShort(dateValue)}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      ) : null}
+
+                      <div className="booking-month-head">
+                        <button
+                          type="button"
+                          className="booking-month-nav"
+                          onClick={() =>
+                            setDecisionMonth((prev) => shiftMonth(prev, -1))
                           }
-                          onChange={(event) => {
-                            const nextDate = event.target.value;
-                            const availableTimes = (
-                              decisionAvailability.slotsByDate[nextDate] ?? []
-                            )
-                              .filter((slot) => slot.available)
-                              .map((slot) => slot.time);
-
-                            setDrafts((prev) => {
-                              const current = prev[
-                                selectedReservation.code
-                              ] ?? {
-                                ownerResponse: "",
-                                proposedDate: "",
-                                proposedTime: "",
-                              };
-
-                              return {
-                                ...prev,
-                                [selectedReservation.code]: {
-                                  ...current,
-                                  proposedDate: nextDate,
-                                  proposedTime: availableTimes[0] ?? "",
-                                },
-                              };
-                            });
-                          }}
                         >
-                          {decisionAvailability.days.filter(
-                            (day) => day.hasAvailability,
-                          ).length === 0 ? (
-                            <option value="">Nessuna data disponibile</option>
-                          ) : null}
-                          {(decisionAvailability.days ?? [])
-                            .filter((day) => day.hasAvailability)
-                            .map((day) => (
-                              <option key={day.date} value={day.date}>
-                                {day.date}
-                              </option>
-                            ))}
-                        </select>
-                      </label>
+                          ←
+                        </button>
+                        <strong>{monthLabel(decisionMonth)}</strong>
+                        <button
+                          type="button"
+                          className="booking-month-nav"
+                          onClick={() =>
+                            setDecisionMonth((prev) => shiftMonth(prev, 1))
+                          }
+                        >
+                          →
+                        </button>
+                      </div>
 
-                      <label>
+                      <div className="booking-weekdays" aria-hidden="true">
+                        <span>L</span>
+                        <span>M</span>
+                        <span>M</span>
+                        <span>G</span>
+                        <span>V</span>
+                        <span>S</span>
+                        <span>D</span>
+                      </div>
+
+                      <div className="booking-calendar" role="grid">
+                        {decisionCalendarCells.map((cell, index) => {
+                          if (cell.kind === "empty") {
+                            return (
+                              <span
+                                key={`decision-empty-${index}`}
+                                className="booking-day booking-day-empty"
+                                aria-hidden="true"
+                              />
+                            );
+                          }
+
+                          const day = decisionAvailability.days.find(
+                            (entry) => entry.date === cell.dateKey,
+                          );
+                          const enabled = Boolean(day?.hasAvailability);
+                          const selected =
+                            drafts[selectedReservation.code]?.proposedDate ===
+                            cell.dateKey;
+
+                          return (
+                            <button
+                              key={cell.dateKey}
+                              type="button"
+                              className={
+                                selected ? "booking-day active" : "booking-day"
+                              }
+                              disabled={!enabled}
+                              onClick={() => {
+                                const availableTimes = (
+                                  decisionAvailability.slotsByDate[
+                                    cell.dateKey
+                                  ] ?? []
+                                )
+                                  .filter((slot) => slot.available)
+                                  .map((slot) => slot.time);
+
+                                setDrafts((prev) => {
+                                  const current = prev[
+                                    selectedReservation.code
+                                  ] ?? {
+                                    ownerResponse: "",
+                                    proposedDate: "",
+                                    proposedTime: "",
+                                  };
+
+                                  return {
+                                    ...prev,
+                                    [selectedReservation.code]: {
+                                      ...current,
+                                      proposedDate: cell.dateKey,
+                                      proposedTime: availableTimes[0] ?? "",
+                                    },
+                                  };
+                                });
+                              }}
+                            >
+                              {cell.day}
+                            </button>
+                          );
+                        })}
+                      </div>
+
+                      <p
+                        className="booking-step-title"
+                        style={{ marginTop: "0.5rem" }}
+                      >
                         Orario proposto
-                        <select
-                          value={
-                            drafts[selectedReservation.code]?.proposedTime ?? ""
-                          }
-                          onChange={(event) =>
-                            onDraftChange(
-                              selectedReservation.code,
-                              "proposedTime",
-                              event.target.value,
-                            )
-                          }
-                        >
-                          {(
-                            decisionAvailability.slotsByDate[
-                              drafts[selectedReservation.code]?.proposedDate ??
-                                ""
-                            ] ?? []
-                          ).filter((slot) => slot.available).length === 0 ? (
-                            <option value="">Nessun orario disponibile</option>
-                          ) : null}
-                          {(
-                            decisionAvailability.slotsByDate[
-                              drafts[selectedReservation.code]?.proposedDate ??
-                                ""
-                            ] ?? []
-                          )
-                            .filter((slot) => slot.available)
-                            .map((slot) => (
-                              <option key={slot.time} value={slot.time}>
-                                {slot.time}
-                              </option>
-                            ))}
-                        </select>
-                      </label>
-                    </div>
+                      </p>
+                      <div className="admin-proposal-time-grid" role="group">
+                        {(
+                          decisionAvailability.slotsByDate[
+                            drafts[selectedReservation.code]?.proposedDate ?? ""
+                          ] ?? []
+                        )
+                          .filter((slot) => slot.available)
+                          .map((slot) => (
+                            <button
+                              key={slot.time}
+                              type="button"
+                              className={
+                                drafts[selectedReservation.code]
+                                  ?.proposedTime === slot.time
+                                  ? "admin-proposal-time-card active"
+                                  : "admin-proposal-time-card"
+                              }
+                              onClick={() =>
+                                onDraftChange(
+                                  selectedReservation.code,
+                                  "proposedTime",
+                                  slot.time,
+                                )
+                              }
+                            >
+                              {slot.time}
+                            </button>
+                          ))}
+                      </div>
+                    </>
                   ) : null}
 
                   {!decisionLoading &&
@@ -1067,11 +1780,9 @@ export function AdminReservationsPanel({
                     void runDecision(selectedReservation, decisionDialogMode)
                   }
                 >
-                  {pendingCode === selectedReservation.code
-                    ? "Attendi..."
-                    : decisionDialogMode === "rejected"
-                      ? "Conferma rifiuto"
-                      : "Invia proposta"}
+                  {decisionDialogMode === "rejected"
+                    ? "Conferma rifiuto"
+                    : "Invia proposta"}
                 </button>
               </div>
             </div>
@@ -1079,204 +1790,9 @@ export function AdminReservationsPanel({
         </div>
       ) : null}
 
-      {settingsOpen ? (
-        <div className="admin-modal-backdrop" role="dialog" aria-modal="true">
-          <div className="admin-modal admin-settings-modal">
-            <div className="admin-modal-head">
-              <h3>Impostazioni prenotazioni</h3>
-              <button
-                type="button"
-                className="btn-secondary admin-modal-btn"
-                onClick={requestCloseSettings}
-              >
-                Chiudi
-              </button>
-            </div>
-
-            {settingsLoading ? (
-              <p className="section-subtitle">Caricamento impostazioni...</p>
-            ) : (
-              <div className="booking-form">
-                <div className="admin-settings-row">
-                  <label>
-                    Orario apertura
-                    <input
-                      type="time"
-                      value={settings.openTime}
-                      onChange={(event) =>
-                        setSettings((prev) => ({
-                          ...prev,
-                          openTime: event.target.value,
-                        }))
-                      }
-                    />
-                  </label>
-                  <label>
-                    Orario chiusura
-                    <input
-                      type="time"
-                      value={settings.closeTime}
-                      onChange={(event) =>
-                        setSettings((prev) => ({
-                          ...prev,
-                          closeTime: event.target.value,
-                        }))
-                      }
-                    />
-                  </label>
-                  <label>
-                    Intervallo slot
-                    <select
-                      value={settings.slotMinutes}
-                      onChange={(event) =>
-                        setSettings((prev) => ({
-                          ...prev,
-                          slotMinutes:
-                            Number(event.target.value) === 15 ? 15 : 30,
-                        }))
-                      }
-                    >
-                      <option value={15}>15 minuti</option>
-                      <option value={30}>30 minuti</option>
-                    </select>
-                  </label>
-                  <label>
-                    Capacità totale
-                    <input
-                      type="number"
-                      min={1}
-                      max={500}
-                      value={capacityDraft}
-                      onChange={(event) => {
-                        const raw = event.target.value;
-                        if (!/^\d*$/.test(raw)) {
-                          return;
-                        }
-
-                        setCapacityDraft(raw);
-
-                        if (raw === "") {
-                          return;
-                        }
-
-                        const parsed = Number(raw);
-                        if (!Number.isFinite(parsed) || parsed < 1) {
-                          return;
-                        }
-
-                        const normalized = Math.min(500, Math.round(parsed));
-                        setSettings((prev) => ({
-                          ...prev,
-                          capacityPerSlot: normalized,
-                        }));
-                      }}
-                      onBlur={finalizeCapacityDraft}
-                    />
-                  </label>
-                </div>
-
-                <div>
-                  <p className="booking-step-title">Giorni lavorativi</p>
-                  <div className="admin-inline-chips">
-                    {weekdayOptions.map((day) => (
-                      <button
-                        key={day.key}
-                        type="button"
-                        className={
-                          settings.workingDays.includes(day.key)
-                            ? "booking-chip active"
-                            : "booking-chip"
-                        }
-                        onClick={() => toggleWorkingDay(day.key)}
-                      >
-                        {day.label}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                <div>
-                  <div className="admin-chip-head">
-                    <p className="booking-step-title">
-                      Festività / chiusure straordinarie
-                    </p>
-                    <button
-                      type="button"
-                      className="admin-add-chip-btn"
-                      onClick={() => openCalendarPicker("holiday")}
-                      aria-label="Aggiungi chiusura straordinaria"
-                    >
-                      +
-                    </button>
-                  </div>
-
-                  <div className="admin-inline-chips admin-chip-scroll">
-                    {settings.holidays.map((value) => (
-                      <button
-                        key={value}
-                        type="button"
-                        className="booking-chip"
-                        onClick={() => removeHoliday(value)}
-                      >
-                        {value} ×
-                      </button>
-                    ))}
-                  </div>
-
-                  <div
-                    className="admin-chip-head"
-                    style={{ marginTop: "0.65rem" }}
-                  >
-                    <p className="booking-step-title">Aperture straordinarie</p>
-                    <button
-                      type="button"
-                      className="admin-add-chip-btn"
-                      onClick={() => openCalendarPicker("opening")}
-                      aria-label="Aggiungi apertura straordinaria"
-                    >
-                      +
-                    </button>
-                  </div>
-                  <div className="admin-inline-chips admin-chip-scroll">
-                    {settings.specialOpenings.map((value) => (
-                      <button
-                        key={value}
-                        type="button"
-                        className="booking-chip"
-                        onClick={() => removeSpecialOpening(value)}
-                      >
-                        {value} ×
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                <div className="booking-step-actions">
-                  <button
-                    type="button"
-                    className="btn-primary"
-                    disabled={settingsSaving}
-                    onClick={() => void saveSettings()}
-                  >
-                    {settingsSaving ? "Salvataggio..." : "Salva impostazioni"}
-                  </button>
-                </div>
-              </div>
-            )}
-
-            {settingsFeedback ? (
-              <p className="section-subtitle">{settingsFeedback}</p>
-            ) : null}
-            {settingsError ? (
-              <p className="error-text">{settingsError}</p>
-            ) : null}
-          </div>
-        </div>
-      ) : null}
-
       {selectedReservation &&
       pendingCode === selectedReservation.code &&
-      activeDecisionAction === "confirmed" ? (
+      activeDecisionAction ? (
         <div className="app-loader-overlay" role="status" aria-live="polite">
           <div className="app-loader-card">
             <img
@@ -1284,7 +1800,7 @@ export function AdminReservationsPanel({
               alt="Caricamento"
               className="app-loader-gif"
             />
-            <p>Conferma prenotazione in corso...</p>
+            <p>{actionLoadingLabel(activeDecisionAction)}</p>
           </div>
         </div>
       ) : null}
@@ -1369,47 +1885,6 @@ export function AdminReservationsPanel({
                   );
                 })}
               </div>
-            </div>
-          </div>
-        </div>
-      ) : null}
-
-      {closeSettingsPromptOpen ? (
-        <div className="admin-modal-backdrop" role="dialog" aria-modal="true">
-          <div className="admin-modal admin-calendar-modal">
-            <div className="admin-modal-head">
-              <h3>Salvataggi in sospeso</h3>
-            </div>
-
-            <p className="section-subtitle">
-              Hai modifiche non salvate nelle impostazioni prenotazioni.
-            </p>
-            <p className="section-subtitle">Vuoi salvare prima di chiudere?</p>
-
-            <div className="booking-step-actions two-buttons">
-              <button
-                type="button"
-                className="btn-secondary admin-modal-btn"
-                onClick={() => setCloseSettingsPromptOpen(false)}
-              >
-                Annulla
-              </button>
-              <button
-                type="button"
-                className="btn-secondary admin-modal-btn"
-                disabled={settingsSaving}
-                onClick={discardAndCloseSettings}
-              >
-                Chiudi senza salvare
-              </button>
-              <button
-                type="button"
-                className="btn-primary"
-                disabled={settingsSaving}
-                onClick={() => void saveSettings(true)}
-              >
-                {settingsSaving ? "Salvataggio..." : "Salva e chiudi"}
-              </button>
             </div>
           </div>
         </div>

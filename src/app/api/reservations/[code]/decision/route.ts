@@ -2,8 +2,8 @@ import { NextResponse } from "next/server";
 import { FieldValue } from "firebase-admin/firestore";
 import { z } from "zod";
 import { getAdminAuth, getAdminDb } from "@/lib/firebase-admin";
-import { normalizePhoneE164 } from "@/lib/phone";
-import { WhatsAppSendError, sendWhatsAppMessage } from "@/lib/whatsapp";
+import { sendCustomerDecisionEmail } from "@/lib/email";
+import { createProposalActionToken } from "@/lib/reservation-proposal-token";
 
 const decisionSchema = z
   .object({
@@ -44,45 +44,6 @@ const isAllowedAdminEmail = (email: string | undefined): boolean => {
     .map((entry) => entry.trim().toLowerCase())
     .filter(Boolean);
   return whitelist.includes(email.toLowerCase());
-};
-
-const customerMessage = (params: {
-  customerName: string;
-  action: "confirmed" | "rejected" | "proposed";
-  date: string;
-  time: string;
-  proposedDate?: string;
-  proposedTime?: string;
-  ownerResponse?: string;
-}) => {
-  if (params.action === "confirmed") {
-    return [
-      `Ciao ${params.customerName}, la tua prenotazione e stata confermata.`,
-      `Data: ${params.date}`,
-      `Orario: ${params.time}`,
-      params.ownerResponse ? `Messaggio: ${params.ownerResponse}` : "",
-    ]
-      .filter(Boolean)
-      .join("\n");
-  }
-
-  if (params.action === "rejected") {
-    return [
-      `Ciao ${params.customerName}, la tua prenotazione non puo essere confermata.`,
-      params.ownerResponse ? `Messaggio: ${params.ownerResponse}` : "",
-    ]
-      .filter(Boolean)
-      .join("\n");
-  }
-
-  return [
-    `Ciao ${params.customerName}, proponiamo un nuovo orario:`,
-    `Data: ${params.proposedDate}`,
-    `Orario: ${params.proposedTime}`,
-    params.ownerResponse ? `Messaggio: ${params.ownerResponse}` : "",
-  ]
-    .filter(Boolean)
-    .join("\n");
 };
 
 export async function POST(
@@ -128,6 +89,7 @@ export async function POST(
       reservationId?: string;
       customerName: string;
       phone?: string;
+      email?: string;
       date: string;
       time: string;
       guests: number;
@@ -174,58 +136,77 @@ export async function POST(
         ...statusUpdate,
       });
 
-    const reservationSnapshot = await db
-      .collection("reservations")
-      .doc(reservationId)
-      .get();
-
-    const reservationDoc = reservationSnapshot.data() as
-      | {
-          customerName: string;
-          notificationPhone?: string;
-        }
-      | undefined;
-
-    const phone =
-      normalizePhoneE164(reservationDoc?.notificationPhone ?? "") ??
-      normalizePhoneE164(statusDoc.phone ?? "");
-
     let customerNotificationSent = false;
     let customerNotificationError: string | undefined;
-    if (phone) {
-      try {
-        await sendWhatsAppMessage(
-          phone,
-          customerMessage({
-            customerName:
-              reservationDoc?.customerName ?? statusDoc.customerName,
-            action: parsed.data.action,
-            date: statusDoc.date,
-            time: statusDoc.time,
-            proposedDate: parsed.data.proposedDate,
-            proposedTime: parsed.data.proposedTime,
-            ownerResponse: parsed.data.ownerResponse,
-          }),
-        );
-        customerNotificationSent = true;
-      } catch (error) {
-        console.error("Errore notifica WhatsApp cliente", error);
-        if (error instanceof WhatsAppSendError) {
-          if (error.code === 63038) {
-            customerNotificationError =
-              "Stato aggiornato, ma Twilio ha raggiunto il limite giornaliero: notifica cliente non inviata.";
-          } else {
-            customerNotificationError =
-              "Stato aggiornato, ma notifica WhatsApp cliente non inviata.";
+
+    try {
+      const reservationSnapshot = await db
+        .collection("reservations")
+        .doc(reservationId)
+        .get();
+
+      const reservationDoc = reservationSnapshot.data() as
+        | {
+            customerName?: string;
+            email?: string;
           }
-        } else {
-          customerNotificationError =
-            "Stato aggiornato, ma notifica WhatsApp cliente non inviata.";
-        }
+        | undefined;
+
+      const customerEmail =
+        typeof reservationDoc?.email === "string"
+          ? reservationDoc.email.trim()
+          : typeof statusDoc.email === "string"
+            ? statusDoc.email.trim()
+            : "";
+
+      if (customerEmail) {
+        const siteUrl =
+          process.env.NEXT_PUBLIC_SITE_URL ??
+          process.env.SITE_URL ??
+          "http://localhost:3000";
+
+        const expiresAt = Date.now() + 1000 * 60 * 60 * 48;
+        const acceptToken = createProposalActionToken({
+          code,
+          decision: "accept",
+          expiresAt,
+        });
+        const rejectToken = createProposalActionToken({
+          code,
+          decision: "reject",
+          expiresAt,
+        });
+
+        const proposalAcceptUrl = `${siteUrl}/api/reservations/${encodeURIComponent(code)}/proposal-response?decision=accept&token=${encodeURIComponent(acceptToken)}`;
+        const proposalRejectUrl = `${siteUrl}/api/reservations/${encodeURIComponent(code)}/proposal-response?decision=reject&token=${encodeURIComponent(rejectToken)}`;
+        const logoUrl = `${siteUrl}/assets/Centro.png`;
+
+        await sendCustomerDecisionEmail({
+          toEmail: customerEmail,
+          customerName:
+            reservationDoc?.customerName || statusDoc.customerName || "Cliente",
+          action: parsed.data.action,
+          date: statusDoc.date,
+          time: statusDoc.time,
+          proposedDate: parsed.data.proposedDate,
+          proposedTime: parsed.data.proposedTime,
+          ownerResponse: parsed.data.ownerResponse,
+          logoUrl,
+          proposalAcceptUrl:
+            parsed.data.action === "proposed" ? proposalAcceptUrl : undefined,
+          proposalRejectUrl:
+            parsed.data.action === "proposed" ? proposalRejectUrl : undefined,
+        });
+        customerNotificationSent = true;
+      } else {
+        customerNotificationError =
+          "Stato aggiornato, ma email cliente mancante: notifica non inviata.";
       }
-    } else {
+    } catch (error) {
+      // The reservation status remains updated even if the email fails.
+      console.error("Errore invio email cliente", error);
       customerNotificationError =
-        "Stato aggiornato, ma numero cliente non valido per WhatsApp.";
+        "Stato aggiornato, ma email cliente non inviata.";
     }
 
     return NextResponse.json({

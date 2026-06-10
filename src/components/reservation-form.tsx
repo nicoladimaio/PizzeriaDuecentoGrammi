@@ -7,6 +7,8 @@ import { z } from "zod";
 const reservationSchema = z.object({
   customerName: z.string().min(2, "Inserisci nome e cognome."),
   phone: z.string().min(8, "Inserisci un numero valido."),
+  email: z.string().email("Inserisci una email valida."),
+  diningArea: z.enum(["inside", "outside"]),
   date: z.string().min(1, "Seleziona una data."),
   time: z.string().min(1, "Seleziona un orario."),
   guests: z.coerce.number().int().min(1).max(20),
@@ -28,13 +30,18 @@ type AvailabilityResponse = {
     openTime: string;
     closeTime: string;
     slotMinutes: number;
+    activeRoom?: "inside" | "outside";
+    insideActive?: boolean;
+    outsideActive?: boolean;
+    insideCapacityPerSlot?: number;
+    outsideCapacityPerSlot?: number;
     sameDayClosedAfterOpen?: boolean;
   };
   error?: string;
 };
 
-type BookingStep = 1 | 2 | 3;
-type BookingStep2View = "date" | "time";
+type BookingStep = 1 | 2 | 3 | 4;
+type BookingStep3View = "date" | "time";
 
 const weekDayLabels = ["Lun", "Mar", "Mer", "Gio", "Ven", "Sab", "Dom"];
 
@@ -91,6 +98,9 @@ export function ReservationForm() {
   const [showLoadingOverlay, setShowLoadingOverlay] = useState(false);
 
   const [guests, setGuests] = useState<number | null>(null);
+  const [diningArea, setDiningArea] = useState<"inside" | "outside" | null>(
+    null,
+  );
   const [customGuestsOpen, setCustomGuestsOpen] = useState(false);
   const [customGuestsValue, setCustomGuestsValue] = useState("");
   const [customGuestsError, setCustomGuestsError] = useState<string | null>(
@@ -98,15 +108,21 @@ export function ReservationForm() {
   );
   const [selectedDate, setSelectedDate] = useState("");
   const [selectedTime, setSelectedTime] = useState("");
-  const [step2View, setStep2View] = useState<BookingStep2View>("date");
+  const [step3View, setStep3View] = useState<BookingStep3View>("date");
 
   const [customerName, setCustomerName] = useState("");
   const [phone, setPhone] = useState("");
+  const [email, setEmail] = useState("");
   const [notes, setNotes] = useState("");
 
   const [availability, setAvailability] = useState<AvailabilityResponse | null>(
     null,
   );
+  const [roomConfig, setRoomConfig] = useState<{
+    insideActive: boolean;
+    outsideActive: boolean;
+  } | null>(null);
+  const [loadingRoomConfig, setLoadingRoomConfig] = useState(false);
 
   const [error, setError] = useState<string | null>(null);
   const [reviewOpen, setReviewOpen] = useState(false);
@@ -159,21 +175,84 @@ export function ReservationForm() {
   }, [selectedDate]);
 
   const canProceedStep1 = guests !== null && !customGuestsError;
-  const canProceedStep2 = Boolean(selectedDate && selectedTime);
+  const canProceedStep3 = Boolean(selectedDate && selectedTime);
   const canOpenReview =
     guests !== null &&
     Boolean(customerName.trim()) &&
     Boolean(phone.trim()) &&
+    Boolean(email.trim()) &&
     Boolean(selectedDate) &&
     Boolean(selectedTime) &&
     !pending;
 
+  const insideRoomEnabled = roomConfig?.insideActive ?? false;
+  const outsideRoomEnabled = roomConfig?.outsideActive ?? false;
+  const noRoomEnabled = !insideRoomEnabled && !outsideRoomEnabled;
+
   useEffect(() => {
-    if (!guests) {
+    if (!guests || step < 2) {
+      setRoomConfig(null);
+      return;
+    }
+
+    let ignore = false;
+
+    const loadRoomConfig = async () => {
+      setLoadingRoomConfig(true);
+
+      try {
+        const response = await fetch(
+          `/api/reservations/availability?guests=${guests}`,
+        );
+        const data = (await response.json()) as AvailabilityResponse;
+
+        if (ignore) return;
+
+        if (!response.ok) {
+          setRoomConfig({ insideActive: true, outsideActive: true });
+          return;
+        }
+
+        const insideActive = data.config.insideActive ?? true;
+        const outsideActive = data.config.outsideActive ?? true;
+
+        setRoomConfig({ insideActive, outsideActive });
+
+        if (insideActive && !outsideActive) {
+          setDiningArea("inside");
+        } else if (!insideActive && outsideActive) {
+          setDiningArea("outside");
+        } else if (
+          diningArea &&
+          ((diningArea === "inside" && !insideActive) ||
+            (diningArea === "outside" && !outsideActive))
+        ) {
+          setDiningArea(null);
+        }
+      } catch {
+        if (!ignore) {
+          setRoomConfig({ insideActive: true, outsideActive: true });
+        }
+      } finally {
+        if (!ignore) {
+          setLoadingRoomConfig(false);
+        }
+      }
+    };
+
+    void loadRoomConfig();
+
+    return () => {
+      ignore = true;
+    };
+  }, [guests, step, diningArea]);
+
+  useEffect(() => {
+    if (!guests || !diningArea || step < 3) {
       setAvailability(null);
       setSelectedDate("");
       setSelectedTime("");
-      setStep2View("date");
+      setStep3View("date");
       setSelectedMonth("");
       setLoadingAvailability(false);
       return;
@@ -187,7 +266,7 @@ export function ReservationForm() {
 
       try {
         const response = await fetch(
-          `/api/reservations/availability?guests=${guests}`,
+          `/api/reservations/availability?guests=${guests}&room=${diningArea}`,
         );
         const data = (await response.json()) as AvailabilityResponse;
 
@@ -222,7 +301,7 @@ export function ReservationForm() {
     return () => {
       ignore = true;
     };
-  }, [guests]);
+  }, [guests, diningArea, step]);
 
   useEffect(() => {
     if (!availability) return;
@@ -230,7 +309,7 @@ export function ReservationForm() {
     if (!selectedDate || !dayAvailabilityMap.has(selectedDate)) {
       setSelectedDate("");
       setSelectedTime("");
-      setStep2View("date");
+      setStep3View("date");
       return;
     }
 
@@ -251,7 +330,7 @@ export function ReservationForm() {
   ]);
 
   useEffect(() => {
-    if (!loadingAvailability || step < 2) {
+    if (!loadingAvailability || step < 3) {
       setShowLoadingOverlay(false);
       return;
     }
@@ -266,7 +345,7 @@ export function ReservationForm() {
   }, [loadingAvailability, step]);
 
   const submitReservation = async () => {
-    if (!selectedDate || !selectedTime || !canOpenReview) {
+    if (!selectedDate || !selectedTime || !canOpenReview || !diningArea) {
       setError("Completa tutti i campi prima di inviare.");
       return;
     }
@@ -277,6 +356,8 @@ export function ReservationForm() {
     const payload = {
       customerName: customerName.trim(),
       phone: phone.trim(),
+      email: email.trim(),
+      diningArea,
       date: selectedDate,
       time: selectedTime,
       guests: guests ?? 0,
@@ -346,14 +427,14 @@ export function ReservationForm() {
           Prenota Un Tavolo
         </h2>
       </div>
-      <p className="section-subtitle">Procedi in 3 passaggi rapidi.</p>
+      <p className="section-subtitle">Procedi in 4 passaggi rapidi.</p>
 
       <form className="booking-form" onSubmit={onSubmit}>
         <div
           className="booking-wizard-head"
           role="status"
           aria-live="polite"
-          aria-label={`Step ${step} di 3`}
+          aria-label={`Step ${step} di 4`}
         >
           <span
             className={step >= 1 ? "wizard-line active" : "wizard-line"}
@@ -365,6 +446,10 @@ export function ReservationForm() {
           />
           <span
             className={step >= 3 ? "wizard-line active" : "wizard-line"}
+            aria-hidden="true"
+          />
+          <span
+            className={step >= 4 ? "wizard-line active" : "wizard-line"}
             aria-hidden="true"
           />
         </div>
@@ -482,9 +567,99 @@ export function ReservationForm() {
 
         {step === 2 ? (
           <div className="booking-step booking-step-screen booking-step-screen-2">
+            <p className="booking-step-title">
+              Scegli dove preferisci mangiare
+            </p>
+
+            {loadingRoomConfig ? (
+              <p className="booking-selection-summary">
+                Caricamento sale disponibili...
+              </p>
+            ) : null}
+
+            {noRoomEnabled && !loadingRoomConfig ? (
+              <p className="booking-inline-error">
+                Nessuna sala disponibile in questo momento. Riprova tra poco.
+              </p>
+            ) : null}
+
+            <div
+              className="booking-area-cards"
+              role="group"
+              aria-label="Scelta sala"
+            >
+              <button
+                type="button"
+                className={
+                  diningArea === "inside"
+                    ? "booking-area-card active"
+                    : "booking-area-card"
+                }
+                onClick={() => {
+                  setDiningArea("inside");
+                  setSelectedDate("");
+                  setSelectedTime("");
+                }}
+                disabled={loadingRoomConfig || !insideRoomEnabled}
+              >
+                {!loadingRoomConfig && !insideRoomEnabled ? (
+                  <span className="booking-room-unavailable">
+                    NON DISPONIBILE
+                  </span>
+                ) : null}
+                <img src="/assets/interni.jpg" alt="Sala interna" />
+                <span className="booking-area-card-label">Sala interna</span>
+              </button>
+
+              <button
+                type="button"
+                className={
+                  diningArea === "outside"
+                    ? "booking-area-card active"
+                    : "booking-area-card"
+                }
+                onClick={() => {
+                  setDiningArea("outside");
+                  setSelectedDate("");
+                  setSelectedTime("");
+                }}
+                disabled={loadingRoomConfig || !outsideRoomEnabled}
+              >
+                {!loadingRoomConfig && !outsideRoomEnabled ? (
+                  <span className="booking-room-unavailable">
+                    NON DISPONIBILE
+                  </span>
+                ) : null}
+                <img src="/assets/interni2.jpg" alt="Sala esterna" />
+                <span className="booking-area-card-label">Sala esterna</span>
+              </button>
+            </div>
+
+            <div className="booking-step-actions two-buttons">
+              <button
+                type="button"
+                className="btn-secondary"
+                onClick={() => setStep(1)}
+              >
+                Indietro
+              </button>
+              <button
+                type="button"
+                className="btn-primary"
+                disabled={loadingRoomConfig || noRoomEnabled || !diningArea}
+                onClick={() => setStep(3)}
+              >
+                Avanti
+              </button>
+            </div>
+          </div>
+        ) : null}
+
+        {step === 3 ? (
+          <div className="booking-step booking-step-screen booking-step-screen-2">
             <p className="booking-step-title">Scegli giorno e orario</p>
 
-            {step2View === "date" ? (
+            {step3View === "date" ? (
               <>
                 {availableMonthKeys.length > 1 ? (
                   <div
@@ -547,7 +722,7 @@ export function ReservationForm() {
                         onClick={() => {
                           setSelectedDate(cell.date);
                           setSelectedTime("");
-                          setStep2View("time");
+                          setStep3View("time");
                         }}
                       >
                         {currentDate.getDate()}
@@ -568,7 +743,7 @@ export function ReservationForm() {
                     type="button"
                     className="btn-primary"
                     disabled={!selectedDate}
-                    onClick={() => setStep2View("time")}
+                    onClick={() => setStep3View("time")}
                   >
                     Vai agli orari
                   </button>
@@ -610,7 +785,7 @@ export function ReservationForm() {
                     type="button"
                     className="btn-secondary"
                     onClick={() => {
-                      setStep2View("date");
+                      setStep3View("date");
                       setSelectedTime("");
                     }}
                   >
@@ -619,8 +794,8 @@ export function ReservationForm() {
                   <button
                     type="button"
                     className="btn-primary"
-                    disabled={!canProceedStep2}
-                    onClick={() => setStep(3)}
+                    disabled={!canProceedStep3}
+                    onClick={() => setStep(4)}
                   >
                     Avanti
                   </button>
@@ -634,11 +809,14 @@ export function ReservationForm() {
           </div>
         ) : null}
 
-        {step === 3 ? (
+        {step === 4 ? (
           <div className="booking-step booking-step-screen booking-step-screen-3 booking-step-final">
             <p className="booking-step-title">Inserisci i tuoi dati</p>
+            <p className="booking-required-note">
+              I campi con * sono obbligatori.
+            </p>
             <label>
-              Nome e cognome
+              Nome e cognome <span className="required-mark">*</span>
               <input
                 name="customerName"
                 type="text"
@@ -649,13 +827,24 @@ export function ReservationForm() {
             </label>
 
             <label>
-              Telefono
+              Telefono <span className="required-mark">*</span>
               <input
                 name="phone"
                 type="tel"
                 required
                 value={phone}
                 onChange={(event) => setPhone(event.target.value)}
+              />
+            </label>
+
+            <label>
+              Email <span className="required-mark">*</span>
+              <input
+                name="email"
+                type="email"
+                required
+                value={email}
+                onChange={(event) => setEmail(event.target.value)}
               />
             </label>
 
@@ -674,7 +863,7 @@ export function ReservationForm() {
               <button
                 type="button"
                 className="btn-secondary"
-                onClick={() => setStep(2)}
+                onClick={() => setStep(3)}
               >
                 Indietro
               </button>
@@ -701,6 +890,10 @@ export function ReservationForm() {
                 Persone: <strong>{guests}</strong>
               </p>
               <p className="booking-selection-summary">
+                Sala:{" "}
+                <strong>{diningArea === "outside" ? "Fuori" : "Dentro"}</strong>
+              </p>
+              <p className="booking-selection-summary">
                 Giorno: <strong>{selectedDateLabel || selectedDate}</strong>
               </p>
               <p className="booking-selection-summary">
@@ -711,6 +904,9 @@ export function ReservationForm() {
               </p>
               <p className="booking-selection-summary">
                 Telefono: <strong>{phone}</strong>
+              </p>
+              <p className="booking-selection-summary">
+                Email: <strong>{email}</strong>
               </p>
             </div>
             <div className="booking-step-actions two-buttons booking-review-actions">
@@ -738,7 +934,11 @@ export function ReservationForm() {
       {error ? <p className="error-text">{error}</p> : null}
 
       {showLoadingOverlay ? (
-        <div className="booking-loader-overlay" role="status" aria-live="polite">
+        <div
+          className="booking-loader-overlay"
+          role="status"
+          aria-live="polite"
+        >
           <div className="booking-loader-card">
             <img
               src="/assets/loader.gif"
