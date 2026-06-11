@@ -83,7 +83,7 @@ export async function POST(request: Request) {
     let ownerNotificationError: string | undefined;
 
     try {
-      const dashboardLink = `${siteUrl}/riservato/dashboard?tab=reservations`;
+      const dashboardLink = `${siteUrl}/riservato/accesso-200g`;
       const logoUrl = `${siteUrl}/assets/Centro.png`;
       await sendOwnerNewReservationEmail({
         customerName: parsed.data.customerName,
