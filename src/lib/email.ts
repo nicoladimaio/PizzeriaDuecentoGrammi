@@ -1,4 +1,6 @@
 import nodemailer from "nodemailer";
+import fs from "node:fs";
+import path from "node:path";
 
 type NewReservationOwnerEmailParams = {
   customerName: string;
@@ -26,6 +28,7 @@ type CustomerDecisionEmailParams = {
 };
 
 let cachedTransporter: nodemailer.Transporter | null = null;
+const EMAIL_LOGO_CID = "pizzeria-logo";
 
 const requireEnv = (name: string): string => {
   const value = process.env[name];
@@ -68,15 +71,15 @@ const escapeHtml = (value: string): string =>
 const wrapEmailLayout = (
   title: string,
   body: string,
-  logoUrl?: string,
+  logoSrc?: string,
 ): string => `
   <div style="margin:0;padding:20px;background:#f2f6f8;font-family:Arial,sans-serif;color:#20323c;">
     <table style="width:100%;max-width:640px;margin:0 auto;border-collapse:collapse;background:#ffffff;border:1px solid #d9e5ea;border-radius:14px;overflow:hidden;">
       <tr>
         <td style="padding:18px 20px;background:linear-gradient(140deg,#2f4f60,#203947);color:#eef7fa;">
           ${
-            logoUrl
-              ? `<img src="${escapeHtml(logoUrl)}" alt="Pizzeria Duecento Grammi" style="display:block;width:110px;max-width:100%;height:auto;margin:0 0 10px;" />`
+            logoSrc
+              ? `<img src="${escapeHtml(logoSrc)}" alt="Pizzeria Duecento Grammi" style="display:block;width:110px;max-width:100%;height:auto;margin:0 0 10px;" />`
               : ""
           }
           <h1 style="margin:0;font-size:20px;line-height:1.2;">${title}</h1>
@@ -89,6 +92,41 @@ const wrapEmailLayout = (
     </table>
   </div>
 `;
+
+const buildLogoAsset = (
+  logoUrl?: string,
+): {
+  logoSrc?: string;
+  attachments?: nodemailer.SendMailOptions["attachments"];
+} => {
+  const localCandidates = [
+    path.join(process.cwd(), "public", "assets", "Centro.png"),
+    path.join(process.cwd(), "public", "assets", "logo1_hq.png"),
+  ];
+
+  const localPath = localCandidates.find((candidate) => fs.existsSync(candidate));
+
+  if (localPath) {
+    return {
+      logoSrc: `cid:${EMAIL_LOGO_CID}`,
+      attachments: [
+        {
+          filename: "Centro.png",
+          path: localPath,
+          cid: EMAIL_LOGO_CID,
+        },
+      ],
+    };
+  }
+
+  if (logoUrl) {
+    return {
+      logoSrc: logoUrl,
+    };
+  }
+
+  return {};
+};
 
 const buildOwnerReservationHtml = (
   params: NewReservationOwnerEmailParams,
@@ -220,16 +258,18 @@ export const sendOwnerNewReservationEmail = async (
   const from = requireEnv("SMTP_USER");
   const to =
     process.env.OWNER_EMAIL || "prenotazioni@pizzeriaduecentogrammi.it";
+  const logoAsset = buildLogoAsset(params.logoUrl);
 
   await transporter.sendMail({
     from,
     to,
     subject: "Nuova prenotazione - Duecento Grammi",
     text: buildOwnerReservationText(params),
+    attachments: logoAsset.attachments,
     html: wrapEmailLayout(
       "Nuova prenotazione",
       buildOwnerReservationHtml(params),
-      params.logoUrl,
+      logoAsset.logoSrc,
     ),
   });
 };
@@ -239,16 +279,18 @@ export const sendCustomerDecisionEmail = async (
 ): Promise<void> => {
   const transporter = getSmtpTransporter();
   const from = requireEnv("SMTP_USER");
+  const logoAsset = buildLogoAsset(params.logoUrl);
 
   await transporter.sendMail({
     from,
     to: params.toEmail,
     subject: buildDecisionSubject(params.action),
     text: buildCustomerDecisionText(params),
+    attachments: logoAsset.attachments,
     html: wrapEmailLayout(
       "Aggiornamento prenotazione",
       buildCustomerDecisionHtml(params),
-      params.logoUrl,
+      logoAsset.logoSrc,
     ),
   });
 };

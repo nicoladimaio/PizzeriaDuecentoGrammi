@@ -90,12 +90,18 @@ const calendarCells = (monthKey: string) => {
 const guestOptions = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
 
 export function ReservationForm() {
+  const STEP_1_TO_2_MESSAGE = "Controllo le sale disponibili...";
+  const STEP_3_TO_4_MESSAGE = "Sto preparando il riepilogo della tua prenotazione...";
+  const STEP_2_TO_3_MESSAGE = "Sto caricando il calendario...";
+
   const router = useRouter();
   const [step, setStep] = useState<BookingStep>(1);
   const [pending, setPending] = useState(false);
   const [redirecting, setRedirecting] = useState(false);
   const [loadingAvailability, setLoadingAvailability] = useState(false);
-  const [showLoadingOverlay, setShowLoadingOverlay] = useState(false);
+  const [transitionMessage, setTransitionMessage] = useState<string | null>(
+    null,
+  );
 
   const [guests, setGuests] = useState<number | null>(null);
   const [diningArea, setDiningArea] = useState<"inside" | "outside" | null>(
@@ -236,6 +242,9 @@ export function ReservationForm() {
       } finally {
         if (!ignore) {
           setLoadingRoomConfig(false);
+          setTransitionMessage((previous) =>
+            previous === STEP_1_TO_2_MESSAGE ? null : previous,
+          );
         }
       }
     };
@@ -292,6 +301,9 @@ export function ReservationForm() {
       } finally {
         if (!ignore) {
           setLoadingAvailability(false);
+          setTransitionMessage((previous) =>
+            previous === STEP_2_TO_3_MESSAGE ? null : previous,
+          );
         }
       }
     };
@@ -329,20 +341,13 @@ export function ReservationForm() {
     availableTimeOptions,
   ]);
 
-  useEffect(() => {
-    if (!loadingAvailability || step < 3) {
-      setShowLoadingOverlay(false);
-      return;
-    }
-
-    const timeout = window.setTimeout(() => {
-      setShowLoadingOverlay(true);
-    }, 250);
-
-    return () => {
-      window.clearTimeout(timeout);
-    };
-  }, [loadingAvailability, step]);
+  const goToStep4 = () => {
+    setTransitionMessage(STEP_3_TO_4_MESSAGE);
+    window.setTimeout(() => {
+      setStep(4);
+      setTransitionMessage(null);
+    }, 300);
+  };
 
   const submitReservation = async () => {
     if (!selectedDate || !selectedTime || !canOpenReview || !diningArea) {
@@ -557,7 +562,10 @@ export function ReservationForm() {
                 type="button"
                 className="btn-primary"
                 disabled={!canProceedStep1}
-                onClick={() => setStep(2)}
+                onClick={() => {
+                  setTransitionMessage(STEP_1_TO_2_MESSAGE);
+                  setStep(2);
+                }}
               >
                 Avanti
               </button>
@@ -639,7 +647,10 @@ export function ReservationForm() {
               <button
                 type="button"
                 className="btn-secondary"
-                onClick={() => setStep(1)}
+                onClick={() => {
+                  setTransitionMessage(null);
+                  setStep(1);
+                }}
               >
                 Indietro
               </button>
@@ -647,7 +658,10 @@ export function ReservationForm() {
                 type="button"
                 className="btn-primary"
                 disabled={loadingRoomConfig || noRoomEnabled || !diningArea}
-                onClick={() => setStep(3)}
+                onClick={() => {
+                  setTransitionMessage(STEP_2_TO_3_MESSAGE);
+                  setStep(3);
+                }}
               >
                 Avanti
               </button>
@@ -795,7 +809,7 @@ export function ReservationForm() {
                     type="button"
                     className="btn-primary"
                     disabled={!canProceedStep3}
-                    onClick={() => setStep(4)}
+                    onClick={goToStep4}
                   >
                     Avanti
                   </button>
@@ -933,7 +947,7 @@ export function ReservationForm() {
 
       {error ? <p className="error-text">{error}</p> : null}
 
-      {showLoadingOverlay ? (
+      {transitionMessage || (loadingAvailability && step >= 3) ? (
         <div
           className="booking-loader-overlay"
           role="status"
@@ -945,7 +959,10 @@ export function ReservationForm() {
               alt="Caricamento calendario"
               className="app-loader-gif"
             />
-            <p>Sto caricando il calendario...</p>
+            <p>
+              {transitionMessage ??
+                (loadingAvailability ? STEP_2_TO_3_MESSAGE : "Caricamento...")}
+            </p>
           </div>
         </div>
       ) : null}
