@@ -13,10 +13,21 @@ type NewReservationOwnerEmailParams = {
   logoUrl?: string;
 };
 
+type NewReservationCustomerRecapEmailParams = {
+  toEmail: string;
+  customerName: string;
+  date: string;
+  time: string;
+  guests: number;
+  diningArea: "inside" | "outside";
+  notes?: string;
+  logoUrl?: string;
+};
+
 type CustomerDecisionEmailParams = {
   toEmail: string;
   customerName: string;
-  action: "confirmed" | "rejected" | "proposed";
+  action: "confirmed" | "rejected" | "proposed" | "cancelled";
   date: string;
   time: string;
   proposedDate?: string;
@@ -24,6 +35,20 @@ type CustomerDecisionEmailParams = {
   ownerResponse?: string;
   proposalAcceptUrl?: string;
   proposalRejectUrl?: string;
+  logoUrl?: string;
+};
+
+type OwnerProposalOutcomeEmailParams = {
+  code: string;
+  customerName: string;
+  phone?: string;
+  email?: string;
+  decision: "accept" | "reject";
+  date: string;
+  time: string;
+  proposedDate?: string;
+  proposedTime?: string;
+  dashboardLink: string;
   logoUrl?: string;
 };
 
@@ -130,65 +155,113 @@ const buildOwnerReservationHtml = (
   </p>
 `;
 
+const buildCustomerReservationRecapHtml = (
+  params: NewReservationCustomerRecapEmailParams,
+): string => {
+  const areaLabel = params.diningArea === "outside" ? "Esterno" : "Interno";
+  return `
+    <p style="margin:0 0 12px;font-size:14px;line-height:1.55;">
+      Ciao ${escapeHtml(params.customerName)}, abbiamo ricevuto la tua richiesta.
+      Ti aggiorneremo appena la prenotazione sara gestita dal nostro staff.
+    </p>
+    <table style="width:100%;border-collapse:collapse;font-size:14px;">
+      <tr><td style="padding:8px 0;font-weight:700;width:38%;">Data e ora richieste</td><td style="padding:8px 0;">${escapeHtml(params.date)} alle ${escapeHtml(params.time)}</td></tr>
+      <tr><td style="padding:8px 0;font-weight:700;">Numero persone</td><td style="padding:8px 0;">${params.guests}</td></tr>
+      <tr><td style="padding:8px 0;font-weight:700;">Sala</td><td style="padding:8px 0;">${areaLabel}</td></tr>
+      <tr><td style="padding:8px 0;font-weight:700;vertical-align:top;">Note</td><td style="padding:8px 0;">${escapeHtml(params.notes || "-")}</td></tr>
+    </table>
+  `;
+};
+
 const buildCustomerDecisionHtml = (
   params: CustomerDecisionEmailParams,
 ): string => {
   const actionLabel =
     params.action === "confirmed"
       ? "Prenotazione confermata"
-      : params.action === "rejected"
-        ? "Prenotazione non confermata"
-        : "Proposta alternativa";
+      : params.action === "cancelled"
+        ? "Prenotazione annullata"
+        : params.action === "rejected"
+          ? "Prenotazione non confermata"
+          : "Proposta alternativa";
 
   const outcomeTone =
     params.action === "confirmed"
       ? {
           chip: "display:inline-block;padding:6px 10px;border-radius:999px;background:#dff5e7;color:#256842;font-weight:700;font-size:12px;",
           box: "border:1px solid #bfe8cd;background:#eefaf2;color:#1e5c3a;",
-          text: "Esito positivo: la tua prenotazione e stata confermata.",
+          text: "Ti aspettiamo volentieri. La tua prenotazione e confermata.",
         }
-      : params.action === "rejected"
+      : params.action === "cancelled"
         ? {
-            chip:
-              "display:inline-block;padding:6px 10px;border-radius:999px;background:#fbe4e1;color:#9a2f28;font-weight:700;font-size:12px;",
+            chip: "display:inline-block;padding:6px 10px;border-radius:999px;background:#fbe4e1;color:#9a2f28;font-weight:700;font-size:12px;",
             box: "border:1px solid #f2c7c2;background:#fff2f0;color:#7d2520;",
-            text: "Esito negativo: non siamo riusciti a confermare la prenotazione richiesta.",
+            text: "La prenotazione confermata e stata annullata.",
           }
-        : {
-            chip:
-              "display:inline-block;padding:6px 10px;border-radius:999px;background:#fff4d9;color:#9a6a08;font-weight:700;font-size:12px;",
-            box: "border:1px solid #f2deab;background:#fff9ea;color:#7e5707;",
-            text: "Abbiamo una proposta alternativa disponibile per te.",
-          };
+        : params.action === "rejected"
+          ? {
+              chip: "display:inline-block;padding:6px 10px;border-radius:999px;background:#fbe4e1;color:#9a2f28;font-weight:700;font-size:12px;",
+              box: "border:1px solid #f2c7c2;background:#fff2f0;color:#7d2520;",
+              text: "Al momento non riusciamo a confermare la richiesta indicata.",
+            }
+          : {
+              chip: "display:inline-block;padding:6px 10px;border-radius:999px;background:#fff4d9;color:#9a6a08;font-weight:700;font-size:12px;",
+              box: "border:1px solid #f2deab;background:#fff9ea;color:#7e5707;",
+              text: "Abbiamo una proposta alternativa disponibile per te.",
+            };
+
+  const welcomeText =
+    params.action === "confirmed"
+      ? "grazie per aver scelto la nostra pizzeria."
+      : params.action === "cancelled"
+        ? "ci dispiace per il cambio di programma."
+        : params.action === "rejected"
+          ? "grazie per la tua richiesta."
+          : "grazie per la tua richiesta. Se il nuovo orario va bene, puoi confermarlo qui sotto.";
 
   const ownerMessage =
     params.ownerResponse?.trim() ||
     (params.action === "proposed"
       ? "Ti proponiamo un orario alternativo disponibile."
-      : params.action === "rejected"
+      : params.action === "rejected" || params.action === "cancelled"
         ? "Non riusciamo a garantirti il posto prenotato per l'orario richiesto."
         : "La tua prenotazione e stata confermata.");
+
+  const defaultMessageByAction =
+    params.action === "proposed"
+      ? "Ti proponiamo un orario alternativo disponibile."
+      : params.action === "rejected" || params.action === "cancelled"
+        ? "Non riusciamo a garantirti il posto prenotato per l'orario richiesto."
+        : "La tua prenotazione e stata confermata.";
+
+  const showOwnerMessage =
+    Boolean(params.ownerResponse?.trim()) &&
+    ownerMessage.trim() !== defaultMessageByAction;
 
   const whenText =
     params.action === "proposed"
       ? `${escapeHtml(params.proposedDate || "-")} alle ${escapeHtml(params.proposedTime || "-")}`
       : `${escapeHtml(params.date)} alle ${escapeHtml(params.time)}`;
 
+  const whenLabel =
+    params.action === "proposed" ? "Orario proposto" : "Data e ora";
+
   return `
     <p style="margin:0 0 12px;font-size:14px;line-height:1.55;">
       Ciao ${escapeHtml(params.customerName)},<br />
-      abbiamo aggiornato lo stato della tua richiesta.
+      ${welcomeText}
     </p>
     <p style="margin:0 0 12px;">
       <span style="${outcomeTone.chip}">${actionLabel}</span>
     </p>
-    <div style="margin:0 0 14px;padding:10px 12px;border-radius:10px;${outcomeTone.box}">
-      <strong style="display:block;margin-bottom:4px;">Esito prenotazione</strong>
-      <span style="font-size:14px;line-height:1.45;">${outcomeTone.text}</span>
-    </div>
+    
     <table style="width:100%;border-collapse:collapse;font-size:14px;">
-      <tr><td style="padding:8px 0;font-weight:700;width:38%;">Data e ora</td><td style="padding:8px 0;">${whenText}</td></tr>
-      <tr><td style="padding:8px 0;font-weight:700;vertical-align:top;">Messaggio</td><td style="padding:8px 0;">${escapeHtml(ownerMessage)}</td></tr>
+      <tr><td style="padding:8px 0;font-weight:700;width:38%;">${whenLabel}</td><td style="padding:8px 0;">${whenText}</td></tr>
+      ${
+        showOwnerMessage
+          ? `<tr><td style="padding:8px 0;font-weight:700;vertical-align:top;">Nota</td><td style="padding:8px 0;">${escapeHtml(ownerMessage)}</td></tr>`
+          : ""
+      }
     </table>
     ${
       params.action === "proposed" &&
@@ -217,27 +290,55 @@ const buildOwnerReservationText = (
     `Dashboard: ${params.dashboardLink}`,
   ].join("\n");
 
+const buildCustomerReservationRecapText = (
+  params: NewReservationCustomerRecapEmailParams,
+): string =>
+  [
+    `Ciao ${params.customerName},`,
+    "abbiamo ricevuto la tua richiesta di prenotazione.",
+    "Ti aggiorneremo appena la prenotazione sara stata gestita.",
+    `Data e ora richieste: ${params.date} alle ${params.time}`,
+    `Numero persone: ${params.guests}`,
+    `Sala: ${params.diningArea === "outside" ? "Esterno" : "Interno"}`,
+    `Note: ${params.notes || "-"}`,
+  ].join("\n");
+
 const buildCustomerDecisionText = (
   params: CustomerDecisionEmailParams,
 ): string => {
   const actionLabel =
     params.action === "confirmed"
       ? "Prenotazione confermata"
-      : params.action === "rejected"
-        ? "Prenotazione non confermata"
-        : "Nuova proposta orario";
+      : params.action === "cancelled"
+        ? "Prenotazione annullata"
+        : params.action === "rejected"
+          ? "Prenotazione non confermata"
+          : "Proposta alternativa";
 
   const whenText =
     params.action === "proposed"
       ? `${params.proposedDate || "-"} alle ${params.proposedTime || "-"}`
       : `${params.date} alle ${params.time}`;
 
+  const defaultMessageByAction =
+    params.action === "proposed"
+      ? "Ti proponiamo un orario alternativo disponibile."
+      : params.action === "cancelled"
+        ? "La prenotazione confermata e stata annullata."
+        : params.action === "rejected"
+          ? "Non riusciamo a confermare la richiesta indicata."
+          : "La tua prenotazione e confermata.";
+
+  const ownerMessage = params.ownerResponse?.trim() || defaultMessageByAction;
+  const includeNote =
+    Boolean(params.ownerResponse?.trim()) &&
+    ownerMessage !== defaultMessageByAction;
+
   return [
     `Ciao ${params.customerName},`,
-    "abbiamo aggiornato lo stato della tua richiesta.",
     actionLabel,
     `Data e ora: ${whenText}`,
-    `Messaggio: ${params.ownerResponse || "-"}`,
+    ...(includeNote ? [`Nota: ${ownerMessage}`] : []),
     ...(params.action === "proposed" &&
     params.proposalAcceptUrl &&
     params.proposalRejectUrl
@@ -249,15 +350,72 @@ const buildCustomerDecisionText = (
   ].join("\n");
 };
 
+const buildOwnerProposalOutcomeHtml = (
+  params: OwnerProposalOutcomeEmailParams,
+): string => {
+  const accepted = params.decision === "accept";
+  const outcomeLabel = accepted ? "Proposta accettata" : "Proposta rifiutata";
+  const finalDate = accepted ? params.proposedDate || params.date : params.date;
+  const finalTime = accepted ? params.proposedTime || params.time : params.time;
+
+  return `
+    <p style="margin:0 0 12px;font-size:14px;line-height:1.55;">
+      Il cliente ha risposto alla proposta inviata.
+    </p>
+    <p style="margin:0 0 12px;">
+      <span style="display:inline-block;padding:6px 10px;border-radius:999px;background:${accepted ? "#dff5e7" : "#fbe4e1"};color:${accepted ? "#256842" : "#9a2f28"};font-weight:700;font-size:12px;">${outcomeLabel}</span>
+    </p>
+    <table style="width:100%;border-collapse:collapse;font-size:14px;">
+      <tr><td style="padding:8px 0;font-weight:700;width:38%;">Codice</td><td style="padding:8px 0;">${escapeHtml(params.code)}</td></tr>
+      <tr><td style="padding:8px 0;font-weight:700;">Cliente</td><td style="padding:8px 0;">${escapeHtml(params.customerName)}</td></tr>
+      <tr><td style="padding:8px 0;font-weight:700;">Telefono</td><td style="padding:8px 0;">${escapeHtml(params.phone || "-")}</td></tr>
+      <tr><td style="padding:8px 0;font-weight:700;">Email</td><td style="padding:8px 0;">${escapeHtml(params.email || "-")}</td></tr>
+      <tr><td style="padding:8px 0;font-weight:700;">Orario finale</td><td style="padding:8px 0;">${escapeHtml(finalDate)} alle ${escapeHtml(finalTime)}</td></tr>
+    </table>
+    <p style="margin:16px 0 0;">
+      <a href="${escapeHtml(params.dashboardLink)}" style="display:inline-block;padding:10px 14px;border-radius:8px;background:#234452;color:#f1f9fb;text-decoration:none;font-weight:700;">
+        Apri dashboard prenotazioni
+      </a>
+    </p>
+  `;
+};
+
+const buildOwnerProposalOutcomeText = (
+  params: OwnerProposalOutcomeEmailParams,
+): string => {
+  const accepted = params.decision === "accept";
+  const finalDate = accepted ? params.proposedDate || params.date : params.date;
+  const finalTime = accepted ? params.proposedTime || params.time : params.time;
+
+  return [
+    `Esito proposta: ${accepted ? "accettata" : "rifiutata"}`,
+    `Codice: ${params.code}`,
+    `Cliente: ${params.customerName}`,
+    `Telefono: ${params.phone || "-"}`,
+    `Email: ${params.email || "-"}`,
+    `Orario finale: ${finalDate} alle ${finalTime}`,
+    `Dashboard: ${params.dashboardLink}`,
+  ].join("\n");
+};
+
+const decisionTitle = (
+  action: CustomerDecisionEmailParams["action"],
+): string => {
+  if (action === "confirmed") return "Prenotazione confermata";
+  if (action === "rejected") return "Prenotazione non confermata";
+  if (action === "cancelled") return "Prenotazione annullata";
+  return "Nuova proposta orario";
+};
+
 const buildDecisionSubject = (
   action: CustomerDecisionEmailParams["action"],
 ): string => {
   if (action === "confirmed")
     return "Prenotazione confermata - Duecento Grammi";
-  if (action === "rejected") {
-    return "Aggiornamento prenotazione - Duecento Grammi";
-  }
-  return "Nuova proposta prenotazione - Duecento Grammi";
+  if (action === "rejected")
+    return "Prenotazione non confermata - Duecento Grammi";
+  if (action === "cancelled") return "Prenotazione annullata - Duecento Grammi";
+  return "Nuova proposta orario - Duecento Grammi";
 };
 
 const sendWithResend = async ({
@@ -306,6 +464,23 @@ export const sendOwnerNewReservationEmail = async (
   });
 };
 
+export const sendCustomerReservationRecapEmail = async (
+  params: NewReservationCustomerRecapEmailParams,
+): Promise<void> => {
+  const logoAsset = buildLogoAsset(params.logoUrl);
+
+  await sendWithResend({
+    to: params.toEmail,
+    subject: "Richiesta prenotazione ricevuta - Duecento Grammi",
+    text: buildCustomerReservationRecapText(params),
+    html: wrapEmailLayout(
+      "Richiesta ricevuta",
+      buildCustomerReservationRecapHtml(params),
+      logoAsset.logoSrc,
+    ),
+  });
+};
+
 export const sendCustomerDecisionEmail = async (
   params: CustomerDecisionEmailParams,
 ): Promise<void> => {
@@ -316,8 +491,27 @@ export const sendCustomerDecisionEmail = async (
     subject: buildDecisionSubject(params.action),
     text: buildCustomerDecisionText(params),
     html: wrapEmailLayout(
-      "Aggiornamento prenotazione",
+      decisionTitle(params.action),
       buildCustomerDecisionHtml(params),
+      logoAsset.logoSrc,
+    ),
+  });
+};
+
+export const sendOwnerProposalOutcomeEmail = async (
+  params: OwnerProposalOutcomeEmailParams,
+): Promise<void> => {
+  const to =
+    process.env.OWNER_EMAIL || "prenotazioni@pizzeriaduecentogrammi.it";
+  const logoAsset = buildLogoAsset(params.logoUrl);
+
+  await sendWithResend({
+    to,
+    subject: `Esito proposta ${params.decision === "accept" ? "accettata" : "rifiutata"} - ${params.code}`,
+    text: buildOwnerProposalOutcomeText(params),
+    html: wrapEmailLayout(
+      "Esito proposta cliente",
+      buildOwnerProposalOutcomeHtml(params),
       logoAsset.logoSrc,
     ),
   });

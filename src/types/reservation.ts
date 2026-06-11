@@ -21,6 +21,7 @@ export type ReservationDoc = ReservationInput & {
   id?: string;
   code: string;
   status: ReservationStatus;
+  arrived?: boolean;
   ownerResponse: string;
   proposedDate?: string;
   proposedTime?: string;

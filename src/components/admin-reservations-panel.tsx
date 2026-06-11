@@ -57,6 +57,8 @@ const weekdayOptions = [
 
 const defaultRejectMessage =
   "Non riusciamo a garantirti il posto prenotato per l'orario richiesto. Ti invitiamo a riprovare con una nuova richiesta.";
+const defaultCancelConfirmedMessage =
+  "La tua prenotazione confermata e stata annullata. Se vuoi, contattaci per concordare una nuova disponibilita.";
 const defaultProposalMessage =
   "Ti proponiamo un orario alternativo disponibile: se per te va bene, confermalo dal pulsante in email.";
 const proposalDatesPageSize = 8;
@@ -158,6 +160,7 @@ const mapSnapshot = (
   return {
     ...data,
     diningArea: data.diningArea === "outside" ? "outside" : "inside",
+    arrived: data.arrived === true,
     id: snap.id,
   };
 };
@@ -212,6 +215,9 @@ export function AdminReservationsPanel({
   const [rows, setRows] = useState<Array<ReservationDoc & { id: string }>>([]);
   const [error, setError] = useState<string | null>(null);
   const [pendingCode, setPendingCode] = useState<string | null>(null);
+  const [arrivedPendingCode, setArrivedPendingCode] = useState<string | null>(
+    null,
+  );
   const [drafts, setDrafts] = useState<Record<string, ProposalDraft>>({});
   const [selectedCode, setSelectedCode] = useState<string | null>(
     highlightedCode ?? null,
@@ -388,7 +394,6 @@ export function AdminReservationsPanel({
     () => buildMonthCells(holidayMonth),
     [holidayMonth],
   );
-
 
   const confirmedDayKeys = useMemo(() => {
     return [...new Set(confirmedRows.map((row) => row.date))].sort();
@@ -583,7 +588,6 @@ export function AdminReservationsPanel({
           },
         };
       });
-
     } catch (err) {
       setDecisionAvailability(null);
       setDecisionError(
@@ -640,7 +644,9 @@ export function AdminReservationsPanel({
       const ownerResponse =
         ownerResponseRaw ||
         (action === "rejected"
-          ? defaultRejectMessage
+          ? row.status === "confirmed"
+            ? defaultCancelConfirmedMessage
+            : defaultRejectMessage
           : action === "proposed"
             ? defaultProposalMessage
             : "");
@@ -865,6 +871,41 @@ export function AdminReservationsPanel({
     } finally {
       setPendingCode(null);
       setActiveDecisionAction(null);
+    }
+  };
+
+  const toggleReservationArrived = async (
+    row: ReservationDoc & { id: string },
+  ) => {
+    setError(null);
+    setArrivedPendingCode(row.code);
+
+    try {
+      const auth = getClientAuth();
+      const token = await auth.currentUser?.getIdToken();
+      if (!token) {
+        throw new Error("Sessione admin non valida.");
+      }
+
+      const response = await fetch(`/api/admin/reservations/${row.code}`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          arrived: row.arrived !== true,
+        }),
+      });
+
+      const data = (await response.json()) as { error?: string };
+      if (!response.ok) {
+        throw new Error(data.error ?? "Aggiornamento arrivo non riuscito.");
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Errore inatteso.");
+    } finally {
+      setArrivedPendingCode(null);
     }
   };
 
@@ -1230,13 +1271,27 @@ export function AdminReservationsPanel({
                       {confirmedRowsByTime.map((group) => (
                         <div key={group.time} className="admin-time-slot-block">
                           <h5>{group.time}</h5>
-                          <div className="admin-reservation-list">
+                          <div className="admin-reservation-list admin-reservation-list-compact-grid">
                             {group.rows.map((row) => (
-                              <button
+                              <div
                                 key={row.id}
-                                type="button"
-                                className="admin-reservation-item"
+                                role="button"
+                                tabIndex={0}
+                                className={
+                                  row.arrived
+                                    ? "admin-reservation-item admin-reservation-item-compact admin-reservation-item-arrived"
+                                    : "admin-reservation-item admin-reservation-item-compact"
+                                }
                                 onClick={() => setSelectedCode(row.code)}
+                                onKeyDown={(event) => {
+                                  if (
+                                    event.key === "Enter" ||
+                                    event.key === " "
+                                  ) {
+                                    event.preventDefault();
+                                    setSelectedCode(row.code);
+                                  }
+                                }}
                               >
                                 <span className="admin-reservation-main">
                                   <strong>{row.customerName}</strong>
@@ -1247,10 +1302,32 @@ export function AdminReservationsPanel({
                                       : "Sala interna"}
                                   </small>
                                 </span>
-                                <span className={`badge ${row.status}`}>
-                                  {statusLabel(row)}
-                                </span>
-                              </button>
+                                <button
+                                  type="button"
+                                  className={
+                                    row.arrived
+                                      ? "admin-presence-toggle active"
+                                      : "admin-presence-toggle"
+                                  }
+                                  disabled={arrivedPendingCode === row.code}
+                                  onClick={(event) => {
+                                    event.stopPropagation();
+                                    void toggleReservationArrived(row);
+                                  }}
+                                  title={
+                                    row.arrived
+                                      ? "Segna cliente non presente"
+                                      : "Segna cliente presente"
+                                  }
+                                  aria-label={
+                                    row.arrived
+                                      ? "Segna cliente non presente"
+                                      : "Segna cliente presente"
+                                  }
+                                >
+                                  {row.arrived ? "✓" : "✕"}
+                                </button>
+                              </div>
                             ))}
                           </div>
                         </div>
@@ -1550,6 +1627,10 @@ export function AdminReservationsPanel({
             <p>
               <strong>Stato:</strong> {statusLabel(selectedReservation)}
             </p>
+            <p>
+              <strong>Arrivo cliente:</strong>{" "}
+              {selectedReservation.arrived ? "Presente" : "Non presente"}
+            </p>
             {selectedReservation.status === "proposed" &&
             selectedReservation.proposedDate &&
             selectedReservation.proposedTime ? (
@@ -1565,20 +1646,35 @@ export function AdminReservationsPanel({
 
             {(() => {
               const isBusy = pendingCode === selectedReservation.code;
+              const isConfirmedReservation =
+                selectedReservation.status === "confirmed";
 
               return (
                 <div className="booking-form" style={{ marginTop: "0.7rem" }}>
-                  <div className="two-cols admin-decision-actions">
-                    <button
-                      type="button"
-                      className="btn-primary"
-                      disabled={isBusy}
-                      onClick={() =>
-                        void runDecision(selectedReservation, "confirmed")
-                      }
-                    >
-                      Conferma
-                    </button>
+                  {!isConfirmedReservation ? (
+                    <div className="two-cols admin-decision-actions">
+                      <button
+                        type="button"
+                        className="btn-primary"
+                        disabled={isBusy}
+                        onClick={() =>
+                          void runDecision(selectedReservation, "confirmed")
+                        }
+                      >
+                        Conferma
+                      </button>
+                      <button
+                        type="button"
+                        className="btn-secondary admin-modal-btn admin-decision-reject"
+                        disabled={isBusy}
+                        onClick={() =>
+                          openDecisionDialog("rejected", selectedReservation)
+                        }
+                      >
+                        Rifiuta
+                      </button>
+                    </div>
+                  ) : (
                     <button
                       type="button"
                       className="btn-secondary admin-modal-btn admin-decision-reject"
@@ -1587,31 +1683,35 @@ export function AdminReservationsPanel({
                         openDecisionDialog("rejected", selectedReservation)
                       }
                     >
-                      Rifiuta
+                      Annulla prenotazione
                     </button>
-                  </div>
+                  )}
 
-                  <button
-                    type="button"
-                    className="btn-secondary admin-modal-btn admin-decision-propose"
-                    disabled={isBusy}
-                    onClick={() =>
-                      openDecisionDialog("proposed", selectedReservation)
-                    }
-                  >
-                    Proponi nuovo orario
-                  </button>
+                  {!isConfirmedReservation ? (
+                    <button
+                      type="button"
+                      className="btn-secondary admin-modal-btn admin-decision-propose"
+                      disabled={isBusy}
+                      onClick={() =>
+                        openDecisionDialog("proposed", selectedReservation)
+                      }
+                    >
+                      Proponi nuovo orario
+                    </button>
+                  ) : null}
 
-                  <button
-                    type="button"
-                    className="btn-secondary admin-modal-btn admin-decision-reject"
-                    disabled={isBusy}
-                    onClick={() =>
-                      void deleteReservation(selectedReservation.code)
-                    }
-                  >
-                    Elimina prenotazione
-                  </button>
+                  {!isConfirmedReservation ? (
+                    <button
+                      type="button"
+                      className="btn-secondary admin-modal-btn admin-decision-reject"
+                      disabled={isBusy}
+                      onClick={() =>
+                        void deleteReservation(selectedReservation.code)
+                      }
+                    >
+                      Elimina prenotazione
+                    </button>
+                  ) : null}
                 </div>
               );
             })()}
@@ -1625,7 +1725,9 @@ export function AdminReservationsPanel({
             <div className="admin-modal-head">
               <h3>
                 {decisionDialogMode === "rejected"
-                  ? "Rifiuta prenotazione"
+                  ? selectedReservation.status === "confirmed"
+                    ? "Annulla prenotazione"
+                    : "Rifiuta prenotazione"
                   : "Proponi nuovo orario"}
               </h3>
             </div>
@@ -1640,7 +1742,9 @@ export function AdminReservationsPanel({
                   placeholder={
                     decisionDialogMode === "proposed"
                       ? "Se lasci vuoto verra inviato un messaggio standard di proposta."
-                      : "Se lasci vuoto verra inviato un messaggio standard di rifiuto."
+                      : selectedReservation.status === "confirmed"
+                        ? "Se lasci vuoto verra inviato un messaggio standard di annullamento."
+                        : "Se lasci vuoto verra inviato un messaggio standard di rifiuto."
                   }
                   onChange={(event) =>
                     onDraftChange(
@@ -1652,7 +1756,12 @@ export function AdminReservationsPanel({
                 />
                 <small className="admin-decision-hint">
                   Scrivi un messaggio personalizzato, oppure lascia vuoto per
-                  usare automaticamente il messaggio standard.
+                  usare automaticamente il messaggio standard
+                  {selectedReservation.status === "confirmed" &&
+                  decisionDialogMode === "rejected"
+                    ? " di annullamento"
+                    : ""}
+                  .
                 </small>
               </label>
 
@@ -1676,7 +1785,8 @@ export function AdminReservationsPanel({
                               disabled={currentProposalPageStart === 0}
                               onClick={() => {
                                 const previousPageStart =
-                                  currentProposalPageStart - proposalDatesPageSize;
+                                  currentProposalPageStart -
+                                  proposalDatesPageSize;
                                 if (previousPageStart >= 0) {
                                   setProposalDate(
                                     selectedReservation.code,
@@ -1689,7 +1799,8 @@ export function AdminReservationsPanel({
                             </button>
                             <strong className="admin-proposal-date-label">
                               {`${Math.min(currentProposalPageStart + 1, availableProposalDays.length)}-${Math.min(
-                                currentProposalPageStart + proposalDatesPageSize,
+                                currentProposalPageStart +
+                                  proposalDatesPageSize,
                                 availableProposalDays.length,
                               )} di ${availableProposalDays.length}`}
                             </strong>
@@ -1697,13 +1808,17 @@ export function AdminReservationsPanel({
                               type="button"
                               className="admin-confirmed-day-btn"
                               disabled={
-                                currentProposalPageStart + proposalDatesPageSize >=
+                                currentProposalPageStart +
+                                  proposalDatesPageSize >=
                                 availableProposalDays.length
                               }
                               onClick={() => {
                                 const nextPageStart =
-                                  currentProposalPageStart + proposalDatesPageSize;
-                                if (nextPageStart < availableProposalDays.length) {
+                                  currentProposalPageStart +
+                                  proposalDatesPageSize;
+                                if (
+                                  nextPageStart < availableProposalDays.length
+                                ) {
                                   setProposalDate(
                                     selectedReservation.code,
                                     availableProposalDays[nextPageStart],
@@ -1715,7 +1830,10 @@ export function AdminReservationsPanel({
                             </button>
                           </div>
 
-                          <div className="admin-proposal-time-grid" role="group">
+                          <div
+                            className="admin-proposal-time-grid"
+                            role="group"
+                          >
                             {pagedProposalDays.map((dateValue) => (
                               <button
                                 key={dateValue}
@@ -1726,7 +1844,10 @@ export function AdminReservationsPanel({
                                     : "admin-proposal-time-card"
                                 }
                                 onClick={() =>
-                                  setProposalDate(selectedReservation.code, dateValue)
+                                  setProposalDate(
+                                    selectedReservation.code,
+                                    dateValue,
+                                  )
                                 }
                               >
                                 {formatDateShort(dateValue)}
@@ -1822,7 +1943,9 @@ export function AdminReservationsPanel({
                   }
                 >
                   {decisionDialogMode === "rejected"
-                    ? "Conferma rifiuto"
+                    ? selectedReservation.status === "confirmed"
+                      ? "Conferma annullamento"
+                      : "Conferma rifiuto"
                     : "Invia proposta"}
                 </button>
               </div>

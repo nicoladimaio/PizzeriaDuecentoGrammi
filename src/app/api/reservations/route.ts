@@ -2,7 +2,10 @@ import { NextResponse } from "next/server";
 import { FieldValue } from "firebase-admin/firestore";
 import { z } from "zod";
 import { getAdminDb } from "@/lib/firebase-admin";
-import { sendOwnerNewReservationEmail } from "@/lib/email";
+import {
+  sendCustomerReservationRecapEmail,
+  sendOwnerNewReservationEmail,
+} from "@/lib/email";
 
 const createReservationSchema = z.object({
   customerName: z.string().min(2),
@@ -45,6 +48,7 @@ export async function POST(request: Request) {
       ...parsed.data,
       code,
       status: "pending",
+      arrived: false,
       ownerResponse: "",
       proposedDate: "",
       proposedTime: "",
@@ -67,6 +71,7 @@ export async function POST(request: Request) {
       time: parsed.data.time,
       guests: parsed.data.guests,
       status: "pending",
+      arrived: false,
       ownerResponse: "",
       proposedDate: "",
       proposedTime: "",
@@ -81,6 +86,26 @@ export async function POST(request: Request) {
 
     let ownerNotificationSent = false;
     let ownerNotificationError: string | undefined;
+    let customerRecapSent = false;
+    let customerRecapError: string | undefined;
+
+    try {
+      const logoUrl = `${siteUrl}/assets/Centro.png`;
+      await sendCustomerReservationRecapEmail({
+        toEmail: parsed.data.email,
+        customerName: parsed.data.customerName,
+        date: parsed.data.date,
+        time: parsed.data.time,
+        guests: parsed.data.guests,
+        diningArea: parsed.data.diningArea,
+        notes: parsed.data.notes,
+        logoUrl,
+      });
+      customerRecapSent = true;
+    } catch (error) {
+      console.error("Errore invio email recap cliente", error);
+      customerRecapError = "Richiesta salvata, ma recap cliente non inviato.";
+    }
 
     try {
       const dashboardLink = `${siteUrl}/riservato/dashboard?tab=reservations`;
@@ -105,6 +130,8 @@ export async function POST(request: Request) {
 
     return NextResponse.json({
       ok: true,
+      customerRecapSent,
+      customerRecapError,
       ownerNotificationSent,
       ownerNotificationError,
     });

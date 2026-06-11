@@ -14,7 +14,7 @@ export default function BookingConfirmedPage() {
           <p className="section-subtitle">
             Abbiamo registrato la tua richiesta. Riceverai subito una email con
             i dettagli della prenotazione e una successiva comunicazione di
-            risposta appena possibile.
+            risposta appena possibile. Controlla anche nello spam!
           </p>
           <div className="booking-confirm-actions">
             <Link href="/" className="btn-secondary admin-modal-btn">

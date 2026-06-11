@@ -93,6 +93,7 @@ export async function POST(
       date: string;
       time: string;
       guests: number;
+      status?: "pending" | "confirmed" | "rejected" | "proposed";
     };
 
     const nowIso = new Date().toISOString();
@@ -160,6 +161,11 @@ export async function POST(
             : "";
 
       if (customerEmail) {
+        const customerEmailAction =
+          parsed.data.action === "rejected" && statusDoc.status === "confirmed"
+            ? "cancelled"
+            : parsed.data.action;
+
         const siteUrl =
           process.env.NEXT_PUBLIC_SITE_URL ??
           process.env.SITE_URL ??
@@ -185,7 +191,7 @@ export async function POST(
           toEmail: customerEmail,
           customerName:
             reservationDoc?.customerName || statusDoc.customerName || "Cliente",
-          action: parsed.data.action,
+          action: customerEmailAction,
           date: statusDoc.date,
           time: statusDoc.time,
           proposedDate: parsed.data.proposedDate,

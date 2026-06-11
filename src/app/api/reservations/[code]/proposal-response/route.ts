@@ -1,5 +1,6 @@
 import { FieldValue } from "firebase-admin/firestore";
 import { getAdminDb } from "@/lib/firebase-admin";
+import { sendOwnerProposalOutcomeEmail } from "@/lib/email";
 import { verifyProposalActionToken } from "@/lib/reservation-proposal-token";
 
 const htmlResponse = (title: string, message: string, ok = true) => {
@@ -76,6 +77,9 @@ export async function GET(
 
     const statusDoc = statusSnapshot.data() as {
       reservationId?: string;
+      customerName?: string;
+      phone?: string;
+      email?: string;
       date: string;
       time: string;
       proposedDate?: string;
@@ -133,6 +137,31 @@ export async function GET(
 
     await statusRef.update(update);
     await db.collection("reservations").doc(reservationId).update(update);
+
+    try {
+      const siteUrl =
+        process.env.NEXT_PUBLIC_SITE_URL ??
+        process.env.SITE_URL ??
+        "http://localhost:3000";
+      const dashboardLink = `${siteUrl}/riservato/dashboard?tab=reservations`;
+      const logoUrl = `${siteUrl}/assets/Centro.png`;
+
+      await sendOwnerProposalOutcomeEmail({
+        code,
+        customerName: statusDoc.customerName || "Cliente",
+        phone: statusDoc.phone,
+        email: statusDoc.email,
+        decision,
+        date: statusDoc.date,
+        time: statusDoc.time,
+        proposedDate: statusDoc.proposedDate,
+        proposedTime: statusDoc.proposedTime,
+        dashboardLink,
+        logoUrl,
+      });
+    } catch (error) {
+      console.error("Errore invio email proprietario esito proposta", error);
+    }
 
     if (decision === "accept") {
       return htmlResponse(
