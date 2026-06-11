@@ -91,7 +91,8 @@ const guestOptions = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
 
 export function ReservationForm() {
   const STEP_1_TO_2_MESSAGE = "Controllo le sale disponibili...";
-  const STEP_3_TO_4_MESSAGE = "Sto preparando il riepilogo della tua prenotazione...";
+  const STEP_3_TO_4_MESSAGE =
+    "Sto preparando il riepilogo della tua prenotazione...";
   const STEP_2_TO_3_MESSAGE = "Sto caricando il calendario...";
 
   const router = useRouter();

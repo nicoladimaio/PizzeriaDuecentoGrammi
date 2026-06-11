@@ -17,6 +17,7 @@ type VerifyTokenInput = {
 const getSecret = () =>
   process.env.RESERVATION_ACTION_SECRET ||
   process.env.SESSION_SECRET ||
+  process.env.RESEND_API_KEY ||
   process.env.SMTP_PASSWORD ||
   "duecentogrammi-dev-secret";
 

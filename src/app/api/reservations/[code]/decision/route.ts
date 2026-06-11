@@ -205,8 +205,11 @@ export async function POST(
     } catch (error) {
       // The reservation status remains updated even if the email fails.
       console.error("Errore invio email cliente", error);
-      customerNotificationError =
-        "Stato aggiornato, ma email cliente non inviata.";
+      const detail =
+        error instanceof Error && error.message
+          ? error.message
+          : "errore sconosciuto";
+      customerNotificationError = `Stato aggiornato, ma email cliente non inviata (${detail}).`;
     }
 
     return NextResponse.json({

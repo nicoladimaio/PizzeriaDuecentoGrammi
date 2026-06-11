@@ -10,9 +10,11 @@ export default function BookingConfirmedPage() {
       <div className="container booking-confirm-wrap">
         <section className="card-block booking-confirm-card">
           <p className="booking-confirm-kicker">Grazie</p>
-          <h1>PRENOTAZIONE CONFERMATA</h1>
+          <h1>Richiesta di prenotazione inviata!</h1>
           <p className="section-subtitle">
-            La tua richiesta e stata registrata correttamente.
+            Abbiamo registrato la tua richiesta. Riceverai subito una email con
+            i dettagli della prenotazione e una successiva comunicazione di
+            risposta appena possibile.
           </p>
           <div className="booking-confirm-actions">
             <Link href="/" className="btn-secondary admin-modal-btn">
