@@ -428,6 +428,8 @@ export function AdminMenuPanel() {
   const [savingId, setSavingId] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [fabOpen, setFabOpen] = useState(false);
+  const [ingredientSearch, setIngredientSearch] = useState("");
 
   const [menuSubview, setMenuSubview] = useState<"dishes" | "ingredients">(
     "dishes",
@@ -802,11 +804,26 @@ export function AdminMenuPanel() {
   }, [itemsByCategory, activeCategory]);
 
   const filteredIngredients = useMemo(() => {
-    if (selectedAllergenFilters.length === 0) return ingredients;
-    return ingredients.filter((ingredient) =>
-      ingredient.allergeni.some((key) => selectedAllergenFilters.includes(key)),
-    );
-  }, [ingredients, selectedAllergenFilters]);
+    let result = ingredients;
+
+    if (selectedAllergenFilters.length > 0) {
+      result = result.filter((ingredient) =>
+        ingredient.allergeni.some((key) =>
+          selectedAllergenFilters.includes(key),
+        ),
+      );
+    }
+
+    const query = ingredientSearch.trim().toLowerCase();
+
+    if (query) {
+      result = result.filter((ingredient) =>
+        ingredient.name.toLowerCase().includes(query),
+      );
+    }
+
+    return result;
+  }, [ingredients, selectedAllergenFilters, ingredientSearch]);
 
   const selectableCategories = useMemo(
     () => categories.filter((category) => category.visible),
@@ -1561,8 +1578,29 @@ export function AdminMenuPanel() {
     await reorderCategories(categoryId, targetId);
   };
 
+  const openCategoryManager = () => {
+    setShowCategoryModal(true);
+  };
+
+  const openNewDishModal = () => {
+    if (activeCategory) {
+      setNewItemCategory(activeCategory);
+    }
+    setShowItemModal(true);
+  };
+
+  const openReorderModal = () => {
+    setShowReorderMode(true);
+  };
+
   return (
-    <section className="admin-shell">
+    <section
+      className={
+        menuSubview === "dishes"
+          ? "admin-shell admin-shell-menu-dishes"
+          : "admin-shell"
+      }
+    >
       {feedback ? <p className="success-text">{feedback}</p> : null}
       {error ? <p className="error-text">{error}</p> : null}
 
@@ -1570,121 +1608,210 @@ export function AdminMenuPanel() {
         <p className="section-subtitle">Caricamento menu remoto...</p>
       ) : null}
 
-      <div className="admin-tabs menu-top-tabs">
-        <button
-          type="button"
-          className={
-            menuSubview === "dishes" ? "admin-tab active" : "admin-tab"
-          }
-          onClick={() => {
-            setMenuSubview("dishes");
-          }}
-        >
-          Piatti
-        </button>
-        <button
-          type="button"
-          className={
-            menuSubview === "ingredients" ? "admin-tab active" : "admin-tab"
-          }
-          onClick={() => {
-            setMenuSubview("ingredients");
-          }}
-        >
-          Ingredienti
-        </button>
+      <div className="admin-menu-sticky-header">
+        <div className="admin-menu-sticky-header">
+          <div className="menu-top-tabs-row">
+            <div className="admin-tabs menu-top-tabs">
+              <button
+                type="button"
+                className={
+                  menuSubview === "dishes" ? "admin-tab active" : "admin-tab"
+                }
+                onClick={() => {
+                  setMenuSubview("dishes");
+                  setFabOpen(false);
+                }}
+              >
+                Piatti
+              </button>
+
+              <button
+                type="button"
+                className={
+                  menuSubview === "ingredients"
+                    ? "admin-tab active"
+                    : "admin-tab"
+                }
+                onClick={() => {
+                  setMenuSubview("ingredients");
+                  setFabOpen(false);
+                }}
+              >
+                Ingredienti
+              </button>
+            </div>
+
+            <div className="category-actions">
+              <button
+                type="button"
+                className={`category-actions-btn ${fabOpen ? "open" : ""}`}
+                onClick={() => setFabOpen((v) => !v)}
+                aria-label="Azioni"
+              >
+                <span />
+                <span />
+                <span />
+              </button>
+
+              {fabOpen ? (
+                <div className="category-actions-menu">
+                  {menuSubview === "dishes" ? (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          openNewDishModal();
+                          setFabOpen(false);
+                        }}
+                      >
+                        Nuovo piatto
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          openCategoryManager();
+                          setFabOpen(false);
+                        }}
+                      >
+                        Categorie
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          openReorderModal();
+                          setFabOpen(false);
+                        }}
+                        disabled={!activeCategory || visibleItems.length <= 1}
+                      >
+                        Riordina
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setShowIngredientModal(true);
+                          setFabOpen(false);
+                        }}
+                      >
+                        Nuovo ingrediente
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setShowAllergenFilters(true);
+                          setFabOpen(false);
+                        }}
+                      >
+                        Filtra allergeni
+                      </button>
+                    </>
+                  )}
+                </div>
+              ) : null}
+            </div>
+          </div>
+
+          {menuSubview === "dishes" ? (
+            <div
+              className="category-scroll"
+              role="tablist"
+              aria-label="Categorie menu"
+            >
+              {visibleCategories.map((categoryName) => {
+                const categoryDoc = categories.find(
+                  (entry) =>
+                    entry.name.toLowerCase() === categoryName.toLowerCase(),
+                );
+                const categoryId = categoryDoc?.id ?? null;
+                const isVisible =
+                  categoryVisibilityByName[categoryName.toLowerCase()] ?? true;
+
+                return (
+                  <button
+                    key={categoryName}
+                    type="button"
+                    role="tab"
+                    draggable={Boolean(categoryId)}
+                    onDragStart={() => {
+                      if (categoryId) setDraggingCategoryId(categoryId);
+                    }}
+                    onDragOver={(event) => {
+                      if (categoryId) event.preventDefault();
+                    }}
+                    onDrop={() => {
+                      if (draggingCategoryId && categoryId) {
+                        void reorderCategories(draggingCategoryId, categoryId);
+                      }
+                      setDraggingCategoryId(null);
+                    }}
+                    onDragEnd={() => {
+                      setDraggingCategoryId(null);
+                    }}
+                    className={
+                      activeCategory === categoryName
+                        ? "category-pill active"
+                        : isVisible
+                          ? "category-pill"
+                          : "category-pill category-pill-muted"
+                    }
+                    onClick={() => {
+                      setActiveCategory(categoryName);
+                    }}
+                  >
+                    {categoryName}
+                    {!isVisible ? (
+                      <span className="pill-state"> (nascosta)</span>
+                    ) : null}
+                  </button>
+                );
+              })}
+            </div>
+          ) : (
+            <div className="ingredient-search-row">
+              <input
+                type="search"
+                placeholder="Cerca ingrediente..."
+                value={ingredientSearch}
+                onChange={(event) => {
+                  setIngredientSearch(event.currentTarget.value);
+                }}
+              />
+            </div>
+          )}
+        </div>
       </div>
 
       {menuSubview === "dishes" ? (
         <>
-          <div className="admin-menu-toolbar minimal-right">
+          {/* <div className="admin-menu-toolbar minimal-right admin-menu-toolbar-desktop">
             <button
               type="button"
               className="admin-mini-btn"
-              onClick={() => {
-                setShowCategoryModal(true);
-              }}
+              onClick={openCategoryManager}
             >
               + Categoria
             </button>
             <button
               type="button"
               className="admin-mini-btn"
-              onClick={() => {
-                if (activeCategory) {
-                  setNewItemCategory(activeCategory);
-                }
-                setShowItemModal(true);
-              }}
+              onClick={openNewDishModal}
             >
               + Nuovo piatto
             </button>
             <button
               type="button"
               className="admin-mini-btn"
-              onClick={() => {
-                setShowReorderMode(true);
-              }}
+              onClick={openReorderModal}
               disabled={!activeCategory || visibleItems.length <= 1}
             >
               Riordina
             </button>
-          </div>
-
-          <div
-            className="category-scroll"
-            role="tablist"
-            aria-label="Categorie menu"
-          >
-            {visibleCategories.map((categoryName) => {
-              const categoryDoc = categories.find(
-                (entry) =>
-                  entry.name.toLowerCase() === categoryName.toLowerCase(),
-              );
-              const categoryId = categoryDoc?.id ?? null;
-              const isVisible =
-                categoryVisibilityByName[categoryName.toLowerCase()] ?? true;
-
-              return (
-                <button
-                  key={categoryName}
-                  type="button"
-                  role="tab"
-                  draggable={Boolean(categoryId)}
-                  onDragStart={() => {
-                    if (categoryId) setDraggingCategoryId(categoryId);
-                  }}
-                  onDragOver={(event) => {
-                    if (categoryId) event.preventDefault();
-                  }}
-                  onDrop={() => {
-                    if (draggingCategoryId && categoryId) {
-                      void reorderCategories(draggingCategoryId, categoryId);
-                    }
-                    setDraggingCategoryId(null);
-                  }}
-                  onDragEnd={() => {
-                    setDraggingCategoryId(null);
-                  }}
-                  className={
-                    activeCategory === categoryName
-                      ? "category-pill active"
-                      : isVisible
-                        ? "category-pill"
-                        : "category-pill category-pill-muted"
-                  }
-                  onClick={() => {
-                    setActiveCategory(categoryName);
-                  }}
-                >
-                  {categoryName}
-                  {!isVisible ? (
-                    <span className="pill-state"> (nascosta)</span>
-                  ) : null}
-                </button>
-              );
-            })}
-          </div>
+          </div> */}
 
           {visibleItems.length === 0 ? (
             <article className="admin-card empty-state-card">
@@ -1798,72 +1925,60 @@ export function AdminMenuPanel() {
 
       {menuSubview === "ingredients" ? (
         <>
-          <div className="admin-menu-toolbar minimal-right">
-            <button
-              type="button"
-              className="admin-mini-btn"
-              onClick={() => {
-                setShowAllergenFilters(true);
-              }}
-            >
-              Filtra allergeni
-            </button>
-            <button
-              type="button"
-              className="admin-mini-btn"
-              onClick={() => {
-                setShowIngredientModal(true);
-              }}
-            >
-              + Ingrediente
-            </button>
-          </div>
+          {filteredIngredients.length === 0 ? (
+            <article className="admin-card empty-state-card">
+              <p className="section-subtitle">Nessun ingrediente trovato</p>
+            </article>
+          ) : (
+            <div className="admin-grid compact-cards ingredient-square-grid">
+              {filteredIngredients.map((ingredient) => {
+                return (
+                  <article
+                    className="ingredient-square-card reduced"
+                    key={ingredient.id}
+                  >
+                    <h4>{ingredient.name}</h4>
 
-          <div className="admin-grid compact-cards ingredient-square-grid">
-            {filteredIngredients.map((ingredient) => {
-              return (
-                <article
-                  className="ingredient-square-card reduced"
-                  key={ingredient.id}
-                >
-                  <h4>{ingredient.name}</h4>
-                  <div className="chip-wrap">
-                    {ingredient.allergeni.map((key) => (
-                      <span className="allergen-chip" key={key}>
-                        <span className="allergen-mini-icon" aria-hidden>
-                          <AllergenIcon type={key} />
+                    <div className="chip-wrap">
+                      {ingredient.allergeni.map((key) => (
+                        <span className="allergen-chip" key={key}>
+                          <span className="allergen-mini-icon" aria-hidden>
+                            <AllergenIcon type={key} />
+                          </span>
+                          <span>{allergenMap[key]?.label ?? key}</span>
                         </span>
-                        <span>{allergenMap[key]?.label ?? key}</span>
-                      </span>
-                    ))}
-                  </div>
-                  <div className="admin-dish-actions">
-                    <button
-                      type="button"
-                      className="icon-btn"
-                      onClick={() => {
-                        openIngredientEdit(ingredient);
-                      }}
-                      aria-label={`Modifica ingrediente ${ingredient.name}`}
-                    >
-                      ✎
-                    </button>
-                    <button
-                      type="button"
-                      className="icon-btn danger"
-                      disabled={savingId === ingredient.id}
-                      onClick={() => {
-                        void removeIngredient(ingredient.id);
-                      }}
-                      aria-label={`Elimina ingrediente ${ingredient.name}`}
-                    >
-                      🗑
-                    </button>
-                  </div>
-                </article>
-              );
-            })}
-          </div>
+                      ))}
+                    </div>
+
+                    <div className="admin-dish-actions">
+                      <button
+                        type="button"
+                        className="icon-btn"
+                        aria-label={`Modifica ingrediente ${ingredient.name}`}
+                        onClick={() => {
+                          openIngredientEdit(ingredient);
+                        }}
+                      >
+                        ✎
+                      </button>
+
+                      <button
+                        type="button"
+                        className="icon-btn danger"
+                        aria-label={`Elimina ingrediente ${ingredient.name}`}
+                        disabled={savingId === ingredient.id}
+                        onClick={() => {
+                          void removeIngredient(ingredient.id);
+                        }}
+                      >
+                        🗑
+                      </button>
+                    </div>
+                  </article>
+                );
+              })}
+            </div>
+          )}
         </>
       ) : null}
 
@@ -2250,10 +2365,37 @@ export function AdminMenuPanel() {
         </div>
       ) : null}
 
+      {menuSubview === "dishes" ? (
+        <div className="admin-menu-mobile-dock" aria-label="Azioni menu">
+          <button
+            type="button"
+            className="admin-mini-btn"
+            onClick={openCategoryManager}
+          >
+            Categoria
+          </button>
+          <button
+            type="button"
+            className="admin-mini-btn"
+            onClick={openNewDishModal}
+          >
+            Nuovo piatto
+          </button>
+          <button
+            type="button"
+            className="admin-mini-btn"
+            onClick={openReorderModal}
+            disabled={!activeCategory || visibleItems.length <= 1}
+          >
+            Riordina
+          </button>
+        </div>
+      ) : null}
+
       {showItemModal ? (
         <div className="admin-modal-backdrop" role="presentation">
           <div
-            className="admin-modal"
+            className="admin-modal menu-item-modal"
             role="dialog"
             aria-modal="true"
             aria-label="Aggiungi piatto"
@@ -2272,7 +2414,7 @@ export function AdminMenuPanel() {
               </button>
             </div>
 
-            <form className="booking-form" onSubmit={createItem}>
+            <form className="booking-form menu-item-form" onSubmit={createItem}>
               <label>
                 Nome
                 <input
@@ -2321,9 +2463,6 @@ export function AdminMenuPanel() {
                     }}
                     required
                   >
-                    <option value="" disabled>
-                      Seleziona categoria
-                    </option>
                     {selectableCategories.map((category) => (
                       <option key={category.id} value={category.name}>
                         {category.name}
@@ -2331,39 +2470,25 @@ export function AdminMenuPanel() {
                     ))}
                   </select>
                 </label>
+                <label>
+                  Piccantezza (opzionale)
+                  <select
+                    value={String(newItemSpiceLevel)}
+                    onChange={(event) => {
+                      setNewItemSpiceLevel(
+                        parseSpiceLevel(event.currentTarget.value),
+                      );
+                    }}
+                  >
+                    <option value="0">Non specificata</option>
+                    <option value="1">🌶 Poco piccante</option>
+                    <option value="2">🌶🌶 Piccante</option>
+                    <option value="3">🌶🌶🌶 Molto piccante</option>
+                  </select>
+                </label>
               </div>
 
-              <label>
-                Mostra in Le nostre firme
-                <select
-                  value={newItemSpecial ? "1" : "0"}
-                  onChange={(event) => {
-                    setNewItemSpecial(event.currentTarget.value === "1");
-                  }}
-                >
-                  <option value="0">No</option>
-                  <option value="1">Si, metti la stella</option>
-                </select>
-              </label>
-
-              <label>
-                Piccantezza (opzionale)
-                <select
-                  value={String(newItemSpiceLevel)}
-                  onChange={(event) => {
-                    setNewItemSpiceLevel(
-                      parseSpiceLevel(event.currentTarget.value),
-                    );
-                  }}
-                >
-                  <option value="0">Non specificata</option>
-                  <option value="1">🌶 Poco piccante</option>
-                  <option value="2">🌶🌶 Piccante</option>
-                  <option value="3">🌶🌶🌶 Molto piccante</option>
-                </select>
-              </label>
-
-              <label>
+              <label className="menu-item-field-ingredients">
                 Ingredienti
                 <div className="ingredient-picker-wrap">
                   <input
@@ -2580,7 +2705,7 @@ export function AdminMenuPanel() {
                 </div>
               </label>
 
-              <label>
+              <label className="menu-item-field-image">
                 Immagine
                 <input
                   type="file"
@@ -2590,9 +2715,6 @@ export function AdminMenuPanel() {
                     setNewImageFile(file);
                   }}
                 />
-                <span className="section-subtitle">
-                  Ottimizzazione automatica: upload convertito in WebP.
-                </span>
               </label>
 
               {newImagePreview ? (
@@ -2605,7 +2727,11 @@ export function AdminMenuPanel() {
                 </div>
               ) : null}
 
-              <button className="btn-success" type="submit" disabled={busy}>
+              <button
+                className="btn-success menu-item-submit"
+                type="submit"
+                disabled={busy}
+              >
                 {busy ? "Salvataggio..." : "Salva"}
               </button>
             </form>
@@ -2616,7 +2742,7 @@ export function AdminMenuPanel() {
       {editingItem ? (
         <div className="admin-modal-backdrop" role="presentation">
           <div
-            className="admin-modal"
+            className="admin-modal menu-item-modal"
             role="dialog"
             aria-modal="true"
             aria-label="Modifica piatto"
@@ -2635,7 +2761,10 @@ export function AdminMenuPanel() {
               </button>
             </div>
 
-            <form className="booking-form" onSubmit={saveEditedItem}>
+            <form
+              className="booking-form menu-item-form"
+              onSubmit={saveEditedItem}
+            >
               <label>
                 Nome
                 <input
@@ -2726,7 +2855,7 @@ export function AdminMenuPanel() {
                 </select>
               </label>
 
-              <label>
+              <label className="menu-item-field-ingredients">
                 Ingredienti
                 <div className="ingredient-picker-wrap">
                   <input
@@ -2943,7 +3072,7 @@ export function AdminMenuPanel() {
                 </div>
               </label>
 
-              <div>
+              <div className="menu-item-field-image">
                 <input
                   id="edit-item-image-input"
                   type="file"
@@ -2960,9 +3089,6 @@ export function AdminMenuPanel() {
                 >
                   Cambia immagine
                 </label>
-                <p className="section-subtitle">
-                  Ottimizzazione automatica: upload convertito in WebP.
-                </p>
                 {editImageFile ? (
                   <p className="section-subtitle">{editImageFile.name}</p>
                 ) : null}
@@ -2981,7 +3107,7 @@ export function AdminMenuPanel() {
               </div>
 
               <button
-                className="btn-success"
+                className="btn-success menu-item-submit"
                 type="submit"
                 disabled={savingId === editingItem.id}
               >

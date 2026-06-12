@@ -2537,6 +2537,37 @@ p {
   flex-wrap: wrap;
 }
 
+.admin-menu-mobile-dock {
+  position: fixed;
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: 0.6rem;
+  z-index: 36;
+  display: none;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.4rem;
+  width: min(760px, calc(100vw - 1rem));
+  padding: 0.44rem;
+  border: 1px solid rgba(37, 63, 74, 0.18);
+  border-radius: 14px;
+  background: rgba(251, 254, 254, 0.95);
+  backdrop-filter: blur(6px);
+  box-shadow: 0 12px 26px rgba(33, 55, 65, 0.12);
+}
+
+.admin-shell-menu-dishes {
+  padding-bottom: 4.8rem;
+}
+
+.menu-item-modal {
+  width: min(980px, 96vw);
+}
+
+.menu-item-form {
+  display: grid;
+  gap: 0.58rem;
+}
+
 .admin-mini-btn {
   border: 1px solid var(--line);
   background: linear-gradient(165deg, #ffffff, #f7fafa);
@@ -3007,11 +3038,124 @@ p {
 }
 
 .category-scroll {
+  flex: 1;
+  background: var(--surface, #fff);
   display: flex;
   gap: 0.55rem;
   overflow-x: auto;
   padding: 0.2rem 0.1rem 0.8rem;
-  scrollbar-width: thin;
+  scrollbar-width: none;
+  overflow-x: auto;
+}
+
+.category-actions {
+  position: relative;
+  flex-shrink: 0;
+}
+
+.category-actions-btn {
+  width: 38px;
+  height: 38px;
+  border-radius: 12px;
+  border: 1px solid rgba(36, 56, 66, 0.16);
+  background: linear-gradient(165deg, #ffffff, #f8fbfb);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  cursor: pointer;
+  box-shadow: 0 8px 18px rgba(39, 67, 75, 0.1);
+  transition:
+    transform 180ms ease,
+    box-shadow 180ms ease,
+    background 180ms ease;
+}
+
+.category-actions-btn span {
+  width: 4px;
+  height: 4px;
+  border-radius: 999px;
+  background: #2c4753;
+  transition: transform 180ms ease;
+}
+
+.category-actions-btn.open {
+  transform: rotate(90deg);
+  background: linear-gradient(120deg, var(--accent), var(--accent-deep));
+}
+
+.category-actions-btn.open span {
+  background: #fff;
+}
+
+.category-actions-menu {
+  position: absolute;
+  top: 46px;
+  right: 0;
+  min-width: 190px;
+  padding: 0.35rem;
+  border-radius: 14px;
+  border: 1px solid rgba(36, 56, 66, 0.14);
+  background: #fff;
+  box-shadow: 0 16px 34px rgba(26, 43, 54, 0.16);
+  display: grid;
+  gap: 0.2rem;
+  z-index: 120;
+  animation: adminActionsIn 180ms ease;
+}
+
+.category-actions-menu button {
+  border: none;
+  background: transparent;
+  border-radius: 10px;
+  padding: 0.62rem 0.7rem;
+  text-align: left;
+  font-weight: 650;
+  color: #2c4753;
+  cursor: pointer;
+}
+
+.category-actions-menu button:hover {
+  background: #edf4f5;
+}
+
+.ingredient-search-row {
+  margin-top: 0.65rem;
+}
+
+.ingredient-search-row input {
+  width: 100%;
+  height: 42px;
+  border-radius: 14px;
+  border: 1px solid rgba(36, 56, 66, 0.14);
+  background: #fff;
+  padding: 0 0.85rem;
+  color: #2c4753;
+  font-weight: 600;
+}
+
+@keyframes adminActionsIn {
+  from {
+    opacity: 0;
+    transform: translateY(-6px) scale(0.98);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes menuAppear {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .category-pill {
@@ -3245,7 +3389,7 @@ p {
 
 .ingredient-square-grid {
   margin-top: 0.85rem;
-  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
 }
 
 .ingredient-square-card {
@@ -3414,9 +3558,9 @@ p {
 }
 
 .category-row {
-  display: grid;
+  display: flex;
   grid-template-columns: auto 1fr auto auto auto auto auto;
-  gap: 0.45rem;
+  gap: 12px 0.45rem;
   align-items: center;
 }
 
@@ -3555,7 +3699,7 @@ p {
   }
 }
 
-@media (max-width: 860px) {
+@media (max-width: 1100px) {
   .admin-settings-row.admin-settings-row-3 {
     grid-template-columns: 1fr;
     gap: 0.45rem;
@@ -3578,7 +3722,7 @@ p {
   .admin-reservation-tab {
     min-height: 42px;
     padding: 0.36rem 0.34rem;
-    font-size: 0.69rem;
+    font-size: 0.55rem;
     letter-spacing: 0;
   }
 
@@ -3586,6 +3730,14 @@ p {
     min-width: 16px;
     height: 16px;
     font-size: 0.62rem;
+  }
+
+  .admin-menu-toolbar-desktop {
+    display: flex !important;
+  }
+
+  .admin-menu-mobile-dock {
+    display: none;
   }
 
   .admin-confirmed-day-nav {
@@ -3621,6 +3773,67 @@ p {
 
   .admin-reservation-list-compact-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 980px) {
+  .menu-item-form {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-items: start;
+  }
+
+  .menu-item-form > label {
+    margin: 0;
+  }
+
+  .menu-item-form > label:nth-child(1),
+  .menu-item-form > label:nth-child(2),
+  .menu-item-form > label:nth-child(4),
+  .menu-item-form > label:nth-child(5),
+  .menu-item-form > label:nth-last-child(2),
+  .menu-item-form > .admin-preview-box,
+  .menu-item-form > button[type="submit"] {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (min-width: 1180px) {
+  .menu-item-modal {
+    width: min(1320px, 96vw);
+    max-height: calc(100vh - 24px);
+    overflow-y: auto;
+  }
+
+  .menu-item-modal .menu-item-form {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0.48rem;
+    align-content: start;
+    overflow-y: visible;
+  }
+
+  .menu-item-modal .menu-item-form > label,
+  .menu-item-modal .menu-item-form > div {
+    margin: 0;
+  }
+
+  .menu-item-modal .menu-item-form .two-cols {
+    grid-column: span 2;
+    margin: 0;
+    gap: 0.45rem;
+  }
+
+  .menu-item-modal .menu-item-field-ingredients,
+  .menu-item-modal .menu-item-field-image,
+  .menu-item-modal .menu-item-form .admin-preview-box,
+  .menu-item-modal .menu-item-form .menu-item-submit {
+    grid-column: 1 / -1;
+  }
+
+  .menu-item-modal .menu-item-form textarea {
+    min-height: 64px;
+    max-height: 64px;
+    resize: none;
   }
 }
 
@@ -3663,6 +3876,18 @@ p {
   gap: 0.45rem;
   margin-bottom: 1rem;
   flex-wrap: wrap;
+}
+
+.menu-top-tabs-row {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+}
+
+.menu-top-tabs-row .menu-top-tabs {
+  flex: 1;
+  min-width: 0;
+  margin-bottom: 0;
 }
 
 .menu-top-tabs {
@@ -3714,6 +3939,17 @@ p {
     ),
     linear-gradient(168deg, #f7fbfb, #edf3f3);
   border-top: 1px solid rgba(35, 58, 69, 0.12);
+}
+
+.admin-menu-sticky-header {
+  position: sticky;
+  top: 0;
+  z-index: 80;
+  background: rgba(244, 247, 247, 0.96);
+  backdrop-filter: blur(10px);
+  padding: 0.45rem 0 0.65rem;
+  margin-bottom: 0.9rem;
+  border-bottom: 1px solid rgba(36, 56, 66, 0.1);
 }
 
 .home-section-head {

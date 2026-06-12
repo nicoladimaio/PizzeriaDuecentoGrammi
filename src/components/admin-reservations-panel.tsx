@@ -1197,7 +1197,6 @@ export function AdminReservationsPanel({
 
           {reservationsView === "confirmed" ? (
             <div className="admin-reservation-group admin-confirmed-group">
-              <h4>Confermate per giorno e fascia oraria</h4>
               {confirmedRows.length === 0 ? (
                 <p className="section-subtitle">
                   Nessuna prenotazione confermata.

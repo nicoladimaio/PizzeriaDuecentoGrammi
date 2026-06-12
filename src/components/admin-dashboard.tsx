@@ -132,7 +132,6 @@ export function AdminDashboard({
         <div>
           <p className="admin-head-kicker">Control Center</p>
           <h2>{sectionTitle}</h2>
-          <p className="admin-head-subtitle">{sectionSubtitle}</p>
         </div>
         {activeSection === "reservations" ? (
           <div className="admin-head-stats" aria-live="polite">
