@@ -1,4 +1,8 @@
 import Link from "next/link";
+import {
+  BOOKING_TERMS_PATH,
+  PRIVACY_POLICY_PATH,
+} from "@/lib/reservation-policies";
 
 export const metadata = {
   title: "Prenotazione confermata | Duecento Grammi",
@@ -24,6 +28,11 @@ export default function BookingConfirmedPage() {
               NUOVA PRENOTAZIONE
             </Link>
           </div>
+          <p className="booking-confirm-legal">
+            Informazioni legali: <Link href={PRIVACY_POLICY_PATH}>Privacy</Link>{" "}
+            e{" "}
+            <Link href={BOOKING_TERMS_PATH}>Termini di prenotazione</Link>.
+          </p>
         </section>
       </div>
     </main>

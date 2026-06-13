@@ -1,18 +1,33 @@
 "use client";
 
 import { FormEvent, useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { z } from "zod";
+import {
+  BOOKING_TERMS_PATH,
+  BOOKING_TERMS_VERSION,
+  PRIVACY_POLICY_PATH,
+  PRIVACY_POLICY_VERSION,
+} from "@/lib/reservation-policies";
 
 const reservationSchema = z.object({
   customerName: z.string().min(2, "Inserisci nome e cognome."),
-  phone: z.string().min(8, "Inserisci un numero valido."),
+  phone: z.string().optional(),
   email: z.string().email("Inserisci una email valida."),
   diningArea: z.enum(["inside", "outside"]),
   date: z.string().min(1, "Seleziona una data."),
   time: z.string().min(1, "Seleziona un orario."),
   guests: z.coerce.number().int().min(1).max(20),
   notes: z.string().max(300).optional(),
+  privacyAcknowledged: z
+    .boolean()
+    .refine((value) => value, "Devi dichiarare di aver letto l'informativa privacy."),
+  bookingTermsAccepted: z
+    .boolean()
+    .refine((value) => value, "Devi accettare i termini di prenotazione."),
+  privacyPolicyVersion: z.literal(PRIVACY_POLICY_VERSION),
+  bookingTermsVersion: z.literal(BOOKING_TERMS_VERSION),
 });
 
 type AvailabilityResponse = {
@@ -121,6 +136,8 @@ export function ReservationForm() {
   const [phone, setPhone] = useState("");
   const [email, setEmail] = useState("");
   const [notes, setNotes] = useState("");
+  const [privacyAcknowledged, setPrivacyAcknowledged] = useState(false);
+  const [bookingTermsAccepted, setBookingTermsAccepted] = useState(false);
 
   const [availability, setAvailability] = useState<AvailabilityResponse | null>(
     null,
@@ -186,10 +203,11 @@ export function ReservationForm() {
   const canOpenReview =
     guests !== null &&
     Boolean(customerName.trim()) &&
-    Boolean(phone.trim()) &&
     Boolean(email.trim()) &&
     Boolean(selectedDate) &&
     Boolean(selectedTime) &&
+    privacyAcknowledged &&
+    bookingTermsAccepted &&
     !pending;
 
   const insideRoomEnabled = roomConfig?.insideActive ?? false;
@@ -216,7 +234,10 @@ export function ReservationForm() {
         if (ignore) return;
 
         if (!response.ok) {
-          setRoomConfig({ insideActive: true, outsideActive: true });
+          setRoomConfig({
+            insideActive: data.config?.insideActive ?? false,
+            outsideActive: data.config?.outsideActive ?? false,
+          });
           return;
         }
 
@@ -238,7 +259,7 @@ export function ReservationForm() {
         }
       } catch {
         if (!ignore) {
-          setRoomConfig({ insideActive: true, outsideActive: true });
+          setRoomConfig({ insideActive: false, outsideActive: false });
         }
       } finally {
         if (!ignore) {
@@ -283,6 +304,15 @@ export function ReservationForm() {
         if (ignore) return;
 
         if (!response.ok) {
+          setRoomConfig((previous) =>
+            previous
+              ? {
+                  insideActive: data.config?.insideActive ?? previous.insideActive,
+                  outsideActive:
+                    data.config?.outsideActive ?? previous.outsideActive,
+                }
+              : previous,
+          );
           setError(data.error ?? "Impossibile caricare disponibilita.");
           setAvailability(null);
           return;
@@ -368,6 +398,10 @@ export function ReservationForm() {
       time: selectedTime,
       guests: guests ?? 0,
       notes: notes.trim(),
+      privacyAcknowledged,
+      bookingTermsAccepted,
+      privacyPolicyVersion: PRIVACY_POLICY_VERSION,
+      bookingTermsVersion: BOOKING_TERMS_VERSION,
     };
 
     const parsed = reservationSchema.safeParse(payload);
@@ -842,11 +876,10 @@ export function ReservationForm() {
             </label>
 
             <label>
-              Telefono <span className="required-mark">*</span>
+              Telefono
               <input
                 name="phone"
                 type="tel"
-                required
                 value={phone}
                 onChange={(event) => setPhone(event.target.value)}
               />
@@ -873,6 +906,50 @@ export function ReservationForm() {
                 onChange={(event) => setNotes(event.target.value)}
               />
             </label>
+
+            <div className="booking-legal-box">
+              <label className="booking-checkbox-row">
+                <input
+                  name="privacyAcknowledged"
+                  type="checkbox"
+                  checked={privacyAcknowledged}
+                  onChange={(event) =>
+                    setPrivacyAcknowledged(event.target.checked)
+                  }
+                />
+                <span>
+                  Ho letto l&apos;
+                  <Link href={PRIVACY_POLICY_PATH} target="_blank">
+                    informativa privacy
+                  </Link>
+                  .
+                </span>
+              </label>
+
+              <label className="booking-checkbox-row">
+                <input
+                  name="bookingTermsAccepted"
+                  type="checkbox"
+                  checked={bookingTermsAccepted}
+                  onChange={(event) =>
+                    setBookingTermsAccepted(event.target.checked)
+                  }
+                />
+                <span>
+                  Accetto i{" "}
+                  <Link href={BOOKING_TERMS_PATH} target="_blank">
+                    termini di prenotazione
+                  </Link>
+                  .
+                </span>
+              </label>
+
+              <p className="booking-legal-note">
+                Useremo i tuoi dati solo per gestire la prenotazione. Versioni
+                documenti: privacy {PRIVACY_POLICY_VERSION}, termini{" "}
+                {BOOKING_TERMS_VERSION}.
+              </p>
+            </div>
 
             <div className="booking-step-actions two-buttons">
               <button
@@ -918,10 +995,13 @@ export function ReservationForm() {
                 Cliente: <strong>{customerName}</strong>
               </p>
               <p className="booking-selection-summary">
-                Telefono: <strong>{phone}</strong>
+                Telefono: <strong>{phone || "-"}</strong>
               </p>
               <p className="booking-selection-summary">
                 Email: <strong>{email}</strong>
+              </p>
+              <p className="booking-selection-summary">
+                Documenti accettati: <strong>privacy e termini prenotazione</strong>
               </p>
             </div>
             <div className="booking-step-actions two-buttons booking-review-actions">

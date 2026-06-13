@@ -85,6 +85,17 @@ const todayKey = () => {
   return `${year}-${month}-${day}`;
 };
 
+const parseMinutes = (value: string) => {
+  const [hours, minutes] = value.split(":").map(Number);
+  return hours * 60 + minutes;
+};
+
+const minutesToTime = (value: number) => {
+  const hours = String(Math.floor(value / 60)).padStart(2, "0");
+  const minutes = String(value % 60).padStart(2, "0");
+  return `${hours}:${minutes}`;
+};
+
 const monthKey = (date: Date) => {
   const year = date.getFullYear();
   const month = String(date.getMonth() + 1).padStart(2, "0");
@@ -202,6 +213,11 @@ const deriveTotalCapacity = (settings: ReservationSettings): number => {
   return total > 0 ? total : settings.capacityPerSlot;
 };
 
+const getDefaultDiningArea = (
+  settings: ReservationSettings,
+): "inside" | "outside" =>
+  settings.insideActive || !settings.outsideActive ? "inside" : "outside";
+
 export function AdminReservationsPanel({
   highlightedCode,
   settingsOnly,
@@ -264,7 +280,7 @@ export function AdminReservationsPanel({
       customerName: "",
       phone: "",
       email: "",
-      diningArea: "inside",
+      diningArea: getDefaultDiningArea(defaultSettings),
       date: todayKey(),
       time: "20:00",
       guests: "2",
@@ -345,6 +361,24 @@ export function AdminReservationsPanel({
     };
   }, []);
 
+  useEffect(() => {
+    setManualReservationForm((prev) => {
+      const selectedRoomVisible =
+        prev.diningArea === "inside"
+          ? settings.insideActive
+          : settings.outsideActive;
+
+      if (selectedRoomVisible) {
+        return prev;
+      }
+
+      return {
+        ...prev,
+        diningArea: getDefaultDiningArea(settings),
+      };
+    });
+  }, [settings]);
+
   const orderedRows = useMemo(() => {
     if (!highlightedCode) return rows;
     const idx = rows.findIndex((row) => row.code === highlightedCode);
@@ -423,6 +457,39 @@ export function AdminReservationsPanel({
         ),
       }));
   }, [confirmedRowsForSelectedDate]);
+
+  const manualTimeOptions = useMemo(() => {
+    const open = parseMinutes(settings.openTime);
+    const close = parseMinutes(settings.closeTime);
+    const slotMinutes =
+      settings.slotMinutes === 15 || settings.slotMinutes === 30
+        ? settings.slotMinutes
+        : 30;
+
+    if (!Number.isFinite(open) || !Number.isFinite(close) || close < open) {
+      return ["20:00"];
+    }
+
+    const slots: string[] = [];
+    for (let minute = open; minute <= close; minute += slotMinutes) {
+      slots.push(minutesToTime(minute));
+    }
+
+    return slots.length > 0 ? slots : ["20:00"];
+  }, [settings.closeTime, settings.openTime, settings.slotMinutes]);
+
+  useEffect(() => {
+    setManualReservationForm((prev) => {
+      if (manualTimeOptions.includes(prev.time)) {
+        return prev;
+      }
+
+      return {
+        ...prev,
+        time: manualTimeOptions[0] ?? "20:00",
+      };
+    });
+  }, [manualTimeOptions]);
 
   const availableProposalDays = useMemo(() => {
     if (!decisionAvailability) return [] as string[];
@@ -918,9 +985,9 @@ export function AdminReservationsPanel({
       customerName: "",
       phone: "",
       email: "",
-      diningArea: "inside",
+      diningArea: getDefaultDiningArea(settings),
       date: todayKey(),
-      time: "20:00",
+      time: manualTimeOptions[0] ?? "20:00",
       guests: "2",
       notes: "",
     });
@@ -961,6 +1028,8 @@ export function AdminReservationsPanel({
         throw new Error(data.error ?? "Inserimento prenotazione non riuscito.");
       }
 
+      setReservationsView("confirmed");
+      setConfirmedSelectedDate(manualReservationForm.date);
       setShowManualReservationModal(false);
       resetManualReservationForm();
     } catch (err) {
@@ -1608,7 +1677,7 @@ export function AdminReservationsPanel({
               <strong>Cliente:</strong> {selectedReservation.customerName}
             </p>
             <p>
-              <strong>Telefono:</strong> {selectedReservation.phone}
+              <strong>Telefono:</strong> {selectedReservation.phone || "-"}
             </p>
             <p>
               <strong>Data/Ora richieste:</strong> {selectedReservation.date}{" "}
@@ -1984,7 +2053,7 @@ export function AdminReservationsPanel({
 
               <div className="two-cols">
                 <label>
-                  Telefono
+                  Telefono (opzionale)
                   <input
                     value={manualReservationForm.phone}
                     onChange={(event) =>
@@ -2027,9 +2096,7 @@ export function AdminReservationsPanel({
                 </label>
                 <label>
                   Orario
-                  <input
-                    type="time"
-                    step={1800}
+                  <select
                     value={manualReservationForm.time}
                     onChange={(event) =>
                       setManualReservationForm((prev) => ({
@@ -2037,7 +2104,13 @@ export function AdminReservationsPanel({
                         time: event.target.value,
                       }))
                     }
-                  />
+                  >
+                    {manualTimeOptions.map((timeOption) => (
+                      <option key={timeOption} value={timeOption}>
+                        {timeOption}
+                      </option>
+                    ))}
+                  </select>
                 </label>
               </div>
 
@@ -2071,8 +2144,12 @@ export function AdminReservationsPanel({
                       }))
                     }
                   >
-                    <option value="inside">Sala interna</option>
-                    <option value="outside">Sala esterna</option>
+                    <option value="inside" disabled={!settings.insideActive}>
+                      Sala interna
+                    </option>
+                    <option value="outside" disabled={!settings.outsideActive}>
+                      Sala esterna
+                    </option>
                   </select>
                 </label>
               </div>

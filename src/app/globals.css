@@ -1176,10 +1176,33 @@ p {
   margin-inline: auto;
 }
 
+.bookings-page-stack {
+  width: 100%;
+  display: grid;
+  gap: 0.8rem;
+}
+
 .bookings-center-wrap {
   width: 100%;
   display: flex;
   justify-content: center;
+}
+
+.bookings-legal-links {
+  width: min(960px, 92vw);
+  margin-inline: auto;
+  display: flex;
+  justify-content: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+  padding-bottom: 1.2rem;
+  font-size: 0.84rem;
+}
+
+.bookings-legal-links a {
+  color: #2b5863;
+  text-decoration: underline;
+  text-underline-offset: 2px;
 }
 
 .status-popup-modal {
@@ -1840,6 +1863,45 @@ p {
   margin: 0 0 0.35rem;
   font-size: 0.8rem;
   color: #4a6370;
+}
+
+.booking-legal-box {
+  display: grid;
+  gap: 0.58rem;
+  margin-top: 0.3rem;
+  padding: 0.8rem 0.9rem;
+  border: 1px solid rgba(39, 66, 78, 0.14);
+  border-radius: 14px;
+  background: linear-gradient(180deg, #f8fbfb, #f2f7f7);
+}
+
+.booking-checkbox-row {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.7rem;
+  align-items: start;
+  font-size: 0.84rem;
+  color: #39535f;
+}
+
+.booking-checkbox-row input {
+  width: 18px;
+  height: 18px;
+  margin: 0.1rem 0 0;
+}
+
+.booking-checkbox-row a,
+.booking-legal-note a {
+  color: #234e59;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.booking-legal-note {
+  margin: 0;
+  font-size: 0.76rem;
+  color: #5d737d;
+  line-height: 1.45;
 }
 
 .required-mark {
@@ -3490,6 +3552,80 @@ p {
 .booking-confirm-actions .btn-primary,
 .booking-confirm-actions .btn-secondary {
   text-align: center;
+}
+
+.booking-confirm-legal {
+  margin: 0.3rem 0 0;
+  font-size: 0.82rem;
+}
+
+.booking-confirm-legal a {
+  color: #2b5863;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.legal-page {
+  padding: 2rem 0 3rem;
+}
+
+.legal-wrap {
+  display: flex;
+  justify-content: center;
+}
+
+.legal-card {
+  width: min(860px, 100%);
+  display: grid;
+  gap: 0.8rem;
+}
+
+.legal-kicker {
+  margin: 0;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  font-size: 0.74rem;
+  color: #55757f;
+}
+
+.legal-content {
+  display: grid;
+  gap: 1rem;
+}
+
+.legal-content section {
+  border-top: 1px solid rgba(39, 66, 78, 0.12);
+  padding-top: 0.9rem;
+}
+
+.legal-content h2 {
+  margin-bottom: 0.35rem;
+  font-size: 1rem;
+  color: #233a44;
+}
+
+.legal-content p {
+  margin: 0;
+  line-height: 1.6;
+}
+
+.legal-content a {
+  color: #2b5863;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.legal-actions {
+  display: flex;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  margin-top: 0.4rem;
+}
+
+.legal-secondary {
+  color: #27424e;
+  background: rgba(39, 66, 78, 0.08);
+  border: 1px solid rgba(39, 66, 78, 0.25);
 }
 
 @media (min-width: 720px) {

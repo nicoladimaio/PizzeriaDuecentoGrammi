@@ -230,6 +230,20 @@ export async function GET(request: Request) {
 
     const roomEnabled =
       activeRoom === "inside" ? settings.insideActive : settings.outsideActive;
+
+    if (room && !roomEnabled) {
+      return NextResponse.json(
+        {
+          error: "La sala selezionata non e disponibile per la prenotazione.",
+          config: {
+            insideActive: settings.insideActive,
+            outsideActive: settings.outsideActive,
+          },
+        },
+        { status: 400 },
+      );
+    }
+
     const roomCapacity =
       activeRoom === "inside"
         ? settings.insideCapacityPerSlot

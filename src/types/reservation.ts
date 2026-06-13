@@ -15,6 +15,11 @@ export type ReservationInput = {
   time: string;
   guests: number;
   notes?: string;
+  privacyAcknowledged?: boolean;
+  bookingTermsAccepted?: boolean;
+  privacyPolicyVersion?: string;
+  bookingTermsVersion?: string;
+  legalAcceptedAt?: string;
 };
 
 export type ReservationDoc = ReservationInput & {

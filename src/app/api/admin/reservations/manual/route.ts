@@ -5,7 +5,7 @@ import { getAdminAuth, getAdminDb } from "@/lib/firebase-admin";
 
 const manualReservationSchema = z.object({
   customerName: z.string().min(2),
-  phone: z.string().min(3),
+  phone: z.string().trim().optional().or(z.literal("")),
   email: z.string().trim().email().optional().or(z.literal("")),
   diningArea: z.enum(["inside", "outside"]),
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
@@ -66,10 +66,38 @@ export async function POST(request: Request) {
     const code = buildCode();
     const reservationId = db.collection("reservations").doc().id;
     const normalizedEmail = (parsed.data.email ?? "").trim();
+    const normalizedPhone = (parsed.data.phone ?? "").trim();
+
+    const settingsSnap = await db
+      .collection("reservation_settings")
+      .doc("default")
+      .get();
+    const settings = settingsSnap.data() as
+      | {
+          insideActive?: unknown;
+          outsideActive?: unknown;
+        }
+      | undefined;
+    const insideActive =
+      typeof settings?.insideActive === "boolean" ? settings.insideActive : true;
+    const outsideActive =
+      typeof settings?.outsideActive === "boolean"
+        ? settings.outsideActive
+        : true;
+
+    if (
+      (parsed.data.diningArea === "inside" && !insideActive) ||
+      (parsed.data.diningArea === "outside" && !outsideActive)
+    ) {
+      return NextResponse.json(
+        { error: "La sala selezionata non e visibile per le prenotazioni." },
+        { status: 400 },
+      );
+    }
 
     const reservationDoc = {
       customerName: parsed.data.customerName,
-      phone: parsed.data.phone,
+      phone: normalizedPhone,
       email: normalizedEmail,
       diningArea: parsed.data.diningArea,
       date: parsed.data.date,
@@ -77,7 +105,7 @@ export async function POST(request: Request) {
       guests: parsed.data.guests,
       notes: parsed.data.notes ?? "",
       code,
-      status: "pending",
+      status: "confirmed",
       arrived: false,
       ownerResponse: "",
       proposedDate: "",
@@ -95,13 +123,13 @@ export async function POST(request: Request) {
       reservationId,
       code,
       customerName: parsed.data.customerName,
-      phone: parsed.data.phone,
+      phone: normalizedPhone,
       email: normalizedEmail,
       diningArea: parsed.data.diningArea,
       date: parsed.data.date,
       time: parsed.data.time,
       guests: parsed.data.guests,
-      status: "pending",
+      status: "confirmed",
       arrived: false,
       ownerResponse: "",
       proposedDate: "",

@@ -6,16 +6,24 @@ import {
   sendCustomerReservationRecapEmail,
   sendOwnerNewReservationEmail,
 } from "@/lib/email";
+import {
+  BOOKING_TERMS_VERSION,
+  PRIVACY_POLICY_VERSION,
+} from "@/lib/reservation-policies";
 
 const createReservationSchema = z.object({
   customerName: z.string().min(2),
-  phone: z.string().min(8),
+  phone: z.string().trim().optional().or(z.literal("")),
   email: z.string().email(),
   diningArea: z.enum(["inside", "outside"]),
   date: z.string().min(1),
   time: z.string().min(1),
   guests: z.number().int().min(1).max(20),
   notes: z.string().max(300).optional(),
+  privacyAcknowledged: z.literal(true),
+  bookingTermsAccepted: z.literal(true),
+  privacyPolicyVersion: z.literal(PRIVACY_POLICY_VERSION),
+  bookingTermsVersion: z.literal(BOOKING_TERMS_VERSION),
 });
 
 const buildCode = () => {
@@ -43,9 +51,12 @@ export async function POST(request: Request) {
     const nowIso = new Date().toISOString();
     const code = buildCode();
     const reservationId = db.collection("reservations").doc().id;
+    const normalizedPhone = (parsed.data.phone ?? "").trim();
 
     const reservationDoc = {
       ...parsed.data,
+      phone: normalizedPhone,
+      legalAcceptedAt: nowIso,
       code,
       status: "pending",
       arrived: false,
@@ -64,7 +75,7 @@ export async function POST(request: Request) {
       reservationId,
       code,
       customerName: parsed.data.customerName,
-      phone: parsed.data.phone,
+      phone: normalizedPhone,
       email: parsed.data.email,
       diningArea: parsed.data.diningArea,
       date: parsed.data.date,
@@ -75,6 +86,11 @@ export async function POST(request: Request) {
       ownerResponse: "",
       proposedDate: "",
       proposedTime: "",
+      privacyAcknowledged: parsed.data.privacyAcknowledged,
+      bookingTermsAccepted: parsed.data.bookingTermsAccepted,
+      privacyPolicyVersion: parsed.data.privacyPolicyVersion,
+      bookingTermsVersion: parsed.data.bookingTermsVersion,
+      legalAcceptedAt: nowIso,
       updatedAt: nowIso,
       updatedAtServer: FieldValue.serverTimestamp(),
     });
@@ -112,7 +128,7 @@ export async function POST(request: Request) {
       const logoUrl = `${siteUrl}/assets/Centro.png`;
       await sendOwnerNewReservationEmail({
         customerName: parsed.data.customerName,
-        phone: parsed.data.phone,
+        phone: normalizedPhone,
         date: parsed.data.date,
         time: parsed.data.time,
         guests: parsed.data.guests,
