@@ -44,21 +44,23 @@ export function AdminLoginForm() {
   };
 
   return (
-    <form className="booking-form" onSubmit={onSubmit}>
-      <label>
-        Email amministratore
-        <input name="email" type="email" autoComplete="username" required />
-      </label>
-      <label>
-        Password
-        <input
-          name="password"
-          type="password"
-          autoComplete="current-password"
-          required
-        />
-      </label>
-      <button className="btn-primary" type="submit" disabled={loading}>
+    <form className="booking-form admin-login-form" onSubmit={onSubmit}>
+      <div className="admin-login-fields">
+        <label>
+          Email amministratore
+          <input name="email" type="email" autoComplete="username" required />
+        </label>
+        <label>
+          Password
+          <input
+            name="password"
+            type="password"
+            autoComplete="current-password"
+            required
+          />
+        </label>
+      </div>
+      <button className="btn-primary admin-login-submit" type="submit" disabled={loading}>
         {loading ? "Accesso..." : "Accedi"}
       </button>
       {error ? <p className="error-text">{error}</p> : null}

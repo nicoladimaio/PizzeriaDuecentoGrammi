@@ -19,8 +19,8 @@ export default function HiddenLoginPage() {
         </div>
       </section>
 
-      <div className="container narrow">
-        <div className="card-block">
+      <div className="container narrow admin-login-shell">
+        <div className="card-block admin-login-card">
           <p className="section-subtitle">
             Accesso solo per account autorizzati.
           </p>

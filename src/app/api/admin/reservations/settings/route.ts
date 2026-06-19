@@ -3,10 +3,13 @@ import { FieldValue } from "firebase-admin/firestore";
 import { z } from "zod";
 import { getAdminAuth, getAdminDb } from "@/lib/firebase-admin";
 
+const slotMinutesSchema = z.union([z.literal(15), z.literal(30), z.literal(60)]);
+
 const settingsSchema = z.object({
   openTime: z.string().regex(/^([01]\d|2[0-3]):([0-5]\d)$/),
   closeTime: z.string().regex(/^([01]\d|2[0-3]):([0-5]\d)$/),
-  slotMinutes: z.literal(30),
+  slotMinutes: slotMinutesSchema,
+  saturdaySlotMinutes: slotMinutesSchema,
   capacityPerSlot: z.number().int().min(1).max(500),
   insideActive: z.boolean(),
   outsideActive: z.boolean(),
@@ -41,6 +44,7 @@ const defaultSettings = () => ({
   openTime: process.env.RESERVATION_OPEN_TIME ?? "19:00",
   closeTime: process.env.RESERVATION_CLOSE_TIME ?? "23:00",
   slotMinutes: 30 as const,
+  saturdaySlotMinutes: 30 as const,
   capacityPerSlot: Number(process.env.RESERVATION_CAPACITY_PER_SLOT ?? 40),
   insideActive: true,
   outsideActive: true,
@@ -142,7 +146,6 @@ export async function POST(request: Request) {
       .set(
         {
           ...parsed.data,
-          slotMinutes: 30,
           updatedAt: new Date().toISOString(),
           updatedAtServer: FieldValue.serverTimestamp(),
         },

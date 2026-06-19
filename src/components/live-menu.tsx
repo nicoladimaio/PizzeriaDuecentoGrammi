@@ -703,6 +703,8 @@ const toEmojiCategory = (name: string): string =>
 const normalizeCategoryKey = (name: string): string =>
   name.toLowerCase().trim();
 
+const topOffsetForActiveCategory = 168;
+
 const getFallbackProducts = (): MenuProduct[] =>
   getMenuItems().map((entry, index) => {
     const entryRecord = entry as Record<string, unknown>;
@@ -782,12 +784,23 @@ export function LiveMenu() {
     }
 
     let hasResolvedItems = false;
+    let hasResolvedCategories = false;
+    let hasSettledLoading = false;
+
+    const resolveLoadingIfReady = () => {
+      if (hasSettledLoading) return;
+      if (!hasResolvedItems || !hasResolvedCategories) return;
+      hasSettledLoading = true;
+      window.clearTimeout(loadingFallbackTimer);
+      setLoading(false);
+    };
 
     const loadingFallbackTimer = window.setTimeout(() => {
-      if (hasResolvedItems) return;
+      if (hasResolvedItems && hasResolvedCategories) return;
       setProducts((current) =>
         current.length > 0 ? current : getFallbackProducts(),
       );
+      hasSettledLoading = true;
       setLoading(false);
     }, 3500);
 
@@ -901,20 +914,21 @@ export function LiveMenu() {
           setProducts(getFallbackProducts());
         }
 
-        setLoading(false);
+        resolveLoadingIfReady();
       },
       () => {
         hasResolvedItems = true;
         setProducts((current) =>
           current.length > 0 ? current : getFallbackProducts(),
         );
-        setLoading(false);
+        resolveLoadingIfReady();
       },
     );
 
     const unsubscribeCategories = onSnapshot(
       collection(db, "menu_categories"),
       (snapshot) => {
+        hasResolvedCategories = true;
         const orderedCategories = snapshot.docs
           .map((doc) => {
             const raw = doc.data() as RawCategoryDoc;
@@ -945,9 +959,12 @@ export function LiveMenu() {
           });
 
         setCategories(orderedCategories);
+        resolveLoadingIfReady();
       },
       () => {
+        hasResolvedCategories = true;
         setCategories([]);
+        resolveLoadingIfReady();
       },
     );
 
@@ -1160,54 +1177,50 @@ export function LiveMenu() {
 
   useEffect(() => {
     if (categorySections.length === 0) return;
+    let ticking = false;
 
-    const visibilityMap = new Map<string, number>();
-    const observer = new IntersectionObserver(
-      (entries) => {
-        entries.forEach((entry) => {
-          const categoryName = entry.target.getAttribute("data-category-name");
-          if (!categoryName) return;
-          const key = normalizeCategoryKey(categoryName);
-          visibilityMap.set(
-            key,
-            entry.isIntersecting ? entry.intersectionRatio : 0,
-          );
-        });
+    const updateActiveCategoryFromScroll = () => {
+      ticking = false;
 
-        let nextCategory = "";
-        let bestRatio = 0;
+      let nextCategory = categorySections[0]?.category.name ?? "";
+      let bestDistance = Number.POSITIVE_INFINITY;
 
-        categorySections.forEach((section) => {
-          const key = normalizeCategoryKey(section.category.name);
-          const ratio = visibilityMap.get(key) ?? 0;
-          if (ratio > bestRatio) {
-            bestRatio = ratio;
-            nextCategory = section.category.name;
-          }
-        });
+      categorySections.forEach((section) => {
+        const target =
+          sectionRefs.current[normalizeCategoryKey(section.category.name)];
+        if (!target) return;
 
-        if (nextCategory) {
-          setActiveCategory((current) =>
-            normalizeCategoryKey(current) === normalizeCategoryKey(nextCategory)
-              ? current
-              : nextCategory,
-          );
+        const rect = target.getBoundingClientRect();
+        const distance = Math.abs(rect.top - topOffsetForActiveCategory);
+        const isEligible = rect.top - topOffsetForActiveCategory <= 1;
+
+        if (isEligible && distance <= bestDistance) {
+          bestDistance = distance;
+          nextCategory = section.category.name;
         }
-      },
-      {
-        root: null,
-        rootMargin: "-132px 0px -55% 0px",
-        threshold: [0.1, 0.25, 0.5, 0.75],
-      },
-    );
+      });
 
-    categorySections.forEach((section) => {
-      const target =
-        sectionRefs.current[normalizeCategoryKey(section.category.name)];
-      if (target) observer.observe(target);
-    });
+      setActiveCategory((current) =>
+        normalizeCategoryKey(current) === normalizeCategoryKey(nextCategory)
+          ? current
+          : nextCategory,
+      );
+    };
 
-    return () => observer.disconnect();
+    const onScroll = () => {
+      if (ticking) return;
+      ticking = true;
+      window.requestAnimationFrame(updateActiveCategoryFromScroll);
+    };
+
+    updateActiveCategoryFromScroll();
+    window.addEventListener("scroll", onScroll, { passive: true });
+    window.addEventListener("resize", onScroll);
+
+    return () => {
+      window.removeEventListener("scroll", onScroll);
+      window.removeEventListener("resize", onScroll);
+    };
   }, [categorySections]);
 
   const scrollToCategorySection = (categoryName: string) => {

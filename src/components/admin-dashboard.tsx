@@ -7,7 +7,10 @@ import { collection, onSnapshot, query, where } from "firebase/firestore";
 import { getClientAuth, getClientDb } from "@/lib/firebase";
 import { isAllowedAdminEmail } from "@/lib/auth";
 import { AdminMenuPanel } from "@/components/admin-menu-panel";
-import { AdminReservationsPanel } from "@/components/admin-reservations-panel";
+import {
+  AdminReservationsPanel,
+  type SettingsLeaveGuard,
+} from "@/components/admin-reservations-panel";
 
 type AdminSection = "reservations" | "menu" | "settings";
 
@@ -33,6 +36,14 @@ export function AdminDashboard({
   );
   const [pendingReservationsCount, setPendingReservationsCount] = useState(0);
   const [proposedReservationsCount, setProposedReservationsCount] = useState(0);
+  const [settingsLeaveGuard, setSettingsLeaveGuard] =
+    useState<SettingsLeaveGuard | null>(null);
+  const [pendingSectionChange, setPendingSectionChange] =
+    useState<AdminSection | null>(null);
+  const [showUnsavedSettingsModal, setShowUnsavedSettingsModal] =
+    useState(false);
+  const [leavingAfterSave, setLeavingAfterSave] = useState(false);
+  const [pendingLogout, setPendingLogout] = useState(false);
 
   useEffect(() => {
     const auth = getClientAuth();
@@ -105,6 +116,57 @@ export function AdminDashboard({
     router.replace("/");
   };
 
+  const finishPendingLeave = async () => {
+    const nextSection = pendingSectionChange;
+    const shouldLogout = pendingLogout;
+
+    setShowUnsavedSettingsModal(false);
+    setPendingSectionChange(null);
+    setPendingLogout(false);
+
+    if (nextSection) {
+      setActiveSection(nextSection);
+      return;
+    }
+
+    if (shouldLogout) {
+      await onLogout();
+    }
+  };
+
+  const attemptLeaveSettings = (options: {
+    nextSection?: AdminSection;
+    logout?: boolean;
+  }) => {
+    const hasUnsavedChanges = settingsLeaveGuard?.hasUnsavedChanges() ?? false;
+
+    if (!hasUnsavedChanges) {
+      if (options.nextSection) {
+        setActiveSection(options.nextSection);
+        return;
+      }
+
+      if (options.logout) {
+        void onLogout();
+      }
+      return;
+    }
+
+    setPendingSectionChange(options.nextSection ?? null);
+    setPendingLogout(options.logout === true);
+    setShowUnsavedSettingsModal(true);
+  };
+
+  const saveAndLeaveSettings = async () => {
+    if (!settingsLeaveGuard) return;
+    setLeavingAfterSave(true);
+    const saved = await settingsLeaveGuard.saveChanges();
+    setLeavingAfterSave(false);
+    if (saved) {
+      await finishPendingLeave();
+    }
+  };
+
   if (booting) {
     return <p className="section-subtitle">Caricamento dashboard...</p>;
   }
@@ -152,7 +214,11 @@ export function AdminDashboard({
       ) : null}
 
       {activeSection === "settings" ? (
-        <AdminReservationsPanel settingsOnly onLogout={onLogout} />
+        <AdminReservationsPanel
+          settingsOnly
+          onLogout={() => attemptLeaveSettings({ logout: true })}
+          onSettingsLeaveGuardChange={setSettingsLeaveGuard}
+        />
       ) : null}
 
       <div
@@ -167,7 +233,11 @@ export function AdminDashboard({
               ? "admin-bottom-btn active"
               : "admin-bottom-btn"
           }
-          onClick={() => setActiveSection("reservations")}
+          onClick={() =>
+            activeSection === "settings"
+              ? attemptLeaveSettings({ nextSection: "reservations" })
+              : setActiveSection("reservations")
+          }
         >
           {reservationsAttentionCount > 0 ? (
             <span className="admin-bottom-badge">
@@ -186,7 +256,11 @@ export function AdminDashboard({
               ? "admin-bottom-btn active"
               : "admin-bottom-btn"
           }
-          onClick={() => setActiveSection("menu")}
+          onClick={() =>
+            activeSection === "settings"
+              ? attemptLeaveSettings({ nextSection: "menu" })
+              : setActiveSection("menu")
+          }
         >
           <span className="admin-bottom-symbol" aria-hidden>
             🍕
@@ -208,6 +282,59 @@ export function AdminDashboard({
           <span>Impostazioni</span>
         </button>
       </div>
+
+      {showUnsavedSettingsModal ? (
+        <div className="admin-modal-backdrop" role="dialog" aria-modal="true">
+          <div className="admin-modal admin-leave-settings-modal">
+            <div className="admin-modal-head">
+              <h3>Modifiche non salvate</h3>
+            </div>
+            <p>
+              Hai aggiornato le impostazioni delle prenotazioni ma non le hai
+              ancora salvate.
+            </p>
+            <p>
+              Puoi salvare prima di uscire oppure annullare le modifiche di
+              questa sessione.
+            </p>
+            <div className="booking-step-actions">
+              <button
+                type="button"
+                className="btn-primary"
+                onClick={() => void saveAndLeaveSettings()}
+                disabled={leavingAfterSave}
+              >
+                {leavingAfterSave ? "Salvataggio..." : "Salva e continua"}
+              </button>
+            </div>
+            <div className="booking-step-actions two-buttons">
+              <button
+                type="button"
+                className="btn-secondary admin-modal-btn"
+                disabled={leavingAfterSave}
+                onClick={() => {
+                  settingsLeaveGuard?.discardChanges();
+                  void finishPendingLeave();
+                }}
+              >
+                Annulla modifiche
+              </button>
+              <button
+                type="button"
+                className="btn-secondary admin-modal-btn"
+                disabled={leavingAfterSave}
+                onClick={() => {
+                  setShowUnsavedSettingsModal(false);
+                  setPendingSectionChange(null);
+                  setPendingLogout(false);
+                }}
+              >
+                Resta nella pagina
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </section>
   );
 }

@@ -37,6 +37,7 @@ export function MenuProductSheet({
   const [readyImageProductId, setReadyImageProductId] = useState<string | null>(
     null,
   );
+  const [imageMode, setImageMode] = useState<"contain" | "cover">("contain");
 
   useEffect(() => {
     if (!product) return;
@@ -55,6 +56,7 @@ export function MenuProductSheet({
 
   useEffect(() => {
     if (!product) return;
+    setImageMode("contain");
 
     const thumb = product.imageThumb || product.image;
     if (!product.image || product.image === thumb) return;
@@ -62,9 +64,29 @@ export function MenuProductSheet({
     const currentProductId = product.id;
     const img = new window.Image();
     img.decoding = "async";
-    img.onload = () => setReadyImageProductId(currentProductId);
+    img.onload = () => {
+      const ratio =
+        img.naturalHeight > 0 ? img.naturalWidth / img.naturalHeight : 1;
+      setImageMode(ratio < 1.2 ? "cover" : "contain");
+      setReadyImageProductId(currentProductId);
+    };
     img.onerror = () => setReadyImageProductId(currentProductId);
     img.src = product.image;
+  }, [product]);
+
+  useEffect(() => {
+    if (!product?.imageThumb && !product?.image) return;
+
+    const probe = new window.Image();
+    probe.decoding = "async";
+    probe.onload = () => {
+      const ratio =
+        probe.naturalHeight > 0
+          ? probe.naturalWidth / probe.naturalHeight
+          : 1;
+      setImageMode(ratio < 1.2 ? "cover" : "contain");
+    };
+    probe.src = product.imageThumb || product.image;
   }, [product]);
 
   const activeProduct = product;
@@ -115,7 +137,11 @@ export function MenuProductSheet({
                           : product.imageThumb || product.image
                       }
                       alt={product.name}
-                      className="qr-sheet-image"
+                      className={
+                        imageMode === "cover"
+                          ? "qr-sheet-image qr-sheet-image-cover"
+                          : "qr-sheet-image"
+                      }
                       loading="eager"
                       fetchPriority="high"
                       decoding="async"

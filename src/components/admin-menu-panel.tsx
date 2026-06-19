@@ -1,7 +1,7 @@
 "use client";
 
-import { FormEvent, useEffect, useMemo, useState } from "react";
-import type { Dispatch, DragEvent, SetStateAction } from "react";
+import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
+import type { Dispatch, DragEvent, SetStateAction, WheelEvent } from "react";
 import {
   CeleryIcon,
   CrustaceansIcon,
@@ -435,6 +435,7 @@ export function AdminMenuPanel() {
     "dishes",
   );
   const [activeCategory, setActiveCategory] = useState<string>("");
+  const categoryScrollRef = useRef<HTMLDivElement | null>(null);
 
   const [draggingCategoryId, setDraggingCategoryId] = useState<string | null>(
     null,
@@ -1578,6 +1579,16 @@ export function AdminMenuPanel() {
     await reorderCategories(categoryId, targetId);
   };
 
+  const onCategoryScrollWheel = (event: WheelEvent<HTMLDivElement>) => {
+    const container = categoryScrollRef.current;
+    if (!container) return;
+    if (Math.abs(event.deltaY) <= Math.abs(event.deltaX)) return;
+    if (container.scrollWidth <= container.clientWidth) return;
+
+    event.preventDefault();
+    container.scrollBy({ left: event.deltaY, behavior: "auto" });
+  };
+
   const openCategoryManager = () => {
     setShowCategoryModal(true);
   };
@@ -1719,8 +1730,10 @@ export function AdminMenuPanel() {
           {menuSubview === "dishes" ? (
             <div
               className="category-scroll"
+              ref={categoryScrollRef}
               role="tablist"
               aria-label="Categorie menu"
+              onWheel={onCategoryScrollWheel}
             >
               {visibleCategories.map((categoryName) => {
                 const categoryDoc = categories.find(

@@ -1,6 +1,4 @@
 import { Resend } from "resend";
-import fs from "node:fs";
-import path from "node:path";
 
 type NewReservationOwnerEmailParams = {
   customerName: string;
@@ -106,32 +104,20 @@ const buildLogoAsset = (
 ): {
   logoSrc?: string;
 } => {
-  const localCandidates = [
-    path.join(process.cwd(), "public", "assets", "Centro.png"),
-    path.join(process.cwd(), "public", "assets", "logo1_hq.png"),
-  ];
-
-  const localPath = localCandidates.find((candidate) =>
-    fs.existsSync(candidate),
-  );
-
-  if (localPath) {
-    const extension = path.extname(localPath).toLowerCase();
-    const mimeType = extension === ".png" ? "image/png" : "image/jpeg";
-    const encoded = fs.readFileSync(localPath).toString("base64");
-
-    return {
-      logoSrc: `data:${mimeType};base64,${encoded}`,
-    };
-  }
-
   if (logoUrl) {
     return {
       logoSrc: logoUrl,
     };
   }
 
-  return {};
+  const siteUrl =
+    process.env.NEXT_PUBLIC_SITE_URL ??
+    process.env.SITE_URL ??
+    "https://pizzeriaduecentogrammi.it";
+
+  return {
+    logoSrc: `${siteUrl.replace(/\/+$/, "")}/assets/Centro.png`,
+  };
 };
 
 const buildOwnerReservationHtml = (

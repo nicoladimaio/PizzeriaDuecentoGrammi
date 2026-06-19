@@ -1537,6 +1537,41 @@ p {
   font-weight: 800;
 }
 
+@media (max-width: 760px) {
+  .booking-area-cards {
+    grid-template-columns: 1fr;
+    gap: 0.55rem;
+  }
+
+  .booking-area-card {
+    grid-template-columns: 112px minmax(0, 1fr);
+    align-items: stretch;
+    min-height: 84px;
+  }
+
+  .booking-area-card img {
+    width: 112px;
+    height: 100%;
+    min-height: 84px;
+  }
+
+  .booking-area-card span {
+    min-height: auto;
+    padding: 0.75rem 0.8rem;
+    justify-content: flex-start;
+    text-align: left;
+  }
+
+  .booking-room-unavailable {
+    left: 56px;
+    top: 50%;
+    max-width: 96px;
+    text-align: center;
+    padding: 0.26rem 0.42rem;
+    font-size: 0.62rem;
+  }
+}
+
 .booking-inline-error {
   margin: 0.35rem 0 0;
   color: #b42318;
@@ -2029,6 +2064,33 @@ p {
   max-width: 640px;
 }
 
+.admin-login-shell {
+  min-height: calc(100vh - 240px);
+  display: flex;
+  align-items: center;
+}
+
+.admin-login-card {
+  width: min(520px, 100%);
+  margin-inline: auto;
+  display: grid;
+  gap: 0.9rem;
+}
+
+.admin-login-form {
+  justify-items: center;
+}
+
+.admin-login-fields {
+  width: min(360px, 100%);
+  display: grid;
+  gap: 0.8rem;
+}
+
+.admin-login-submit {
+  width: min(220px, 100%);
+}
+
 .admin-shell {
   margin-top: 1rem;
 }
@@ -2097,6 +2159,8 @@ p {
       transparent 48%
     ),
     linear-gradient(165deg, #ffffff, #f7fbfc);
+  min-width: 0;
+  overflow-x: hidden;
 }
 
 .admin-reservations-head {
@@ -2296,6 +2360,11 @@ p {
   background: rgba(255, 255, 255, 0.76);
   padding: 0.6rem;
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.7);
+  min-width: 0;
+}
+
+.admin-confirmed-group {
+  overflow-x: hidden;
 }
 
 .admin-reservation-list {
@@ -2310,10 +2379,11 @@ p {
 
 .admin-reservation-tabs {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
   gap: 0.45rem;
   margin-bottom: 0.65rem;
   width: 100%;
+  align-items: center;
 }
 
 .admin-reservation-tab {
@@ -2355,8 +2425,14 @@ p {
 }
 
 .admin-reservation-tab-plus {
-  font-size: 1.1rem;
+  width: 50px;
+  min-width: 50px;
+  min-height: 50px;
+  padding: 0;
+  border-radius: 999px;
+  font-size: 1.3rem;
   line-height: 1;
+  justify-self: end;
 }
 
 .admin-manual-reservation-modal {
@@ -2369,6 +2445,19 @@ p {
   gap: 0.55rem;
   align-items: center;
   margin-bottom: 0.65rem;
+}
+
+.admin-confirmed-group .admin-confirmed-day-nav {
+  grid-template-columns: 1fr;
+  margin-bottom: 0.4rem;
+}
+
+.admin-confirmed-group .admin-confirmed-day-nav .admin-confirmed-day-btn {
+  display: none;
+}
+
+.admin-confirmed-day-header {
+  margin-bottom: 0.45rem;
 }
 
 .admin-confirmed-day-btn {
@@ -2403,9 +2492,73 @@ p {
   font-size: 0.74rem;
 }
 
+.admin-confirmed-day-strip {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 0.55rem;
+  width: max-content;
+  min-width: max-content;
+  box-sizing: border-box;
+}
+
+.admin-confirmed-day-strip-wrap {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding-bottom: 0.35rem;
+  margin-bottom: 0.7rem;
+  scrollbar-width: thin;
+  overscroll-behavior-x: contain;
+  -webkit-overflow-scrolling: touch;
+  box-sizing: border-box;
+}
+
+.admin-confirmed-day-pill {
+  min-width: 132px;
+  border-radius: 14px;
+  border: 1px solid rgba(40, 69, 83, 0.16);
+  background: rgba(255, 255, 255, 0.92);
+  padding: 0.65rem 0.75rem;
+  text-align: left;
+  color: #294651;
+  cursor: pointer;
+  flex: 0 0 auto;
+}
+
+.admin-confirmed-day-pill:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  filter: grayscale(0.08);
+}
+
+.admin-confirmed-day-pill strong {
+  display: block;
+  font-size: 0.92rem;
+  margin-bottom: 0.14rem;
+}
+
+.admin-confirmed-day-pill small {
+  color: #5b7380;
+  font-size: 0.73rem;
+  white-space: nowrap;
+}
+
+.admin-confirmed-day-pill.active {
+  border-color: rgba(177, 74, 44, 0.28);
+  background: linear-gradient(135deg, #fff8f2 0%, #ffffff 100%);
+  box-shadow: 0 10px 24px rgba(177, 74, 44, 0.12);
+}
+
 .admin-confirmed-time-groups {
   display: grid;
   gap: 0.55rem;
+}
+
+.admin-leave-settings-modal {
+  width: min(460px, 96vw);
 }
 
 .admin-time-slot-block {
@@ -2457,8 +2610,26 @@ p {
 }
 
 .admin-reservation-item-arrived {
-  opacity: 0.56;
-  filter: saturate(0.7);
+  opacity: 1;
+  border-color: rgba(21, 101, 52, 0.34);
+  background: linear-gradient(165deg, #eefaf1, #dff4e6);
+  box-shadow:
+    inset 0 0 0 1px rgba(22, 101, 52, 0.12),
+    0 8px 18px rgba(21, 101, 52, 0.12);
+}
+
+.admin-arrived-badge {
+  display: inline-flex;
+  width: fit-content;
+  margin-top: 0.14rem;
+  padding: 0.14rem 0.48rem;
+  border-radius: 999px;
+  background: #166534;
+  color: #f4fbf6;
+  font-size: 0.63rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
 }
 
 .admin-presence-toggle {
@@ -2480,8 +2651,9 @@ p {
 
 .admin-presence-toggle.active {
   border-color: rgba(24, 102, 62, 0.5);
-  background: rgba(22, 101, 52, 0.14);
-  color: #19633b;
+  background: #166534;
+  color: #f4fbf6;
+  box-shadow: 0 8px 18px rgba(22, 101, 52, 0.24);
 }
 
 .admin-presence-toggle:disabled {
@@ -3106,8 +3278,9 @@ p {
   gap: 0.55rem;
   overflow-x: auto;
   padding: 0.2rem 0.1rem 0.8rem;
-  scrollbar-width: none;
-  overflow-x: auto;
+  scrollbar-width: thin;
+  overscroll-behavior-x: contain;
+  scroll-behavior: smooth;
 }
 
 .category-actions {
@@ -3851,7 +4024,7 @@ p {
   }
 
   .admin-reservation-tabs {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
     gap: 0.32rem;
   }
 
@@ -3868,6 +4041,13 @@ p {
     font-size: 0.62rem;
   }
 
+  .admin-reservation-tab-plus {
+    width: 42px;
+    min-width: 42px;
+    min-height: 42px;
+    font-size: 1.1rem;
+  }
+
   .admin-menu-toolbar-desktop {
     display: flex !important;
   }
@@ -3879,6 +4059,11 @@ p {
   .admin-confirmed-day-nav {
     grid-template-columns: 40px 1fr 40px;
     gap: 0.35rem;
+  }
+
+  .admin-confirmed-day-pill {
+    min-width: 118px;
+    padding: 0.55rem 0.62rem;
   }
 
   .admin-time-slot-block {
@@ -5767,6 +5952,7 @@ p {
   position: relative;
   width: 100%;
   height: 310px;
+  overflow: hidden;
   background:
     radial-gradient(
       circle at 50% 20%,
@@ -5784,6 +5970,13 @@ p {
   display: block;
   object-fit: contain;
   padding: 14px;
+}
+
+.qr-sheet-image-cover {
+  object-fit: cover;
+  padding: 0;
+  transform: scale(1.06);
+  transform-origin: center center;
 }
 
 .qr-sheet-content {
@@ -6241,5 +6434,10 @@ p {
   .qr-sheet-image {
     object-fit: contain;
     padding: 10px;
+  }
+
+  .qr-sheet-image-cover {
+    object-fit: cover;
+    padding: 0;
   }
 }

@@ -1,13 +1,18 @@
+import type { Metadata } from "next";
 import { ReservationForm } from "@/components/reservation-form";
 import Link from "next/link";
 import {
   BOOKING_TERMS_PATH,
   PRIVACY_POLICY_PATH,
 } from "@/lib/reservation-policies";
+import { buildPageMetadata } from "@/lib/seo";
 
-export const metadata = {
-  title: "Prenotazioni | Duecento Grammi",
-};
+export const metadata: Metadata = buildPageMetadata({
+  title: "Prenota un Tavolo | Duecento Grammi Marcianise",
+  description:
+    "Prenota online il tuo tavolo da Duecento Grammi a Marcianise. Ricevi conferma della prenotazione direttamente via email.",
+  path: "/prenotazioni",
+});
 
 export default function BookingPage() {
   return (

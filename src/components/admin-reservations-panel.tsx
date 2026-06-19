@@ -45,6 +45,18 @@ type ManualReservationForm = {
   notes: string;
 };
 
+type ApiErrorPayload = {
+  error?: string;
+};
+
+export type SettingsLeaveGuard = {
+  hasUnsavedChanges: () => boolean;
+  saveChanges: () => Promise<boolean>;
+  discardChanges: () => void;
+};
+
+const slotMinuteOptions: Array<15 | 30 | 60> = [15, 30, 60];
+
 const weekdayOptions = [
   { key: 1, label: "Lun" },
   { key: 2, label: "Mar" },
@@ -67,6 +79,7 @@ const defaultSettings: ReservationSettings = {
   openTime: "19:00",
   closeTime: "23:00",
   slotMinutes: 30,
+  saturdaySlotMinutes: 30,
   capacityPerSlot: 40,
   insideActive: true,
   outsideActive: true,
@@ -82,6 +95,24 @@ const todayKey = () => {
   const year = now.getFullYear();
   const month = String(now.getMonth() + 1).padStart(2, "0");
   const day = String(now.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+};
+
+const dateKeyDaysAgo = (days: number) => {
+  const date = new Date();
+  date.setDate(date.getDate() - days);
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+};
+
+const dateKeyDaysAhead = (days: number) => {
+  const date = new Date();
+  date.setDate(date.getDate() + days);
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
   return `${year}-${month}-${day}`;
 };
 
@@ -180,7 +211,22 @@ const normalizeSettings = (
   settings: ReservationSettings,
 ): ReservationSettings => ({
   ...settings,
-  slotMinutes: 30,
+  slotMinutes:
+    settings.slotMinutes === 15 ||
+    settings.slotMinutes === 30 ||
+    settings.slotMinutes === 60
+      ? settings.slotMinutes
+      : 30,
+  saturdaySlotMinutes:
+    settings.saturdaySlotMinutes === 15 ||
+    settings.saturdaySlotMinutes === 30 ||
+    settings.saturdaySlotMinutes === 60
+      ? settings.saturdaySlotMinutes
+      : settings.slotMinutes === 15 ||
+          settings.slotMinutes === 30 ||
+          settings.slotMinutes === 60
+        ? settings.slotMinutes
+        : 30,
   capacityPerSlot:
     typeof settings.capacityPerSlot === "number" &&
     Number.isFinite(settings.capacityPerSlot) &&
@@ -218,14 +264,74 @@ const getDefaultDiningArea = (
 ): "inside" | "outside" =>
   settings.insideActive || !settings.outsideActive ? "inside" : "outside";
 
+const getSlotMinutesForDateKey = (
+  dateKey: string,
+  settings: ReservationSettings,
+): 15 | 30 | 60 => {
+  const [year, month, day] = dateKey.split("-").map(Number);
+  const date = new Date(year, (month || 1) - 1, day || 1);
+  return date.getDay() === 6
+    ? settings.saturdaySlotMinutes
+    : settings.slotMinutes;
+};
+
+const isBookingOpenOnDateKey = (
+  dateKey: string,
+  settings: ReservationSettings,
+): boolean => {
+  const [year, month, day] = dateKey.split("-").map(Number);
+  const date = new Date(year, (month || 1) - 1, day || 1);
+  const weekday = date.getDay();
+  const isSpecialOpening = settings.specialOpenings.includes(dateKey);
+  const isHoliday = settings.holidays.includes(dateKey);
+  const isWorkingDay = settings.workingDays.includes(weekday);
+
+  if (isSpecialOpening) {
+    return true;
+  }
+
+  return isWorkingDay && !isHoliday;
+};
+
+const parseJsonResponse = async <T,>(response: Response): Promise<T> => {
+  const rawText = await response.text();
+
+  if (!rawText) {
+    return {} as T;
+  }
+
+  try {
+    return JSON.parse(rawText) as T;
+  } catch {
+    throw new Error(
+      `Il server ha restituito una risposta non valida${
+        response.status ? ` (HTTP ${response.status})` : ""
+      }.`,
+    );
+  }
+};
+
+const buildSettingsSnapshot = (
+  settings: ReservationSettings,
+  insideCapacityDraft: string,
+  outsideCapacityDraft: string,
+) =>
+  JSON.stringify({
+    settings: normalizeSettings(settings),
+    insideCapacityDraft,
+    outsideCapacityDraft,
+  });
+
 export function AdminReservationsPanel({
   highlightedCode,
   settingsOnly,
   onLogout,
+  onSettingsLeaveGuardChange,
 }: {
   highlightedCode?: string;
   settingsOnly?: boolean;
   onLogout?: () => void | Promise<void>;
+  onSettingsLeaveGuardChange?: (guard: SettingsLeaveGuard | null) => void;
 }) {
   const [loading, setLoading] = useState(true);
   const [rows, setRows] = useState<Array<ReservationDoc & { id: string }>>([]);
@@ -251,6 +357,14 @@ export function AdminReservationsPanel({
   const [settingsSaving, setSettingsSaving] = useState(false);
   const [settingsError, setSettingsError] = useState<string | null>(null);
   const [settingsFeedback, setSettingsFeedback] = useState<string | null>(null);
+  const [savedSettings, setSavedSettings] =
+    useState<ReservationSettings>(defaultSettings);
+  const [savedInsideCapacityDraft, setSavedInsideCapacityDraft] = useState(
+    String(defaultSettings.insideCapacityPerSlot),
+  );
+  const [savedOutsideCapacityDraft, setSavedOutsideCapacityDraft] = useState(
+    String(defaultSettings.outsideCapacityPerSlot),
+  );
   const [cleanupPending, setCleanupPending] = useState(false);
   const [calendarPickerOpen, setCalendarPickerOpen] = useState(false);
   const [calendarPickerMode, setCalendarPickerMode] = useState<
@@ -258,8 +372,8 @@ export function AdminReservationsPanel({
   >("holiday");
   const [holidayMonth, setHolidayMonth] = useState(monthKey(new Date()));
   const [reservationsView, setReservationsView] = useState<
-    "pending" | "confirmed" | "proposed"
-  >("pending");
+    "open" | "confirmed"
+  >("open");
   const [confirmedSelectedDate, setConfirmedSelectedDate] = useState("");
   const [decisionDialogMode, setDecisionDialogMode] =
     useState<DecisionDialogMode | null>(null);
@@ -327,10 +441,10 @@ export function AdminReservationsPanel({
             Authorization: `Bearer ${token}`,
           },
         });
-        const data = (await response.json()) as {
+        const data = await parseJsonResponse<{
           settings?: ReservationSettings;
           error?: string;
-        };
+        }>(response);
 
         if (!response.ok) {
           throw new Error(data.error ?? "Impossibile caricare impostazioni.");
@@ -339,6 +453,13 @@ export function AdminReservationsPanel({
         if (!ignore && data.settings) {
           const normalized = normalizeSettings(data.settings);
           setSettings(normalized);
+          setSavedSettings(normalized);
+          setInsideCapacityDraft(String(normalized.insideCapacityPerSlot));
+          setOutsideCapacityDraft(String(normalized.outsideCapacityPerSlot));
+          setSavedInsideCapacityDraft(String(normalized.insideCapacityPerSlot));
+          setSavedOutsideCapacityDraft(
+            String(normalized.outsideCapacityPerSlot),
+          );
         }
       } catch (err) {
         if (!ignore) {
@@ -416,10 +537,20 @@ export function AdminReservationsPanel({
     [orderedRows],
   );
 
+  const openRows = useMemo(
+    () =>
+      orderedRows.filter(
+        (row) =>
+          row.date >= todayKey() &&
+          (row.status === "pending" || row.status === "proposed"),
+      ),
+    [orderedRows],
+  );
+
   const confirmedRows = useMemo(
     () =>
       orderedRows.filter(
-        (row) => row.date >= todayKey() && row.status === "confirmed",
+        (row) => row.date >= dateKeyDaysAgo(2) && row.status === "confirmed",
       ),
     [orderedRows],
   );
@@ -432,6 +563,21 @@ export function AdminReservationsPanel({
   const confirmedDayKeys = useMemo(() => {
     return [...new Set(confirmedRows.map((row) => row.date))].sort();
   }, [confirmedRows]);
+
+  const bookingWindowDayKeys = useMemo(() => {
+    return Array.from({ length: 31 }, (_, index) => dateKeyDaysAhead(index));
+  }, []);
+
+  const confirmedDateSummaries = useMemo(() => {
+    return bookingWindowDayKeys.map((dateValue) => {
+      const rowsForDay = confirmedRows.filter((row) => row.date === dateValue);
+      return {
+        date: dateValue,
+        reservationsCount: rowsForDay.length,
+        isSelectable: rowsForDay.length > 0,
+      };
+    }).filter((day) => isBookingOpenOnDateKey(day.date, settings));
+  }, [bookingWindowDayKeys, confirmedRows, settings]);
 
   const confirmedRowsForSelectedDate = useMemo(() => {
     if (!confirmedSelectedDate)
@@ -458,13 +604,43 @@ export function AdminReservationsPanel({
       }));
   }, [confirmedRowsForSelectedDate]);
 
+  const currentSettingsSnapshot = useMemo(
+    () =>
+      buildSettingsSnapshot(
+        settings,
+        insideCapacityDraft,
+        outsideCapacityDraft,
+      ),
+    [insideCapacityDraft, outsideCapacityDraft, settings],
+  );
+
+  const savedSettingsSnapshot = useMemo(
+    () =>
+      buildSettingsSnapshot(
+        savedSettings,
+        savedInsideCapacityDraft,
+        savedOutsideCapacityDraft,
+      ),
+    [
+      savedInsideCapacityDraft,
+      savedOutsideCapacityDraft,
+      savedSettings,
+    ],
+  );
+
+  const hasUnsavedSettingsChanges = Boolean(
+    settingsOnly &&
+      !settingsLoading &&
+      currentSettingsSnapshot !== savedSettingsSnapshot,
+  );
+
   const manualTimeOptions = useMemo(() => {
     const open = parseMinutes(settings.openTime);
     const close = parseMinutes(settings.closeTime);
-    const slotMinutes =
-      settings.slotMinutes === 15 || settings.slotMinutes === 30
-        ? settings.slotMinutes
-        : 30;
+    const slotMinutes = getSlotMinutesForDateKey(
+      manualReservationForm.date,
+      settings,
+    );
 
     if (!Number.isFinite(open) || !Number.isFinite(close) || close < open) {
       return ["20:00"];
@@ -476,7 +652,13 @@ export function AdminReservationsPanel({
     }
 
     return slots.length > 0 ? slots : ["20:00"];
-  }, [settings.closeTime, settings.openTime, settings.slotMinutes]);
+  }, [
+    manualReservationForm.date,
+    settings.closeTime,
+    settings.openTime,
+    settings.saturdaySlotMinutes,
+    settings.slotMinutes,
+  ]);
 
   useEffect(() => {
     setManualReservationForm((prev) => {
@@ -587,7 +769,7 @@ export function AdminReservationsPanel({
       const response = await fetch(
         `/api/reservations/availability?guests=${guests}&room=${room}`,
       );
-      const data = (await response.json()) as DecisionAvailability;
+      const data = await parseJsonResponse<DecisionAvailability>(response);
 
       if (!response.ok) {
         throw new Error(data.error ?? "Impossibile caricare disponibilita.");
@@ -732,11 +914,11 @@ export function AdminReservationsPanel({
         }),
       });
 
-      const data = (await response.json()) as {
+      const data = await parseJsonResponse<{
         error?: string;
         customerNotificationSent?: boolean;
         customerNotificationError?: string;
-      };
+      }>(response);
       if (!response.ok) {
         throw new Error(data.error ?? "Aggiornamento non riuscito.");
       }
@@ -777,7 +959,6 @@ export function AdminReservationsPanel({
 
       const payloadToSave = {
         ...settings,
-        slotMinutes: 30 as const,
         capacityPerSlot: deriveTotalCapacity(settings),
       };
 
@@ -790,10 +971,10 @@ export function AdminReservationsPanel({
         body: JSON.stringify(payloadToSave),
       });
 
-      const data = (await response.json()) as {
+      const data = await parseJsonResponse<{
         ok?: boolean;
         error?: string;
-      };
+      }>(response);
 
       if (!response.ok) {
         throw new Error(data.error ?? "Salvataggio non riuscito.");
@@ -801,15 +982,30 @@ export function AdminReservationsPanel({
 
       const normalized = normalizeSettings(payloadToSave);
       setSettings(normalized);
+      setSavedSettings(normalized);
+      setInsideCapacityDraft(String(normalized.insideCapacityPerSlot));
+      setOutsideCapacityDraft(String(normalized.outsideCapacityPerSlot));
+      setSavedInsideCapacityDraft(String(normalized.insideCapacityPerSlot));
+      setSavedOutsideCapacityDraft(String(normalized.outsideCapacityPerSlot));
       setSettingsFeedback("Impostazioni prenotazioni salvate.");
       if (closeAfterSave) {
         setCalendarPickerOpen(false);
       }
+      return true;
     } catch (err) {
       setSettingsError(err instanceof Error ? err.message : "Errore inatteso.");
+      return false;
     } finally {
       setSettingsSaving(false);
     }
+  };
+
+  const discardUnsavedSettingsChanges = () => {
+    setSettings(savedSettings);
+    setInsideCapacityDraft(savedInsideCapacityDraft);
+    setOutsideCapacityDraft(savedOutsideCapacityDraft);
+    setSettingsError(null);
+    setSettingsFeedback("Modifiche annullate.");
   };
 
   const toggleWorkingDay = (day: number) => {
@@ -893,10 +1089,10 @@ export function AdminReservationsPanel({
         },
       });
 
-      const data = (await response.json()) as {
+      const data = await parseJsonResponse<{
         deletedCount?: number;
         error?: string;
-      };
+      }>(response);
 
       if (!response.ok) {
         throw new Error(data.error ?? "Pulizia non riuscita.");
@@ -927,7 +1123,7 @@ export function AdminReservationsPanel({
         },
       });
 
-      const data = (await response.json()) as { error?: string };
+      const data = await parseJsonResponse<ApiErrorPayload>(response);
       if (!response.ok) {
         throw new Error(data.error ?? "Eliminazione non riuscita.");
       }
@@ -965,7 +1161,7 @@ export function AdminReservationsPanel({
         }),
       });
 
-      const data = (await response.json()) as { error?: string };
+      const data = await parseJsonResponse<ApiErrorPayload>(response);
       if (!response.ok) {
         throw new Error(data.error ?? "Aggiornamento arrivo non riuscito.");
       }
@@ -1023,7 +1219,7 @@ export function AdminReservationsPanel({
         }),
       });
 
-      const data = (await response.json()) as { error?: string };
+      const data = await parseJsonResponse<ApiErrorPayload>(response);
       if (!response.ok) {
         throw new Error(data.error ?? "Inserimento prenotazione non riuscito.");
       }
@@ -1042,18 +1238,69 @@ export function AdminReservationsPanel({
   };
 
   useEffect(() => {
-    if (confirmedDayKeys.length === 0) {
+    const selectableDayKeys = confirmedDateSummaries
+      .filter((day) => day.isSelectable)
+      .map((day) => day.date);
+
+    if (selectableDayKeys.length === 0) {
       setConfirmedSelectedDate("");
       return;
     }
 
-    const stillExists = confirmedDayKeys.includes(confirmedSelectedDate);
+    const stillExists = selectableDayKeys.includes(confirmedSelectedDate);
 
     if (!stillExists) {
-      const nextDate = confirmedDayKeys[0];
+      const today = todayKey();
+      const nextDate =
+        selectableDayKeys.find((dateValue) => dateValue >= today) ??
+        selectableDayKeys[0];
       setConfirmedSelectedDate(nextDate);
     }
-  }, [confirmedDayKeys, confirmedSelectedDate]);
+  }, [confirmedDateSummaries, confirmedSelectedDate]);
+
+  useEffect(() => {
+    if (hasUnsavedSettingsChanges && settingsFeedback) {
+      setSettingsFeedback(null);
+    }
+  }, [hasUnsavedSettingsChanges, settingsFeedback]);
+
+  useEffect(() => {
+    if (!hasUnsavedSettingsChanges) {
+      return;
+    }
+
+    const handleBeforeUnload = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+      event.returnValue = "";
+    };
+
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => {
+      window.removeEventListener("beforeunload", handleBeforeUnload);
+    };
+  }, [hasUnsavedSettingsChanges]);
+
+  useEffect(() => {
+    if (!onSettingsLeaveGuardChange || !settingsOnly) {
+      return;
+    }
+
+    onSettingsLeaveGuardChange({
+      hasUnsavedChanges: () => hasUnsavedSettingsChanges,
+      saveChanges: () => saveSettings(),
+      discardChanges: discardUnsavedSettingsChanges,
+    });
+
+    return () => {
+      onSettingsLeaveGuardChange(null);
+    };
+  }, [
+    hasUnsavedSettingsChanges,
+    onSettingsLeaveGuardChange,
+    settingsOnly,
+    currentSettingsSnapshot,
+    savedSettingsSnapshot,
+  ]);
 
   const addHolidayByDate = (dateValue: string) => {
     if (!dateValue) return;
@@ -1150,16 +1397,16 @@ export function AdminReservationsPanel({
             <button
               type="button"
               className={
-                reservationsView === "pending"
+                reservationsView === "open"
                   ? "admin-reservation-tab active"
                   : "admin-reservation-tab"
               }
-              onClick={() => setReservationsView("pending")}
+              onClick={() => setReservationsView("open")}
             >
-              NUOVE
-              {newRows.length > 0 ? (
+              DA GESTIRE
+              {openRows.length > 0 ? (
                 <span className="admin-reservation-tab-badge">
-                  {newRows.length}
+                  {openRows.length}
                 </span>
               ) : null}
             </button>
@@ -1176,17 +1423,6 @@ export function AdminReservationsPanel({
             </button>
             <button
               type="button"
-              className={
-                reservationsView === "proposed"
-                  ? "admin-reservation-tab active"
-                  : "admin-reservation-tab"
-              }
-              onClick={() => setReservationsView("proposed")}
-            >
-              IN ATTESA
-            </button>
-            <button
-              type="button"
               className="admin-reservation-tab admin-reservation-tab-plus"
               onClick={() => {
                 resetManualReservationForm();
@@ -1198,14 +1434,16 @@ export function AdminReservationsPanel({
             </button>
           </div>
 
-          {reservationsView === "pending" ? (
+          {reservationsView === "open" ? (
             <div className="admin-reservation-group">
-              <h4>Nuove</h4>
-              {newRows.length === 0 ? (
-                <p className="section-subtitle">Nessuna prenotazione nuova.</p>
+              <h4>Da gestire</h4>
+              {openRows.length === 0 ? (
+                <p className="section-subtitle">
+                  Nessuna prenotazione da gestire.
+                </p>
               ) : (
                 <div className="admin-reservation-list">
-                  {newRows.map((row) => (
+                  {openRows.map((row) => (
                     <button
                       key={row.id}
                       type="button"
@@ -1232,59 +1470,30 @@ export function AdminReservationsPanel({
             </div>
           ) : null}
 
-          {reservationsView === "proposed" ? (
-            <div className="admin-reservation-group">
-              <h4>In attesa</h4>
-              {proposedRows.length === 0 ? (
-                <p className="section-subtitle">
-                  Nessuna proposta in attesa di risposta.
-                </p>
-              ) : (
-                <div className="admin-reservation-list">
-                  {proposedRows.map((row) => (
-                    <button
-                      key={row.id}
-                      type="button"
-                      className="admin-reservation-item"
-                      onClick={() => setSelectedCode(row.code)}
-                    >
-                      <span className="admin-reservation-main">
-                        <strong>{row.customerName}</strong>
-                        <small>
-                          {row.date} · {row.time} · {row.guests} persone
-                        </small>
-                      </span>
-                      <span className={`badge ${row.status}`}>
-                        {statusLabel(row)}
-                      </span>
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-          ) : null}
-
           {reservationsView === "confirmed" ? (
             <div className="admin-reservation-group admin-confirmed-group">
-              {confirmedRows.length === 0 ? (
-                <p className="section-subtitle">
-                  Nessuna prenotazione confermata.
-                </p>
-              ) : (
-                <>
+              <>
                   <div className="admin-confirmed-day-nav">
                     <button
                       type="button"
                       className="admin-confirmed-day-btn"
                       disabled={
-                        confirmedDayKeys.indexOf(confirmedSelectedDate) <= 0
+                        confirmedDateSummaries.findIndex(
+                          (day) => day.date === confirmedSelectedDate,
+                        ) <= 0
                       }
                       onClick={() => {
-                        const idx = confirmedDayKeys.indexOf(
-                          confirmedSelectedDate,
+                        const idx = confirmedDateSummaries.findIndex(
+                          (day) => day.date === confirmedSelectedDate,
                         );
                         if (idx > 0) {
-                          setConfirmedSelectedDate(confirmedDayKeys[idx - 1]);
+                          const previousDay = confirmedDateSummaries
+                            .slice(0, idx)
+                            .reverse()
+                            .find((day) => day.isSelectable);
+                          if (previousDay) {
+                            setConfirmedSelectedDate(previousDay.date);
+                          }
                         }
                       }}
                     >
@@ -1293,7 +1502,7 @@ export function AdminReservationsPanel({
                     <div className="admin-confirmed-day-label">
                       <strong>
                         {parseDateKey(
-                          confirmedSelectedDate || confirmedDayKeys[0],
+                          confirmedSelectedDate || bookingWindowDayKeys[0],
                         ).toLocaleDateString("it-IT", {
                           weekday: "long",
                           day: "2-digit",
@@ -1302,27 +1511,36 @@ export function AdminReservationsPanel({
                         })}
                       </strong>
                       <small>
-                        Giorno{" "}
-                        {Math.max(
-                          1,
-                          confirmedDayKeys.indexOf(confirmedSelectedDate) + 1,
+                        {(
+                          confirmedDateSummaries.find(
+                            (day) =>
+                              day.date ===
+                              (confirmedSelectedDate || bookingWindowDayKeys[0]),
+                          )?.reservationsCount ?? 0
                         )}{" "}
-                        di {confirmedDayKeys.length}
+                        prenotazioni
                       </small>
                     </div>
                     <button
                       type="button"
                       className="admin-confirmed-day-btn"
                       disabled={
-                        confirmedDayKeys.indexOf(confirmedSelectedDate) >=
-                        confirmedDayKeys.length - 1
+                        confirmedDateSummaries.findIndex(
+                          (day) => day.date === confirmedSelectedDate,
+                        ) >=
+                        confirmedDateSummaries.length - 1
                       }
                       onClick={() => {
-                        const idx = confirmedDayKeys.indexOf(
-                          confirmedSelectedDate,
+                        const idx = confirmedDateSummaries.findIndex(
+                          (day) => day.date === confirmedSelectedDate,
                         );
-                        if (idx >= 0 && idx < confirmedDayKeys.length - 1) {
-                          setConfirmedSelectedDate(confirmedDayKeys[idx + 1]);
+                        if (idx >= 0 && idx < confirmedDateSummaries.length - 1) {
+                          const nextDay = confirmedDateSummaries
+                            .slice(idx + 1)
+                            .find((day) => day.isSelectable);
+                          if (nextDay) {
+                            setConfirmedSelectedDate(nextDay.date);
+                          }
                         }
                       }}
                     >
@@ -1330,9 +1548,39 @@ export function AdminReservationsPanel({
                     </button>
                   </div>
 
+                  <div className="admin-confirmed-day-strip-wrap">
+                    <div
+                      className="admin-confirmed-day-strip"
+                      role="tablist"
+                      aria-label="Date prenotazioni confermate"
+                    >
+                      {confirmedDateSummaries.map((day) => (
+                        <button
+                          key={day.date}
+                          type="button"
+                          role="tab"
+                          aria-selected={confirmedSelectedDate === day.date}
+                          disabled={!day.isSelectable}
+                          className={
+                            confirmedSelectedDate === day.date
+                              ? "admin-confirmed-day-pill active"
+                              : "admin-confirmed-day-pill"
+                          }
+                          onClick={() => {
+                            if (!day.isSelectable) return;
+                            setConfirmedSelectedDate(day.date);
+                          }}
+                        >
+                          <strong>{formatDateShort(day.date)}</strong>
+                          <small>{day.reservationsCount} prenotazioni</small>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
                   {confirmedRowsByTime.length === 0 ? (
                     <p className="section-subtitle">
-                      Nessuna confermata nel giorno selezionato.
+                      Nessuna prenotazione confermata nel giorno selezionato.
                     </p>
                   ) : (
                     <div className="admin-confirmed-time-groups">
@@ -1369,6 +1617,11 @@ export function AdminReservationsPanel({
                                       ? "Sala esterna"
                                       : "Sala interna"}
                                   </small>
+                                  {row.arrived ? (
+                                    <span className="admin-arrived-badge">
+                                      Arrivato
+                                    </span>
+                                  ) : null}
                                 </span>
                                 <button
                                   type="button"
@@ -1403,7 +1656,6 @@ export function AdminReservationsPanel({
                     </div>
                   )}
                 </>
-              )}
             </div>
           ) : null}
         </section>
@@ -1458,8 +1710,50 @@ export function AdminReservationsPanel({
                   </label>
                 </div>
                 <label>
-                  Intervallo slot
-                  <input type="text" value="30 minuti" disabled readOnly />
+                  Intervallo standard
+                  <select
+                    value={settings.slotMinutes}
+                    onChange={(event) =>
+                      setSettings((prev) => ({
+                        ...prev,
+                        slotMinutes:
+                          Number(event.target.value) === 15
+                            ? 15
+                            : Number(event.target.value) === 60
+                              ? 60
+                              : 30,
+                      }))
+                    }
+                  >
+                    {slotMinuteOptions.map((option) => (
+                      <option key={option} value={option}>
+                        {option} minuti
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label>
+                  Intervallo sabato
+                  <select
+                    value={settings.saturdaySlotMinutes}
+                    onChange={(event) =>
+                      setSettings((prev) => ({
+                        ...prev,
+                        saturdaySlotMinutes:
+                          Number(event.target.value) === 15
+                            ? 15
+                            : Number(event.target.value) === 60
+                              ? 60
+                              : 30,
+                      }))
+                    }
+                  >
+                    {slotMinuteOptions.map((option) => (
+                      <option key={option} value={option}>
+                        {option} minuti
+                      </option>
+                    ))}
+                  </select>
                 </label>
               </div>
 

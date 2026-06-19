@@ -1,7 +1,16 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import Image from "next/image";
 import { HomeHeroVideo } from "@/components/home-hero-video";
 import { HomeFeaturedStrip } from "@/components/home-featured-strip";
+import { buildPageMetadata } from "@/lib/seo";
+
+export const metadata: Metadata = buildPageMetadata({
+  title: "Duecento Grammi | Pizzeria Gourmet a Marcianise",
+  description:
+    "Pizzeria gourmet a Marcianise. Pizze con ingredienti selezionati, impasti leggeri, fritti artigianali e prenotazione online. Scopri il menu di Duecento Grammi.",
+  path: "/",
+});
 
 export default function HomePage() {
   return (

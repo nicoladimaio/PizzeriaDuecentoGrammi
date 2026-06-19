@@ -22,10 +22,16 @@ const reservationSchema = z.object({
   notes: z.string().max(300).optional(),
   privacyAcknowledged: z
     .boolean()
-    .refine((value) => value, "Devi dichiarare di aver letto l'informativa privacy."),
+    .refine(
+      (value) => value,
+      "Devi accettare Privacy Policy e Termini di Prenotazione.",
+    ),
   bookingTermsAccepted: z
     .boolean()
-    .refine((value) => value, "Devi accettare i termini di prenotazione."),
+    .refine(
+      (value) => value,
+      "Devi accettare Privacy Policy e Termini di Prenotazione.",
+    ),
   privacyPolicyVersion: z.literal(PRIVACY_POLICY_VERSION),
   bookingTermsVersion: z.literal(BOOKING_TERMS_VERSION),
 });
@@ -45,6 +51,7 @@ type AvailabilityResponse = {
     openTime: string;
     closeTime: string;
     slotMinutes: number;
+    saturdaySlotMinutes?: number;
     activeRoom?: "inside" | "outside";
     insideActive?: boolean;
     outsideActive?: boolean;
@@ -104,10 +111,28 @@ const calendarCells = (monthKey: string) => {
 
 const guestOptions = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
 
+const parseJsonResponse = async <T,>(response: Response): Promise<T> => {
+  const rawText = await response.text();
+
+  if (!rawText) {
+    return {} as T;
+  }
+
+  try {
+    return JSON.parse(rawText) as T;
+  } catch {
+    throw new Error(
+      `Il server ha restituito una risposta non valida${
+        response.status ? ` (HTTP ${response.status})` : ""
+      }.`,
+    );
+  }
+};
+
 export function ReservationForm() {
   const STEP_1_TO_2_MESSAGE = "Controllo le sale disponibili...";
   const STEP_3_TO_4_MESSAGE =
-    "Sto preparando il riepilogo della tua prenotazione...";
+    "Sto aprendo il riepilogo della tua prenotazione...";
   const STEP_2_TO_3_MESSAGE = "Sto caricando il calendario...";
 
   const router = useRouter();
@@ -136,8 +161,7 @@ export function ReservationForm() {
   const [phone, setPhone] = useState("");
   const [email, setEmail] = useState("");
   const [notes, setNotes] = useState("");
-  const [privacyAcknowledged, setPrivacyAcknowledged] = useState(false);
-  const [bookingTermsAccepted, setBookingTermsAccepted] = useState(false);
+  const [legalAccepted, setLegalAccepted] = useState(false);
 
   const [availability, setAvailability] = useState<AvailabilityResponse | null>(
     null,
@@ -206,13 +230,46 @@ export function ReservationForm() {
     Boolean(email.trim()) &&
     Boolean(selectedDate) &&
     Boolean(selectedTime) &&
-    privacyAcknowledged &&
-    bookingTermsAccepted &&
+    legalAccepted &&
     !pending;
 
   const insideRoomEnabled = roomConfig?.insideActive ?? false;
   const outsideRoomEnabled = roomConfig?.outsideActive ?? false;
   const noRoomEnabled = !insideRoomEnabled && !outsideRoomEnabled;
+
+  useEffect(() => {
+    const resetBookingFlow = () => {
+      setStep(1);
+      setTransitionMessage(null);
+      setError(null);
+      setReviewOpen(false);
+      setPending(false);
+      setRedirecting(false);
+      setGuests(null);
+      setDiningArea(null);
+      setCustomGuestsOpen(false);
+      setCustomGuestsValue("");
+      setCustomGuestsError(null);
+      setSelectedDate("");
+      setSelectedTime("");
+      setStep3View("date");
+      setCustomerName("");
+      setPhone("");
+      setEmail("");
+      setNotes("");
+      setLegalAccepted(false);
+      setAvailability(null);
+      setRoomConfig(null);
+      setSelectedMonth("");
+      setLoadingAvailability(false);
+      setLoadingRoomConfig(false);
+    };
+
+    window.addEventListener("booking:reset-to-step-1", resetBookingFlow);
+    return () => {
+      window.removeEventListener("booking:reset-to-step-1", resetBookingFlow);
+    };
+  }, []);
 
   useEffect(() => {
     if (!guests || step < 2) {
@@ -229,7 +286,7 @@ export function ReservationForm() {
         const response = await fetch(
           `/api/reservations/availability?guests=${guests}`,
         );
-        const data = (await response.json()) as AvailabilityResponse;
+        const data = await parseJsonResponse<AvailabilityResponse>(response);
 
         if (ignore) return;
 
@@ -299,7 +356,7 @@ export function ReservationForm() {
         const response = await fetch(
           `/api/reservations/availability?guests=${guests}&room=${diningArea}`,
         );
-        const data = (await response.json()) as AvailabilityResponse;
+        const data = await parseJsonResponse<AvailabilityResponse>(response);
 
         if (ignore) return;
 
@@ -398,8 +455,8 @@ export function ReservationForm() {
       time: selectedTime,
       guests: guests ?? 0,
       notes: notes.trim(),
-      privacyAcknowledged,
-      bookingTermsAccepted,
+      privacyAcknowledged: legalAccepted,
+      bookingTermsAccepted: legalAccepted,
       privacyPolicyVersion: PRIVACY_POLICY_VERSION,
       bookingTermsVersion: BOOKING_TERMS_VERSION,
     };
@@ -422,10 +479,10 @@ export function ReservationForm() {
         body: JSON.stringify(parsed.data),
       });
 
-      const data = (await response.json()) as {
+      const data = await parseJsonResponse<{
         ok?: boolean;
         error?: string;
-      };
+      }>(response);
 
       if (!data.ok) {
         setError(data.error ?? "Errore durante l'invio. Riprova tra poco.");
@@ -614,12 +671,6 @@ export function ReservationForm() {
               Scegli dove preferisci mangiare
             </p>
 
-            {loadingRoomConfig ? (
-              <p className="booking-selection-summary">
-                Caricamento sale disponibili...
-              </p>
-            ) : null}
-
             {noRoomEnabled && !loadingRoomConfig ? (
               <p className="booking-inline-error">
                 Nessuna sala disponibile in questo momento. Riprova tra poco.
@@ -650,7 +701,10 @@ export function ReservationForm() {
                     NON DISPONIBILE
                   </span>
                 ) : null}
-                <img src="/assets/interni.jpg" alt="Sala interna" />
+                <img
+                  src="/assets/Sala%20interna.jpeg"
+                  alt="Sala interna"
+                />
                 <span className="booking-area-card-label">Sala interna</span>
               </button>
 
@@ -673,7 +727,10 @@ export function ReservationForm() {
                     NON DISPONIBILE
                   </span>
                 ) : null}
-                <img src="/assets/interni2.jpg" alt="Sala esterna" />
+                <img
+                  src="/assets/Sala%20esterna.jpeg"
+                  alt="Sala esterna"
+                />
                 <span className="booking-area-card-label">Sala esterna</span>
               </button>
             </div>
@@ -910,35 +967,19 @@ export function ReservationForm() {
             <div className="booking-legal-box">
               <label className="booking-checkbox-row">
                 <input
-                  name="privacyAcknowledged"
+                  name="legalAccepted"
                   type="checkbox"
-                  checked={privacyAcknowledged}
-                  onChange={(event) =>
-                    setPrivacyAcknowledged(event.target.checked)
-                  }
+                  checked={legalAccepted}
+                  onChange={(event) => setLegalAccepted(event.target.checked)}
                 />
                 <span>
-                  Ho letto l&apos;
+                  Ho letto e accetto la{" "}
                   <Link href={PRIVACY_POLICY_PATH} target="_blank">
-                    informativa privacy
+                    Privacy Policy
                   </Link>
-                  .
-                </span>
-              </label>
-
-              <label className="booking-checkbox-row">
-                <input
-                  name="bookingTermsAccepted"
-                  type="checkbox"
-                  checked={bookingTermsAccepted}
-                  onChange={(event) =>
-                    setBookingTermsAccepted(event.target.checked)
-                  }
-                />
-                <span>
-                  Accetto i{" "}
+                  {" "}e i{" "}
                   <Link href={BOOKING_TERMS_PATH} target="_blank">
-                    termini di prenotazione
+                    Termini di Prenotazione
                   </Link>
                   .
                 </span>
@@ -1028,7 +1069,7 @@ export function ReservationForm() {
 
       {error ? <p className="error-text">{error}</p> : null}
 
-      {transitionMessage || (loadingAvailability && step >= 3) ? (
+      {transitionMessage || loadingRoomConfig || (loadingAvailability && step >= 3) ? (
         <div
           className="booking-loader-overlay"
           role="status"
@@ -1037,11 +1078,14 @@ export function ReservationForm() {
           <div className="booking-loader-card">
             <img
               src="/assets/loader.gif"
-              alt="Caricamento calendario"
+              alt="Caricamento prenotazione"
               className="app-loader-gif"
             />
             <p>
               {transitionMessage ??
+                (loadingRoomConfig
+                  ? STEP_1_TO_2_MESSAGE
+                  : null) ??
                 (loadingAvailability ? STEP_2_TO_3_MESSAGE : "Caricamento...")}
             </p>
           </div>

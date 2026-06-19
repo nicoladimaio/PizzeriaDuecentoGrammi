@@ -45,6 +45,19 @@ export function SiteHeader({ className }: SiteHeaderProps) {
               key={link.href}
               href={link.href}
               className={clsx("nav-link", pathname === link.href && "active")}
+              onClick={(event) => {
+                if (
+                  typeof window !== "undefined" &&
+                  pathname === "/prenotazioni" &&
+                  link.href === "/prenotazioni"
+                ) {
+                  event.preventDefault();
+                  window.dispatchEvent(
+                    new window.CustomEvent("booking:reset-to-step-1"),
+                  );
+                  window.scrollTo({ top: 0, behavior: "smooth" });
+                }
+              }}
             >
               {link.label}
             </Link>
