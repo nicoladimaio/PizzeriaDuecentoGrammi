@@ -11,6 +11,7 @@ import { MenuCategoriesBar } from "@/components/menu-categories-bar";
 import { MenuProductCard } from "@/components/menu-product-card";
 import { MenuProductSheet } from "@/components/menu-product-sheet";
 import type { MenuAllergen, MenuCategory, MenuProduct } from "@/types/menu-app";
+import type { MenuImageFit } from "@/types/menu-app";
 
 type RawMenuItemDoc = {
   Nome?: string;
@@ -29,6 +30,7 @@ type RawMenuItemDoc = {
   ImmagineThumb?: string;
   imageThumb?: string;
   thumbnail?: string;
+  imageFit?: unknown;
   allergeni?: unknown;
   allergens?: unknown;
   extras?: unknown;
@@ -452,9 +454,13 @@ const inferSpiceFromText = (value: string): number => {
 };
 
 const normalizeImage = (image: string): string => {
-  if (!image) return "/assets/logo1.png";
+  if (!image) return "/assets/logo.jpg";
   if (image.startsWith("http")) return image;
   return `/${image.replace(/^\/+/, "")}`;
+};
+
+const normalizeImageFit = (value: unknown): MenuImageFit => {
+  return value === "contain" ? "contain" : "cover";
 };
 
 const unique = (values: string[]): string[] => {
@@ -726,7 +732,7 @@ const getFallbackProducts = (): MenuProduct[] =>
           ? explicitSpice
           : inferSpiceFromText(`${entry.Nome} ${entry.Ingredienti}`),
       image: normalizeImage(
-        normalizeText(entry.Immagine) || "assets/logo1.png",
+        normalizeText(entry.Immagine) || "assets/logo.jpg",
       ),
       imageThumb: normalizeImage(
         normalizeText(
@@ -735,8 +741,9 @@ const getFallbackProducts = (): MenuProduct[] =>
             entryRecord.imageThumb,
         ) ||
           normalizeText(entry.Immagine) ||
-          "assets/logo1.png",
+          "assets/logo.jpg",
       ),
+      imageFit: normalizeImageFit(entryRecord.imageFit),
       description: desc || ingredientsText,
       ingredients: ingredientsText
         .split(",")
@@ -862,7 +869,7 @@ export function LiveMenu() {
               spiceLevel: explicitSpice > 0 ? explicitSpice : inferredSpice,
               image: normalizeImage(
                 normalizeText(raw.Immagine ?? raw.immagine) ||
-                  "assets/logo1.png",
+                  "assets/logo.jpg",
               ),
               imageThumb: normalizeImage(
                 normalizeText(
@@ -872,8 +879,9 @@ export function LiveMenu() {
                     raw.thumbnail,
                 ) ||
                   normalizeText(raw.Immagine ?? raw.immagine) ||
-                  "assets/logo1.png",
+                  "assets/logo.jpg",
               ),
+              imageFit: normalizeImageFit(raw.imageFit),
               description:
                 description || ingredientsText || ingredients.join(", "),
               ingredients,

@@ -10,6 +10,7 @@ export function AdminLoginForm() {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [showPassword, setShowPassword] = useState(false);
 
   const onSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -52,12 +53,23 @@ export function AdminLoginForm() {
         </label>
         <label>
           Password
-          <input
-            name="password"
-            type="password"
-            autoComplete="current-password"
-            required
-          />
+          <span className="admin-password-field">
+            <input
+              name="password"
+              type={showPassword ? "text" : "password"}
+              autoComplete="current-password"
+              required
+            />
+            <button
+              type="button"
+              className="admin-password-toggle"
+              aria-label={showPassword ? "Nascondi password" : "Mostra password"}
+              aria-pressed={showPassword}
+              onClick={() => setShowPassword((prev) => !prev)}
+            >
+              {showPassword ? "🙈" : "👁"}
+            </button>
+          </span>
         </label>
       </div>
       <button className="btn-primary admin-login-submit" type="submit" disabled={loading}>

@@ -701,10 +701,12 @@ export function ReservationForm() {
                     NON DISPONIBILE
                   </span>
                 ) : null}
-                <img
-                  src="/assets/Sala%20interna.jpeg"
-                  alt="Sala interna"
-                />
+                <div className="booking-area-card-media">
+                  <img
+                    src="/assets/Sala%20interna.jpeg"
+                    alt="Sala interna"
+                  />
+                </div>
                 <span className="booking-area-card-label">Sala interna</span>
               </button>
 
@@ -727,10 +729,12 @@ export function ReservationForm() {
                     NON DISPONIBILE
                   </span>
                 ) : null}
-                <img
-                  src="/assets/Sala%20esterna.jpeg"
-                  alt="Sala esterna"
-                />
+                <div className="booking-area-card-media">
+                  <img
+                    src="/assets/Sala%20esterna.jpeg"
+                    alt="Sala esterna"
+                  />
+                </div>
                 <span className="booking-area-card-label">Sala esterna</span>
               </button>
             </div>

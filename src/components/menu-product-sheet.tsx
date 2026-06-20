@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { AllergenBadge } from "@/components/allergens/allergen-badge";
 import { SpiceLevelIndicator } from "@/components/spice-level-indicator";
+import { getMenuImageSrc } from "@/lib/menu-image-cdn";
 import type { MenuProduct } from "@/types/menu-app";
 
 type MenuProductSheetProps = {
@@ -34,10 +35,11 @@ export function MenuProductSheet({
   labels,
   onClose,
 }: MenuProductSheetProps) {
-  const [readyImageProductId, setReadyImageProductId] = useState<string | null>(
-    null,
-  );
   const [imageMode, setImageMode] = useState<"contain" | "cover">("contain");
+  const [imageNaturalSize, setImageNaturalSize] = useState<{
+    width: number;
+    height: number;
+  } | null>(null);
 
   useEffect(() => {
     if (!product) return;
@@ -55,46 +57,53 @@ export function MenuProductSheet({
   }, [product]);
 
   useEffect(() => {
-    if (!product) return;
-    setImageMode("contain");
-
-    const thumb = product.imageThumb || product.image;
-    if (!product.image || product.image === thumb) return;
-
-    const currentProductId = product.id;
-    const img = new window.Image();
-    img.decoding = "async";
-    img.onload = () => {
-      const ratio =
-        img.naturalHeight > 0 ? img.naturalWidth / img.naturalHeight : 1;
-      setImageMode(ratio < 1.2 ? "cover" : "contain");
-      setReadyImageProductId(currentProductId);
-    };
-    img.onerror = () => setReadyImageProductId(currentProductId);
-    img.src = product.image;
-  }, [product]);
-
-  useEffect(() => {
-    if (!product?.imageThumb && !product?.image) return;
+    if (!product) {
+      setImageNaturalSize(null);
+      return;
+    }
+    if (!product?.image) return;
+    if (product.imageFit === "contain" || product.imageFit === "cover") {
+      setImageMode(product.imageFit);
+    }
 
     const probe = new window.Image();
     probe.decoding = "async";
     probe.onload = () => {
+      const width = Math.max(1, probe.naturalWidth || 1);
+      const height = Math.max(1, probe.naturalHeight || 1);
+      setImageNaturalSize({ width, height });
       const ratio =
-        probe.naturalHeight > 0
-          ? probe.naturalWidth / probe.naturalHeight
+        height > 0
+          ? width / height
           : 1;
-      setImageMode(ratio < 1.2 ? "cover" : "contain");
+      if (product.imageFit !== "contain" && product.imageFit !== "cover") {
+        setImageMode(ratio < 1.2 ? "cover" : "contain");
+      }
     };
-    probe.src = product.imageThumb || product.image;
+    probe.onerror = () => setImageNaturalSize(null);
+    probe.src = product.image || product.imageThumb || "/assets/logo.jpg";
   }, [product]);
 
-  const activeProduct = product;
-  const fullImageReady =
-    activeProduct === null
-      ? false
-      : (activeProduct.imageThumb || activeProduct.image) ===
-          activeProduct.image || readyImageProductId === activeProduct.id;
+  const preserveNaturalDetail =
+    imageNaturalSize !== null &&
+    Math.max(imageNaturalSize.width, imageNaturalSize.height) <= 520;
+  const detailImageSrc = product
+    ? getMenuImageSrc(
+        product.image || product.imageThumb || "/assets/logo.jpg",
+        "detail",
+        product.imageFit,
+      )
+    : "/assets/logo.jpg";
+
+  const sheetImageStyle = preserveNaturalDetail
+    ? {
+        width: `${imageNaturalSize.width}px`,
+        height: `${imageNaturalSize.height}px`,
+        maxWidth: "calc(100% - 28px)",
+        maxHeight: "calc(100% - 28px)",
+        margin: "auto",
+      }
+    : undefined;
 
   return (
     <div
@@ -131,17 +140,16 @@ export function MenuProductSheet({
                   <div className="qr-sheet-image-wrap">
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img
-                      src={
-                        fullImageReady
-                          ? product.image
-                          : product.imageThumb || product.image
-                      }
+                      src={detailImageSrc}
                       alt={product.name}
                       className={
                         imageMode === "cover"
                           ? "qr-sheet-image qr-sheet-image-cover"
-                          : "qr-sheet-image"
+                          : preserveNaturalDetail
+                            ? "qr-sheet-image qr-sheet-image-preserve"
+                            : "qr-sheet-image"
                       }
+                      style={sheetImageStyle}
                       loading="eager"
                       fetchPriority="high"
                       decoding="async"

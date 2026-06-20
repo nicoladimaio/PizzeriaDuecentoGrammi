@@ -14,12 +14,21 @@ type VerifyTokenInput = {
   token: string;
 };
 
-const getSecret = () =>
-  process.env.RESERVATION_ACTION_SECRET ||
-  process.env.SESSION_SECRET ||
-  process.env.RESEND_API_KEY ||
-  process.env.SMTP_PASSWORD ||
-  "duecentogrammi-dev-secret";
+const getSecret = () => {
+  const secret =
+    process.env.RESERVATION_ACTION_SECRET ||
+    process.env.SESSION_SECRET ||
+    process.env.RESEND_API_KEY ||
+    process.env.SMTP_PASSWORD;
+
+  if (!secret) {
+    throw new Error(
+      "Secret mancante per i token prenotazione. Configura RESERVATION_ACTION_SECRET.",
+    );
+  }
+
+  return secret;
+};
 
 const signPayload = (payload: string): string => {
   return crypto.createHmac("sha256", getSecret()).update(payload).digest("hex");

@@ -1,11 +1,8 @@
 "use client";
 
 import { FormEvent, useState } from "react";
-import { collection, getDocs, query, where } from "firebase/firestore";
-import { getClientDb } from "@/lib/firebase";
 
 type StatusDoc = {
-  email: string;
   customerName: string;
   date: string;
   time: string;
@@ -58,23 +55,20 @@ export function ReservationStatusChecker({
     }
 
     try {
-      const db = getClientDb();
-      const q = query(
-        collection(db, "reservation_status"),
-        where("email", "==", email),
+      const response = await fetch(
+        `/api/reservations/status?email=${encodeURIComponent(email)}`,
       );
-      const snapshot = await getDocs(q);
+      const data = (await response.json()) as {
+        result?: StatusDoc;
+        error?: string;
+      };
 
-      if (snapshot.empty) {
-        setError("Nessuna prenotazione trovata con questa email.");
+      if (!response.ok) {
+        setError(data.error ?? "Impossibile recuperare lo stato in questo momento.");
+      } else if (data.result) {
+        setResult(data.result);
       } else {
-        const rows = snapshot.docs.map(
-          (docSnapshot) => docSnapshot.data() as StatusDoc,
-        );
-        rows.sort((a, b) =>
-          (b.updatedAt ?? "").localeCompare(a.updatedAt ?? ""),
-        );
-        setResult(rows[0]);
+        setError("Nessuna prenotazione trovata con questa email.");
       }
     } catch {
       setError("Impossibile recuperare lo stato in questo momento.");

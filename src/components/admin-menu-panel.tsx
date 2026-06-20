@@ -29,6 +29,11 @@ import {
 } from "firebase/firestore";
 import { getDownloadURL, ref, uploadBytes } from "firebase/storage";
 import { getClientDb, getClientStorage } from "@/lib/firebase";
+import type {
+  MenuImageFit,
+  MenuImageMeta,
+  MenuImageQualityTier,
+} from "@/types/menu-app";
 
 type AdminMenuItem = {
   id: string;
@@ -41,6 +46,8 @@ type AdminMenuItem = {
   spiceLevel: number;
   immagine: string;
   immagineThumb: string;
+  imageFit?: MenuImageFit;
+  imageMeta?: MenuImageMeta;
   ordine: number;
   ingredientIds: string[];
   allergeni: string[];
@@ -66,6 +73,30 @@ type AllergenDef = {
   label: string;
 };
 
+type ItemToggleUndoToast = {
+  action: "specialty" | "visibility";
+  itemId: string;
+  itemName: string;
+  nextValue: boolean;
+  message: string;
+};
+
+type ImageUploadAnalysis = {
+  originalWidth: number;
+  originalHeight: number;
+  originalFileSize: number;
+  qualityTier: MenuImageQualityTier;
+  warning: string | null;
+  needsUpscaling: boolean;
+};
+
+type OptimizedImageUpload = {
+  file: File;
+  meta: ImageUploadAnalysis & {
+    optimizedFileSize: number;
+  };
+};
+
 const ALLERGENS: AllergenDef[] = [
   { key: "glutine", label: "Glutine" },
   { key: "arachidi", label: "Arachidi" },
@@ -82,6 +113,84 @@ const ALLERGENS: AllergenDef[] = [
   { key: "lupini", label: "Lupini" },
   { key: "solfiti", label: "Solfiti" },
 ];
+
+const MENU_DESCRIPTION_MAX_LENGTH = 1200;
+const DEFAULT_MENU_IMAGE_FIT: MenuImageFit = "cover";
+const DEFAULT_MENU_IMAGE = "assets/logo.jpg";
+const MENU_IMAGE_HD_MIN = 1200;
+const MENU_IMAGE_GOOD_MIN = 800;
+const MENU_IMAGE_MAX_SIDE = 1600;
+const MENU_IMAGE_WEBP_QUALITY = 0.82;
+const LOW_QUALITY_IMAGE_WARNING =
+  "Questa immagine potrebbe apparire sgranata quando i clienti la visualizzano o la ingrandiscono. Per un risultato migliore consigliamo una foto di almeno 1200×1200 pixel.";
+
+const normalizeMenuImagePath = (image: string | null | undefined) =>
+  image?.trim().replace(/^\/+/, "").toLowerCase() ?? "";
+
+const hasCustomMenuImage = (image: string | null | undefined) => {
+  const normalized = normalizeMenuImagePath(image);
+  return Boolean(normalized) && normalized !== DEFAULT_MENU_IMAGE.toLowerCase();
+};
+
+const getMenuImageQualityTier = (longestSide: number): MenuImageQualityTier => {
+  if (longestSide >= MENU_IMAGE_HD_MIN) return "hd";
+  if (longestSide >= MENU_IMAGE_GOOD_MIN) return "good";
+  return "low";
+};
+
+const getMenuImageQualityLabel = (tier: MenuImageQualityTier): string => {
+  if (tier === "hd") return "HD";
+  if (tier === "good") return "Buona";
+  return "Bassa qualita";
+};
+
+const getMenuImageMetaFromRaw = (data: Record<string, unknown>): MenuImageMeta => {
+  const originalWidth = Number(
+    data.imageOriginalWidth ?? data.originalWidth ?? data.immagineLarghezza,
+  );
+  const originalHeight = Number(
+    data.imageOriginalHeight ?? data.originalHeight ?? data.immagineAltezza,
+  );
+  const originalFileSize = Number(
+    data.imageOriginalFileSize ??
+      data.originalFileSize ??
+      data.immagineDimensioneOriginale,
+  );
+  const optimizedFileSize = Number(
+    data.imageOptimizedFileSize ??
+      data.optimizedFileSize ??
+      data.immagineDimensioneOttimizzata,
+  );
+  const qualityTier =
+    data.imageQualityTier === "hd" ||
+    data.imageQualityTier === "good" ||
+    data.imageQualityTier === "low"
+      ? data.imageQualityTier
+      : undefined;
+
+  return {
+    originalWidth: Number.isFinite(originalWidth) && originalWidth > 0
+      ? originalWidth
+      : undefined,
+    originalHeight: Number.isFinite(originalHeight) && originalHeight > 0
+      ? originalHeight
+      : undefined,
+    originalFileSize: Number.isFinite(originalFileSize) && originalFileSize > 0
+      ? originalFileSize
+      : undefined,
+    optimizedFileSize:
+      Number.isFinite(optimizedFileSize) && optimizedFileSize > 0
+        ? optimizedFileSize
+        : undefined,
+    qualityTier,
+  };
+};
+
+const formatBytes = (bytes: number | undefined): string => {
+  if (!bytes || bytes <= 0) return "";
+  if (bytes >= 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  return `${Math.max(1, Math.round(bytes / 1024))} KB`;
+};
 
 function AllergenIcon({ type }: { type: string }) {
   const iconProps = {
@@ -300,59 +409,57 @@ const loadImageFromUrl = (url: string): Promise<HTMLImageElement> =>
     image.src = url;
   });
 
-const convertImageToWebp = async (file: File): Promise<File> => {
-  if (!file.type.startsWith("image/") || file.type === "image/webp") {
-    return file;
+const analyzeImageFile = async (file: File): Promise<ImageUploadAnalysis> => {
+  if (!file.type.startsWith("image/")) {
+    throw new Error("Il file selezionato non e un'immagine valida.");
   }
 
   const objectUrl = URL.createObjectURL(file);
   try {
     const image = await loadImageFromUrl(objectUrl);
-    const sourceWidth = Math.max(1, image.naturalWidth || image.width || 1);
-    const sourceHeight = Math.max(1, image.naturalHeight || image.height || 1);
-    const maxSide = 1600;
-    const scale = Math.min(1, maxSide / Math.max(sourceWidth, sourceHeight));
-    const targetWidth = Math.max(1, Math.round(sourceWidth * scale));
-    const targetHeight = Math.max(1, Math.round(sourceHeight * scale));
+    const originalWidth = Math.max(1, image.naturalWidth || image.width || 1);
+    const originalHeight = Math.max(1, image.naturalHeight || image.height || 1);
+    const longestSide = Math.max(originalWidth, originalHeight);
+    const qualityTier = getMenuImageQualityTier(longestSide);
+    const needsUpscaling = longestSide < MENU_IMAGE_GOOD_MIN;
 
-    const canvas = document.createElement("canvas");
-    canvas.width = targetWidth;
-    canvas.height = targetHeight;
-
-    const context = canvas.getContext("2d");
-    if (!context) return file;
-
-    context.drawImage(image, 0, 0, targetWidth, targetHeight);
-    const blob = await new Promise<Blob | null>((resolve) => {
-      canvas.toBlob(resolve, "image/webp", 0.82);
-    });
-    if (!blob) return file;
-
-    const baseName = sanitizeFileName(file.name).replace(/\.[^.]+$/, "");
-    const finalName = `${baseName || `menu-${Date.now()}`}.webp`;
-    return new File([blob], finalName, {
-      type: "image/webp",
-      lastModified: Date.now(),
-    });
-  } catch {
-    return file;
+    return {
+      originalWidth,
+      originalHeight,
+      originalFileSize: file.size,
+      qualityTier,
+      warning: needsUpscaling ? LOW_QUALITY_IMAGE_WARNING : null,
+      needsUpscaling,
+    };
   } finally {
     URL.revokeObjectURL(objectUrl);
   }
 };
 
-const convertImageToWebpWithThumb = async (
+const maybeApplyFutureUpscaling = async (
   file: File,
-): Promise<{ full: File; thumb: File }> => {
-  const full = await convertImageToWebp(file);
-  const objectUrl = URL.createObjectURL(full);
+  analysis: ImageUploadAnalysis,
+): Promise<File> => {
+  // Hook pronto per un futuro passaggio automatico di upscaling AI.
+  void analysis;
+  return file;
+};
+
+const optimizeImageForUpload = async (
+  file: File,
+  analysis: ImageUploadAnalysis,
+): Promise<OptimizedImageUpload> => {
+  const source = await maybeApplyFutureUpscaling(file, analysis);
+  const objectUrl = URL.createObjectURL(source);
 
   try {
     const image = await loadImageFromUrl(objectUrl);
     const sourceWidth = Math.max(1, image.naturalWidth || image.width || 1);
     const sourceHeight = Math.max(1, image.naturalHeight || image.height || 1);
-    const maxSide = 560;
-    const scale = Math.min(1, maxSide / Math.max(sourceWidth, sourceHeight));
+    const scale = Math.min(
+      1,
+      MENU_IMAGE_MAX_SIDE / Math.max(sourceWidth, sourceHeight),
+    );
     const targetWidth = Math.max(1, Math.round(sourceWidth * scale));
     const targetHeight = Math.max(1, Math.round(sourceHeight * scale));
 
@@ -361,24 +468,53 @@ const convertImageToWebpWithThumb = async (
     canvas.height = targetHeight;
 
     const context = canvas.getContext("2d");
-    if (!context) return { full, thumb: full };
+    if (!context) {
+      return {
+        file: source,
+        meta: {
+          ...analysis,
+          optimizedFileSize: source.size,
+        },
+      };
+    }
 
+    context.imageSmoothingEnabled = true;
+    context.imageSmoothingQuality = "high";
     context.drawImage(image, 0, 0, targetWidth, targetHeight);
-    const thumbBlob = await new Promise<Blob | null>((resolve) => {
-      canvas.toBlob(resolve, "image/webp", 0.76);
+    const blob = await new Promise<Blob | null>((resolve) => {
+      canvas.toBlob(resolve, "image/webp", MENU_IMAGE_WEBP_QUALITY);
     });
-    if (!thumbBlob) return { full, thumb: full };
+    if (!blob) {
+      return {
+        file: source,
+        meta: {
+          ...analysis,
+          optimizedFileSize: source.size,
+        },
+      };
+    }
 
-    const baseName = sanitizeFileName(full.name).replace(/\.[^.]+$/, "");
-    const thumbName = `${baseName || `menu-${Date.now()}`}-thumb.webp`;
-    const thumb = new File([thumbBlob], thumbName, {
+    const baseName = sanitizeFileName(source.name).replace(/\.[^.]+$/, "");
+    const finalName = `${baseName || `menu-${Date.now()}`}.webp`;
+    const optimizedFile = new File([blob], finalName, {
       type: "image/webp",
       lastModified: Date.now(),
     });
-
-    return { full, thumb };
+    return {
+      file: optimizedFile,
+      meta: {
+        ...analysis,
+        optimizedFileSize: optimizedFile.size,
+      },
+    };
   } catch {
-    return { full, thumb: full };
+    return {
+      file: source,
+      meta: {
+        ...analysis,
+        optimizedFileSize: source.size,
+      },
+    };
   } finally {
     URL.revokeObjectURL(objectUrl);
   }
@@ -428,6 +564,8 @@ export function AdminMenuPanel() {
   const [savingId, setSavingId] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [itemToggleUndoToast, setItemToggleUndoToast] =
+    useState<ItemToggleUndoToast | null>(null);
   const [fabOpen, setFabOpen] = useState(false);
   const [ingredientSearch, setIngredientSearch] = useState("");
 
@@ -447,6 +585,9 @@ export function AdminMenuPanel() {
     string | null
   >(null);
   const [reorderDropTargetId, setReorderDropTargetId] = useState<string | null>(
+    null,
+  );
+  const itemToggleUndoTimerRef = useRef<ReturnType<typeof setTimeout> | null>(
     null,
   );
 
@@ -484,6 +625,8 @@ export function AdminMenuPanel() {
   const [newItemPrice, setNewItemPrice] = useState("");
   const [newItemCategory, setNewItemCategory] = useState("");
   const [newItemSpecial, setNewItemSpecial] = useState(false);
+  const [newItemImageFit, setNewItemImageFit] =
+    useState<MenuImageFit>(DEFAULT_MENU_IMAGE_FIT);
   const [newItemSpiceLevel, setNewItemSpiceLevel] = useState(0);
   const [newItemIngredientIds, setNewItemIngredientIds] = useState<string[]>(
     [],
@@ -496,12 +639,16 @@ export function AdminMenuPanel() {
     string | null
   >(null);
   const [newImageFile, setNewImageFile] = useState<File | null>(null);
+  const [newImageAnalysis, setNewImageAnalysis] =
+    useState<ImageUploadAnalysis | null>(null);
 
   const [editItemName, setEditItemName] = useState("");
   const [editItemDescription, setEditItemDescription] = useState("");
   const [editItemPrice, setEditItemPrice] = useState("");
   const [editItemCategory, setEditItemCategory] = useState("");
   const [editItemSpecial, setEditItemSpecial] = useState(false);
+  const [editItemImageFit, setEditItemImageFit] =
+    useState<MenuImageFit>(DEFAULT_MENU_IMAGE_FIT);
   const [editItemSpiceLevel, setEditItemSpiceLevel] = useState(0);
   const [editItemIngredientIds, setEditItemIngredientIds] = useState<string[]>(
     [],
@@ -514,6 +661,8 @@ export function AdminMenuPanel() {
     string | null
   >(null);
   const [editImageFile, setEditImageFile] = useState<File | null>(null);
+  const [editImageAnalysis, setEditImageAnalysis] =
+    useState<ImageUploadAnalysis | null>(null);
 
   const [showQuickIngredientCreate, setShowQuickIngredientCreate] =
     useState(false);
@@ -565,13 +714,18 @@ export function AdminMenuPanel() {
               data as Record<string, unknown>,
             ),
             immagine: toString(
-              (data.immagine ?? data.Immagine) || "assets/logo1.png",
+              (data.immagine ?? data.Immagine) || DEFAULT_MENU_IMAGE,
             ),
             immagineThumb: toString(
               (data.immagineThumb ?? data.ImmagineThumb ?? data.imageThumb) ||
                 (data.immagine ?? data.Immagine) ||
-                "assets/logo1.png",
+                DEFAULT_MENU_IMAGE,
             ),
+            imageFit:
+              data.imageFit === "contain" || data.imageFit === "cover"
+                ? data.imageFit
+                : DEFAULT_MENU_IMAGE_FIT,
+            imageMeta: getMenuImageMetaFromRaw(data as Record<string, unknown>),
             ordine: Number.isFinite(Number(data.ordine))
               ? Number(data.ordine)
               : Number.isFinite(Number(data.order))
@@ -902,11 +1056,68 @@ export function AdminMenuPanel() {
     if (!newImageFile) return "";
     return URL.createObjectURL(newImageFile);
   }, [newImageFile]);
+  const hasNewImage = Boolean(newImagePreview);
 
   const editImagePreview = useMemo(() => {
     if (!editImageFile) return "";
     return URL.createObjectURL(editImageFile);
   }, [editImageFile]);
+  const editItemHasSavedImage = editingItem
+    ? hasCustomMenuImage(editingItem.immagine)
+    : false;
+  const hasEditImage = Boolean(editImagePreview) || editItemHasSavedImage;
+  const editingItemMeta = editingItem?.imageMeta;
+
+  const onNewImageChange = async (file: File | null) => {
+    setNewImageFile(file);
+    if (!file) {
+      setNewImageAnalysis(null);
+      return;
+    }
+    try {
+      setError(null);
+      setNewImageAnalysis(await analyzeImageFile(file));
+    } catch {
+      setNewImageAnalysis(null);
+      setError("Impossibile leggere i dettagli dell'immagine selezionata.");
+    }
+  };
+
+  const onEditImageChange = async (file: File | null) => {
+    setEditImageFile(file);
+    if (!file) {
+      setEditImageAnalysis(null);
+      return;
+    }
+    try {
+      setError(null);
+      setEditImageAnalysis(await analyzeImageFile(file));
+    } catch {
+      setEditImageAnalysis(null);
+      setError("Impossibile leggere i dettagli dell'immagine selezionata.");
+    }
+  };
+
+  const clearItemToggleUndoTimer = () => {
+    if (itemToggleUndoTimerRef.current) {
+      clearTimeout(itemToggleUndoTimerRef.current);
+      itemToggleUndoTimerRef.current = null;
+    }
+  };
+
+  const dismissItemToggleUndoToast = () => {
+    clearItemToggleUndoTimer();
+    setItemToggleUndoToast(null);
+  };
+
+  const showItemToggleUndoToast = (toast: ItemToggleUndoToast) => {
+    clearItemToggleUndoTimer();
+    setItemToggleUndoToast(toast);
+    itemToggleUndoTimerRef.current = setTimeout(() => {
+      setItemToggleUndoToast(null);
+      itemToggleUndoTimerRef.current = null;
+    }, 5000);
+  };
 
   useEffect(() => {
     return () => {
@@ -920,29 +1131,37 @@ export function AdminMenuPanel() {
     };
   }, [editImagePreview]);
 
+  useEffect(() => {
+    return () => {
+      clearItemToggleUndoTimer();
+    };
+  }, []);
+
   const uploadImage = async (
     file: File,
-  ): Promise<{ imageUrl: string; thumbUrl: string }> => {
-    const optimized = await convertImageToWebpWithThumb(file);
+  ): Promise<{ imageUrl: string; thumbUrl: string; meta: MenuImageMeta }> => {
+    const analysis = await analyzeImageFile(file);
+    const optimized = await optimizeImageForUpload(file, analysis);
     const storage = getClientStorage();
     const ts = Date.now();
-    const fullPath = `menu-items/${ts}-${sanitizeFileName(optimized.full.name)}`;
-    const thumbPath = `menu-items/thumbs/${ts}-${sanitizeFileName(optimized.thumb.name)}`;
+    const fullPath = `menu-items/${ts}-${sanitizeFileName(optimized.file.name)}`;
     const imageRef = ref(storage, fullPath);
-    const thumbRef = ref(storage, thumbPath);
-    await uploadBytes(imageRef, optimized.full, {
-      contentType: optimized.full.type || "image/webp",
+    await uploadBytes(imageRef, optimized.file, {
+      contentType: optimized.file.type || "image/webp",
       cacheControl: "public,max-age=31536000,immutable",
     });
-    await uploadBytes(thumbRef, optimized.thumb, {
-      contentType: optimized.thumb.type || "image/webp",
-      cacheControl: "public,max-age=31536000,immutable",
-    });
-    const [imageUrl, thumbUrl] = await Promise.all([
-      getDownloadURL(imageRef),
-      getDownloadURL(thumbRef),
-    ]);
-    return { imageUrl, thumbUrl };
+    const imageUrl = await getDownloadURL(imageRef);
+    return {
+      imageUrl,
+      thumbUrl: imageUrl,
+      meta: {
+        originalWidth: optimized.meta.originalWidth,
+        originalHeight: optimized.meta.originalHeight,
+        originalFileSize: optimized.meta.originalFileSize,
+        optimizedFileSize: optimized.meta.optimizedFileSize,
+        qualityTier: optimized.meta.qualityTier,
+      },
+    };
   };
 
   const ensureCategoryExists = async (name: string) => {
@@ -1249,7 +1468,7 @@ export function AdminMenuPanel() {
       const db = getClientDb();
       await ensureCategoryExists(categoria);
       const uploaded = newImageFile ? await uploadImage(newImageFile) : null;
-      const uploadedImage = uploaded?.imageUrl ?? "assets/logo1.png";
+      const uploadedImage = uploaded?.imageUrl ?? DEFAULT_MENU_IMAGE;
       const uploadedThumb = uploaded?.thumbUrl ?? uploadedImage;
 
       const currentCategoryItems = items.filter(
@@ -1275,6 +1494,12 @@ export function AdminMenuPanel() {
         spiceLevel: newItemSpiceLevel,
         immagine: uploadedImage,
         immagineThumb: uploadedThumb,
+        imageFit: newItemImageFit,
+        imageOriginalWidth: uploaded?.meta.originalWidth ?? null,
+        imageOriginalHeight: uploaded?.meta.originalHeight ?? null,
+        imageOriginalFileSize: uploaded?.meta.originalFileSize ?? null,
+        imageOptimizedFileSize: uploaded?.meta.optimizedFileSize ?? null,
+        imageQualityTier: uploaded?.meta.qualityTier ?? null,
         ordine: currentCategoryItems.length,
         ingredientIds,
         allergeni,
@@ -1288,10 +1513,12 @@ export function AdminMenuPanel() {
       setNewItemPrice("");
       setNewItemCategory(categoria);
       setNewItemSpecial(false);
+      setNewItemImageFit(DEFAULT_MENU_IMAGE_FIT);
       setNewItemSpiceLevel(0);
       setNewItemIngredientIds([]);
       setNewItemAllergens([]);
       setNewImageFile(null);
+      setNewImageAnalysis(null);
       setShowItemModal(false);
       setFeedback("Piatto aggiunto.");
     } catch {
@@ -1308,6 +1535,7 @@ export function AdminMenuPanel() {
     setEditItemPrice(String(item.prezzo));
     setEditItemCategory(item.categoria);
     setEditItemSpecial(item.specialita ?? false);
+    setEditItemImageFit(item.imageFit ?? DEFAULT_MENU_IMAGE_FIT);
     setEditItemSpiceLevel(item.spiceLevel ?? 0);
     setEditItemIngredientIds(item.ingredientIds);
     const detected = inferAllergensFromIngredientIds(item.ingredientIds);
@@ -1318,6 +1546,7 @@ export function AdminMenuPanel() {
     setEditIngredientSearch("");
     setDraggingEditIngredientId(null);
     setEditImageFile(null);
+    setEditImageAnalysis(null);
     setError(null);
     setFeedback(null);
   };
@@ -1351,9 +1580,13 @@ export function AdminMenuPanel() {
     try {
       const db = getClientDb();
       const uploaded = editImageFile ? await uploadImage(editImageFile) : null;
-      const uploadedImage = uploaded?.imageUrl ?? editingItem.immagine;
+      const uploadedImage =
+        uploaded?.imageUrl || editingItem.immagine || DEFAULT_MENU_IMAGE;
       const uploadedThumb =
-        uploaded?.thumbUrl ?? editingItem.immagineThumb ?? editingItem.immagine;
+        uploaded?.thumbUrl ??
+        editingItem.immagineThumb ??
+        editingItem.immagine ??
+        DEFAULT_MENU_IMAGE;
 
       const inferredAllergens = inferAllergensFromIngredientIds(ingredientIds);
       const allergeni = uniqueInsensitive([
@@ -1374,6 +1607,27 @@ export function AdminMenuPanel() {
         spiceLevel: editItemSpiceLevel,
         immagine: uploadedImage,
         immagineThumb: uploadedThumb,
+        imageFit: editItemImageFit,
+        imageOriginalWidth:
+          uploaded?.meta.originalWidth ??
+          editingItem.imageMeta?.originalWidth ??
+          null,
+        imageOriginalHeight:
+          uploaded?.meta.originalHeight ??
+          editingItem.imageMeta?.originalHeight ??
+          null,
+        imageOriginalFileSize:
+          uploaded?.meta.originalFileSize ??
+          editingItem.imageMeta?.originalFileSize ??
+          null,
+        imageOptimizedFileSize:
+          uploaded?.meta.optimizedFileSize ??
+          editingItem.imageMeta?.optimizedFileSize ??
+          null,
+        imageQualityTier:
+          uploaded?.meta.qualityTier ??
+          editingItem.imageMeta?.qualityTier ??
+          null,
         ingredientIds,
         allergeni,
         updatedAt: new Date().toISOString(),
@@ -1381,7 +1635,9 @@ export function AdminMenuPanel() {
 
       setEditingItemId(null);
       setEditImageFile(null);
+      setEditImageAnalysis(null);
       setEditItemSpecial(false);
+      setEditItemImageFit(DEFAULT_MENU_IMAGE_FIT);
       setEditItemSpiceLevel(0);
       setEditItemIngredientIds([]);
       setEditItemAllergens([]);
@@ -1479,9 +1735,19 @@ export function AdminMenuPanel() {
     setFeedback(null);
     try {
       const db = getClientDb();
+      const nextVisible = !item.visible;
       await updateDoc(doc(db, "menu_items", item.id), {
-        visible: !item.visible,
+        visible: nextVisible,
         updatedAt: new Date().toISOString(),
+      });
+      showItemToggleUndoToast({
+        action: "visibility",
+        itemId: item.id,
+        itemName: item.nome,
+        nextValue: nextVisible,
+        message: nextVisible
+          ? `${item.nome} e visibile nel menu.`
+          : `${item.nome} e nascosto nel menu.`,
       });
     } catch {
       setError("Errore durante aggiornamento visibilita.");
@@ -1496,13 +1762,54 @@ export function AdminMenuPanel() {
     setFeedback(null);
     try {
       const db = getClientDb();
+      const nextSpecial = !item.specialita;
       await updateDoc(doc(db, "menu_items", item.id), {
-        specialita: !item.specialita,
-        special: !item.specialita,
+        specialita: nextSpecial,
+        special: nextSpecial,
         updatedAt: new Date().toISOString(),
+      });
+      showItemToggleUndoToast({
+        action: "specialty",
+        itemId: item.id,
+        itemName: item.nome,
+        nextValue: nextSpecial,
+        message: nextSpecial
+          ? `${item.nome} e in evidenza in homepage.`
+          : `${item.nome} non e piu in evidenza.`,
       });
     } catch {
       setError("Errore durante aggiornamento stella.");
+    } finally {
+      setSavingId(null);
+    }
+  };
+
+  const undoItemToggle = async () => {
+    if (!itemToggleUndoToast) return;
+
+    const toast = itemToggleUndoToast;
+    dismissItemToggleUndoToast();
+    setSavingId(toast.itemId);
+    setError(null);
+    setFeedback(null);
+
+    try {
+      const db = getClientDb();
+      if (toast.action === "visibility") {
+        await updateDoc(doc(db, "menu_items", toast.itemId), {
+          visible: !toast.nextValue,
+          updatedAt: new Date().toISOString(),
+        });
+      } else {
+        await updateDoc(doc(db, "menu_items", toast.itemId), {
+          specialita: !toast.nextValue,
+          special: !toast.nextValue,
+          updatedAt: new Date().toISOString(),
+        });
+      }
+      setFeedback(`Modifica annullata per ${toast.itemName}.`);
+    } catch {
+      setError("Errore durante annullamento modifica.");
     } finally {
       setSavingId(null);
     }
@@ -1617,6 +1924,25 @@ export function AdminMenuPanel() {
 
       {loading ? (
         <p className="section-subtitle">Caricamento menu remoto...</p>
+      ) : null}
+
+      {itemToggleUndoToast ? (
+        <div className="admin-action-toast" role="status" aria-live="polite">
+          <p>{itemToggleUndoToast.message}</p>
+          <div className="admin-action-toast-actions">
+            <button type="button" onClick={() => void undoItemToggle()}>
+              Annulla
+            </button>
+            <button
+              type="button"
+              className="ghost"
+              onClick={dismissItemToggleUndoToast}
+              aria-label="Chiudi notifica"
+            >
+              Chiudi
+            </button>
+          </div>
+        </div>
       ) : null}
 
       <div className="admin-menu-sticky-header">
@@ -1842,11 +2168,24 @@ export function AdminMenuPanel() {
                   key={item.id}
                 >
                   <div className="admin-dish-media-wrap compact">
-                    <img
-                      src={item.immagine || "assets/logo1.png"}
-                      alt={item.nome}
-                      className="admin-dish-media"
-                    />
+                    {item.imageMeta?.qualityTier ? (
+                      <span
+                        className={`admin-image-quality-badge ${item.imageMeta.qualityTier}`}
+                      >
+                        {getMenuImageQualityLabel(item.imageMeta.qualityTier)}
+                      </span>
+                    ) : null}
+                    {hasCustomMenuImage(item.immagine) ? (
+                      <img
+                        src={item.immagine || DEFAULT_MENU_IMAGE}
+                        alt={item.nome}
+                        className="admin-dish-media"
+                      />
+                    ) : (
+                      <div className="admin-dish-media-placeholder">
+                        Nessuna immagine caricata
+                      </div>
+                    )}
                   </div>
                   <div className="admin-dish-body compact">
                     <div className="admin-dish-head">
@@ -2443,7 +2782,7 @@ export function AdminMenuPanel() {
                 Descrizione (opzionale)
                 <textarea
                   rows={3}
-                  maxLength={240}
+                  maxLength={MENU_DESCRIPTION_MAX_LENGTH}
                   value={newItemDescription}
                   onChange={(event) => {
                     setNewItemDescription(event.currentTarget.value);
@@ -2719,26 +3058,80 @@ export function AdminMenuPanel() {
               </label>
 
               <label className="menu-item-field-image">
-                Immagine
+                <span className="menu-item-image-head">
+                  <span>Immagine</span>
+                  <span className="menu-item-image-fit-group">
+                    <button
+                      type="button"
+                      className={
+                        newItemImageFit === "cover"
+                          ? "menu-item-image-fit-btn active"
+                          : "menu-item-image-fit-btn"
+                      }
+                      aria-pressed={newItemImageFit === "cover"}
+                      disabled={!hasNewImage}
+                      onClick={() => setNewItemImageFit("cover")}
+                    >
+                      Zoomata
+                    </button>
+                    <button
+                      type="button"
+                      className={
+                        newItemImageFit === "contain"
+                          ? "menu-item-image-fit-btn active"
+                          : "menu-item-image-fit-btn"
+                      }
+                      aria-pressed={newItemImageFit === "contain"}
+                      disabled={!hasNewImage}
+                      onClick={() => setNewItemImageFit("contain")}
+                    >
+                      Intera
+                    </button>
+                  </span>
+                </span>
                 <input
                   type="file"
                   accept="image/*"
                   onChange={(event) => {
                     const file = event.currentTarget.files?.[0] ?? null;
-                    setNewImageFile(file);
+                    void onNewImageChange(file);
                   }}
                 />
               </label>
 
-              {newImagePreview ? (
-                <div className="admin-preview-box">
+              {newImageAnalysis ? (
+                <div className="menu-image-meta-panel">
+                  <span
+                    className={`admin-image-quality-badge inline ${newImageAnalysis.qualityTier}`}
+                  >
+                    {getMenuImageQualityLabel(newImageAnalysis.qualityTier)}
+                  </span>
+                  <p className="menu-image-meta-text">
+                    Originale {newImageAnalysis.originalWidth}×
+                    {newImageAnalysis.originalHeight} ·{" "}
+                    {formatBytes(newImageAnalysis.originalFileSize)}
+                  </p>
+                  {newImageAnalysis.warning ? (
+                    <p className="menu-image-warning">
+                      {newImageAnalysis.warning}
+                    </p>
+                  ) : null}
+                </div>
+              ) : null}
+
+              <div className="admin-preview-box">
+                {newImagePreview ? (
                   <img
                     src={newImagePreview}
                     alt="Anteprima nuovo piatto"
                     className="admin-preview-image"
                   />
-                </div>
-              ) : null}
+                ) : (
+                  <div className="admin-preview-placeholder">
+                    Nessuna immagine caricata
+                  </div>
+                )}
+              </div>
 
               <button
                 className="btn-success menu-item-submit"
@@ -2793,7 +3186,7 @@ export function AdminMenuPanel() {
                 Descrizione (opzionale)
                 <textarea
                   rows={3}
-                  maxLength={240}
+                  maxLength={MENU_DESCRIPTION_MAX_LENGTH}
                   value={editItemDescription}
                   onChange={(event) => {
                     setEditItemDescription(event.currentTarget.value);
@@ -3086,6 +3479,37 @@ export function AdminMenuPanel() {
               </label>
 
               <div className="menu-item-field-image">
+                <div className="menu-item-image-head">
+                  <span>Immagine</span>
+                  <span className="menu-item-image-fit-group">
+                    <button
+                      type="button"
+                      className={
+                        editItemImageFit === "cover"
+                          ? "menu-item-image-fit-btn active"
+                          : "menu-item-image-fit-btn"
+                      }
+                      aria-pressed={editItemImageFit === "cover"}
+                      disabled={!hasEditImage}
+                      onClick={() => setEditItemImageFit("cover")}
+                    >
+                      Zoomata
+                    </button>
+                    <button
+                      type="button"
+                      className={
+                        editItemImageFit === "contain"
+                          ? "menu-item-image-fit-btn active"
+                          : "menu-item-image-fit-btn"
+                      }
+                      aria-pressed={editItemImageFit === "contain"}
+                      disabled={!hasEditImage}
+                      onClick={() => setEditItemImageFit("contain")}
+                    >
+                      Intera
+                    </button>
+                  </span>
+                </div>
                 <input
                   id="edit-item-image-input"
                   type="file"
@@ -3093,7 +3517,7 @@ export function AdminMenuPanel() {
                   className="input-hidden-file"
                   onChange={(event) => {
                     const file = event.currentTarget.files?.[0] ?? null;
-                    setEditImageFile(file);
+                    void onEditImageChange(file);
                   }}
                 />
                 <label
@@ -3107,16 +3531,60 @@ export function AdminMenuPanel() {
                 ) : null}
               </div>
 
+              {editImageAnalysis ? (
+                <div className="menu-image-meta-panel">
+                  <span
+                    className={`admin-image-quality-badge inline ${editImageAnalysis.qualityTier}`}
+                  >
+                    {getMenuImageQualityLabel(editImageAnalysis.qualityTier)}
+                  </span>
+                  <p className="menu-image-meta-text">
+                    Originale {editImageAnalysis.originalWidth}×
+                    {editImageAnalysis.originalHeight} ·{" "}
+                    {formatBytes(editImageAnalysis.originalFileSize)}
+                  </p>
+                  {editImageAnalysis.warning ? (
+                    <p className="menu-image-warning">
+                      {editImageAnalysis.warning}
+                    </p>
+                  ) : null}
+                </div>
+              ) : editingItemMeta?.qualityTier ? (
+                <div className="menu-image-meta-panel">
+                  <span
+                    className={`admin-image-quality-badge inline ${editingItemMeta.qualityTier}`}
+                  >
+                    {getMenuImageQualityLabel(editingItemMeta.qualityTier)}
+                  </span>
+                  <p className="menu-image-meta-text">
+                    Originale {editingItemMeta.originalWidth ?? "?"}×
+                    {editingItemMeta.originalHeight ?? "?"}
+                    {editingItemMeta.originalFileSize
+                      ? ` · ${formatBytes(editingItemMeta.originalFileSize)}`
+                      : ""}
+                    {editingItemMeta.optimizedFileSize
+                      ? ` · WebP ${formatBytes(editingItemMeta.optimizedFileSize)}`
+                      : ""}
+                  </p>
+                </div>
+              ) : null}
+
               <div className="admin-preview-box">
-                <img
-                  src={
-                    editImagePreview ||
-                    editingItem.immagine ||
-                    "assets/logo1.png"
-                  }
-                  alt="Anteprima modifica piatto"
-                  className="admin-preview-image"
-                />
+                {hasEditImage ? (
+                  <img
+                    src={
+                      editImagePreview ||
+                      editingItem.immagine ||
+                      DEFAULT_MENU_IMAGE
+                    }
+                    alt="Anteprima modifica piatto"
+                    className="admin-preview-image"
+                  />
+                ) : (
+                  <div className="admin-preview-placeholder">
+                    Nessuna immagine caricata
+                  </div>
+                )}
               </div>
 
               <button

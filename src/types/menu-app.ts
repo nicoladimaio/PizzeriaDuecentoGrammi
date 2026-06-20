@@ -4,6 +4,17 @@ export type MenuBadgeFlags = {
   recent: boolean;
 };
 
+export type MenuImageFit = "cover" | "contain";
+export type MenuImageQualityTier = "hd" | "good" | "low";
+
+export type MenuImageMeta = {
+  originalWidth?: number;
+  originalHeight?: number;
+  originalFileSize?: number;
+  optimizedFileSize?: number;
+  qualityTier?: MenuImageQualityTier;
+};
+
 export type MenuProduct = {
   id: string;
   name: string;
@@ -12,6 +23,7 @@ export type MenuProduct = {
   spiceLevel: number;
   image: string;
   imageThumb?: string;
+  imageFit?: MenuImageFit;
   description: string;
   ingredients: string[];
   allergens: string[];

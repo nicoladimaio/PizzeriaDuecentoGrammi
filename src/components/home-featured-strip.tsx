@@ -4,6 +4,7 @@ import Image from "next/image";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { collection, onSnapshot } from "firebase/firestore";
 import { getClientDb } from "@/lib/firebase";
+import { getMenuImageSrc } from "@/lib/menu-image-cdn";
 
 type FeaturedItem = {
   id: string;
@@ -37,7 +38,7 @@ type RawMenuItem = {
 const asText = (value: unknown): string => String(value ?? "").trim();
 
 const imagePath = (value: string): string => {
-  if (!value) return "/assets/logo1.png";
+  if (!value) return "/assets/logo.jpg";
   if (value.startsWith("http")) return value;
   return `/${value.replace(/^\/+/, "")}`;
 };
@@ -298,9 +299,9 @@ export function HomeFeaturedStrip() {
             }}
           >
             <div className="home-featured-media">
-              <Image
-                src={slide.item.image}
-                alt={slide.item.name}
+                          <Image
+                            src={getMenuImageSrc(slide.item.image, "featured")}
+                            alt={slide.item.name}
                 fill
                 sizes="(max-width: 760px) 84vw, 320px"
                 className="home-featured-media-image"

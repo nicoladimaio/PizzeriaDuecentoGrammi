@@ -13,8 +13,7 @@ service cloud.firestore {
     }
 
     match /reservation_status/{code} {
-      allow get: if true;
-      allow list: if isAdmin();
+      allow read: if isAdmin();
       allow create, update, delete: if isAdmin();
     }
 

@@ -1,6 +1,7 @@
 import Image from "next/image";
 import { AllergenBadge } from "@/components/allergens/allergen-badge";
 import { SpiceLevelIndicator } from "@/components/spice-level-indicator";
+import { getMenuImageSrc } from "@/lib/menu-image-cdn";
 import type { MenuProduct } from "@/types/menu-app";
 
 type MenuProductCardProps = {
@@ -30,22 +31,31 @@ export function MenuProductCard({
   labels,
   onOpen,
 }: MenuProductCardProps) {
+  const baseImageSrc = product.image || product.imageThumb || "/assets/logo.jpg";
+  const cardImageSrc = getMenuImageSrc(baseImageSrc, "card", product.imageFit);
+
   return (
     <article
       className="qr-product-card"
       onClick={() => {
-        warmImage(product.image);
+        warmImage(getMenuImageSrc(baseImageSrc, "detail", product.imageFit));
         onOpen(product);
       }}
-      onMouseEnter={() => warmImage(product.image)}
-      onTouchStart={() => warmImage(product.image)}
-      onFocus={() => warmImage(product.image)}
+      onMouseEnter={() =>
+        warmImage(getMenuImageSrc(baseImageSrc, "detail", product.imageFit))
+      }
+      onTouchStart={() =>
+        warmImage(getMenuImageSrc(baseImageSrc, "detail", product.imageFit))
+      }
+      onFocus={() =>
+        warmImage(getMenuImageSrc(baseImageSrc, "detail", product.imageFit))
+      }
       role="button"
       tabIndex={0}
       onKeyDown={(event) => {
         if (event.key === "Enter" || event.key === " ") {
           event.preventDefault();
-          warmImage(product.image);
+          warmImage(getMenuImageSrc(baseImageSrc, "detail", product.imageFit));
           onOpen(product);
         }
       }}
@@ -57,12 +67,16 @@ export function MenuProductCard({
           </span>
         ) : null}
         <Image
-          src={product.imageThumb || product.image}
+          src={cardImageSrc}
           alt={product.name}
           fill
           sizes="(max-width: 760px) 42vw, 240px"
-          className="qr-product-image"
-          quality={68}
+          className={
+            product.imageFit === "contain"
+              ? "qr-product-image qr-product-image-contain"
+              : "qr-product-image"
+          }
+          quality={90}
         />
       </div>
       <div className="qr-product-body">

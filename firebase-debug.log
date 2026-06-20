@@ -1,0 +1,48 @@
+[debug] [2026-06-20T16:56:08.853Z] ----------------------------------------------------------------------
+[debug] [2026-06-20T16:56:08.858Z] Command:       C:\Program Files\nodejs\node.exe C:\Users\nicod\AppData\Roaming\npm\node_modules\firebase-tools\lib\bin\firebase.js deploy --only firestore:rules --project duecentogrammi-2f6f1 --non-interactive
+[debug] [2026-06-20T16:56:08.859Z] CLI Version:   11.0.1
+[debug] [2026-06-20T16:56:08.859Z] Platform:      win32
+[debug] [2026-06-20T16:56:08.859Z] Node Version:  v22.21.0
+[debug] [2026-06-20T16:56:08.860Z] Time:          Sat Jun 20 2026 18:56:08 GMT+0200 (Ora legale dell’Europa centrale)
+[debug] [2026-06-20T16:56:08.860Z] ----------------------------------------------------------------------
+[debug] 
+[debug] [2026-06-20T16:56:08.868Z] >>> [apiv2][query] GET https://firebase-public.firebaseio.com/cli.json [none]
+[debug] [2026-06-20T16:56:09.081Z] > command requires scopes: ["email","openid","https://www.googleapis.com/auth/cloudplatformprojects.readonly","https://www.googleapis.com/auth/firebase","https://www.googleapis.com/auth/cloud-platform"]
+[debug] [2026-06-20T16:56:09.082Z] > authorizing via signed-in user (nico95dimaio@gmail.com)
+[debug] [2026-06-20T16:56:09.083Z] [iam] checking project duecentogrammi-2f6f1 for permissions ["datastore.indexes.create","datastore.indexes.delete","datastore.indexes.list","datastore.indexes.update","firebase.projects.get"]
+[debug] [2026-06-20T16:56:09.085Z] > refreshing access token with scopes: []
+[debug] [2026-06-20T16:56:09.087Z] >>> HTTP REQUEST POST https://www.googleapis.com/oauth2/v3/token  
+ <request body omitted>
+[debug] [2026-06-20T16:56:09.320Z] <<< HTTP RESPONSE 200 {"date":"Sat, 20 Jun 2026 16:56:10 GMT","pragma":"no-cache","cache-control":"no-cache, no-store, max-age=0, must-revalidate","expires":"Mon, 01 Jan 1990 00:00:00 GMT","content-type":"application/json; charset=utf-8","vary":"X-Origin, Referer, Origin,Accept-Encoding","server":"scaffolding on HTTPServer2","x-xss-protection":"0","x-frame-options":"SAMEORIGIN","x-content-type-options":"nosniff","alt-svc":"h3=\":443\"; ma=2592000,h3-29=\":443\"; ma=2592000","accept-ranges":"none","transfer-encoding":"chunked"}
+[debug] [2026-06-20T16:56:09.371Z] >>> [apiv2][query] POST https://cloudresourcemanager.googleapis.com/v1/projects/duecentogrammi-2f6f1:testIamPermissions [none]
+[debug] [2026-06-20T16:56:09.372Z] >>> [apiv2][body] POST https://cloudresourcemanager.googleapis.com/v1/projects/duecentogrammi-2f6f1:testIamPermissions {"permissions":["datastore.indexes.create","datastore.indexes.delete","datastore.indexes.list","datastore.indexes.update","firebase.projects.get"]}
+[debug] [2026-06-20T16:56:09.550Z] <<< [apiv2][status] GET https://firebase-public.firebaseio.com/cli.json 200
+[debug] [2026-06-20T16:56:09.551Z] <<< [apiv2][body] GET https://firebase-public.firebaseio.com/cli.json {"cloudBuildErrorAfter":1594252800000,"cloudBuildWarnAfter":1590019200000,"defaultNode10After":1594252800000,"minVersion":"3.0.5","node8DeploysDisabledAfter":1613390400000,"node8RuntimeDisabledAfter":1615809600000,"node8WarnAfter":1600128000000}
+[debug] [2026-06-20T16:56:10.363Z] <<< [apiv2][status] POST https://cloudresourcemanager.googleapis.com/v1/projects/duecentogrammi-2f6f1:testIamPermissions 200
+[debug] [2026-06-20T16:56:10.364Z] <<< [apiv2][body] POST https://cloudresourcemanager.googleapis.com/v1/projects/duecentogrammi-2f6f1:testIamPermissions {"permissions":["datastore.indexes.create","datastore.indexes.delete","datastore.indexes.list","datastore.indexes.update","firebase.projects.get"]}
+[info] 
+[info] === Deploying to 'duecentogrammi-2f6f1'...
+[info] 
+[info] i  deploying firestore 
+[info] i  cloud.firestore: checking firestore.rules for compilation errors... 
+[debug] [2026-06-20T16:56:10.393Z] >>> [apiv2][query] POST https://firebaserules.googleapis.com/v1/projects/duecentogrammi-2f6f1:test [none]
+[debug] [2026-06-20T16:56:10.395Z] >>> [apiv2][body] POST https://firebaserules.googleapis.com/v1/projects/duecentogrammi-2f6f1:test [omitted]
+[debug] [2026-06-20T16:56:10.849Z] <<< [apiv2][status] POST https://firebaserules.googleapis.com/v1/projects/duecentogrammi-2f6f1:test 200
+[debug] [2026-06-20T16:56:10.850Z] <<< [apiv2][body] POST https://firebaserules.googleapis.com/v1/projects/duecentogrammi-2f6f1:test {}
+[info] +  cloud.firestore: rules file firestore.rules compiled successfully 
+[debug] [2026-06-20T16:56:10.858Z] >>> [apiv2][query] GET https://firebaserules.googleapis.com/v1/projects/duecentogrammi-2f6f1/releases pageSize=10&pageToken=
+[debug] [2026-06-20T16:56:11.093Z] <<< [apiv2][status] GET https://firebaserules.googleapis.com/v1/projects/duecentogrammi-2f6f1/releases 200
+[debug] [2026-06-20T16:56:11.094Z] <<< [apiv2][body] GET https://firebaserules.googleapis.com/v1/projects/duecentogrammi-2f6f1/releases {"releases":[{"name":"projects/duecentogrammi-2f6f1/releases/cloud.firestore","rulesetName":"projects/duecentogrammi-2f6f1/rulesets/12eaf8bb-6f08-4644-9e45-6188da9d4672","createTime":"2025-05-23T12:05:05.441924Z","updateTime":"2026-05-28T18:14:18.491273Z"},{"name":"projects/duecentogrammi-2f6f1/releases/firebase.storage/duecentogrammi-2f6f1.firebasestorage.app","rulesetName":"projects/duecentogrammi-2f6f1/rulesets/f83c7900-0999-45b3-bd37-c36fb11bd512","createTime":"2025-05-23T14:07:10.044581Z","updateTime":"2026-05-14T18:43:34.638707Z"}]}
+[debug] [2026-06-20T16:56:11.099Z] >>> [apiv2][query] GET https://firebaserules.googleapis.com/v1/projects/duecentogrammi-2f6f1/rulesets/12eaf8bb-6f08-4644-9e45-6188da9d4672 [none]
+[debug] [2026-06-20T16:56:12.286Z] <<< [apiv2][status] GET https://firebaserules.googleapis.com/v1/projects/duecentogrammi-2f6f1/rulesets/12eaf8bb-6f08-4644-9e45-6188da9d4672 200
+[debug] [2026-06-20T16:56:12.287Z] <<< [apiv2][body] GET https://firebaserules.googleapis.com/v1/projects/duecentogrammi-2f6f1/rulesets/12eaf8bb-6f08-4644-9e45-6188da9d4672 [omitted]
+[info] i  firestore: uploading rules firestore.rules... 
+[debug] [2026-06-20T16:56:12.295Z] >>> [apiv2][query] POST https://firebaserules.googleapis.com/v1/projects/duecentogrammi-2f6f1/rulesets [none]
+[debug] [2026-06-20T16:56:12.296Z] >>> [apiv2][body] POST https://firebaserules.googleapis.com/v1/projects/duecentogrammi-2f6f1/rulesets [omitted]
+[debug] [2026-06-20T16:56:12.671Z] <<< [apiv2][status] POST https://firebaserules.googleapis.com/v1/projects/duecentogrammi-2f6f1/rulesets 200
+[debug] [2026-06-20T16:56:12.672Z] <<< [apiv2][body] POST https://firebaserules.googleapis.com/v1/projects/duecentogrammi-2f6f1/rulesets {"name":"projects/duecentogrammi-2f6f1/rulesets/2a84b90b-9fc9-4f9c-a7a3-29f80838ef8c","source":{"files":[{"content":"rules_version = '2';\r\n\r\nservice cloud.firestore {\r\n  match /databases/{database}/documents {\r\n    function isAdmin() {\r\n      return request.auth != null\r\n        && request.auth.token.email != null\r\n        && request.auth.token.email in [\"prova@prova.it\", \"mail@duecentogrammi.it\"];\r\n    }\r\n\r\n    match /reservations/{reservationId} {\r\n      allow read, create, update, delete: if isAdmin();\r\n    }\r\n\r\n    match /reservation_status/{code} {\n      allow read: if isAdmin();\n      allow create, update, delete: if isAdmin();\n    }\n\r\n    match /menu_items/{itemId} {\r\n      allow read: if true;\r\n      allow create, update, delete: if isAdmin();\r\n    }\r\n\r\n    match /menu_categories/{categoryId} {\r\n      allow read: if true;\r\n      allow create, update, delete: if isAdmin();\r\n    }\r\n\r\n    match /menu_ingredients/{ingredientId} {\r\n      allow read: if true;\r\n      allow create, update, delete: if isAdmin();\r\n    }\r\n  }\r\n}\r\n","name":"firestore.rules"}]},"createTime":"2026-06-20T16:56:13.559967Z","metadata":{"services":["cloud.firestore"]}}
+[debug] [2026-06-20T16:56:12.673Z] [rules] created ruleset projects/duecentogrammi-2f6f1/rulesets/2a84b90b-9fc9-4f9c-a7a3-29f80838ef8c
+[debug] [2026-06-20T16:56:12.675Z] [rules] releasing cloud.firestore with ruleset projects/duecentogrammi-2f6f1/rulesets/2a84b90b-9fc9-4f9c-a7a3-29f80838ef8c
+[debug] [2026-06-20T16:56:12.678Z] >>> [apiv2][query] PATCH https://firebaserules.googleapis.com/v1/projects/duecentogrammi-2f6f1/releases/cloud.firestore [none]
+[debug] [2026-06-20T16:56:12.679Z] >>> [apiv2][body] PATCH https://firebaserules.googleapis.com/v1/projects/duecentogrammi-2f6f1/releases/cloud.firestore {"release":{"name":"projects/duecentogrammi-2f6f1/releases/cloud.firestore","rulesetName":"projects/duecentogrammi-2f6f1/rulesets/2a84b90b-9fc9-4f9c-a7a3-29f80838ef8c"}}
+[debug] [2026-06-20T16:56:13.546Z] <<< [apiv2][status] PATCH https://firebaserules.googleapis.com/v1/projects/duecentogrammi-2f6f1/releases/cloud.firestore 200

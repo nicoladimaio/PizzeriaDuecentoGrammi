@@ -75,11 +75,13 @@ Valori da inserire:
 
 - Aggiorna la whitelist admin in [firestore.rules](firestore.rules) sostituendo `admin@example.com`.
 - Verifica e pubblica le regole Firestore con Firebase CLI.
+- Imposta `RESERVATION_ACTION_SECRET` in produzione per firmare i link di conferma/rifiuto proposta.
 - Non indicizzare le route admin (gia configurato via metadata robots).
 
 ## Ottimizzazione immagini menu
 
 - Nuovi upload da admin: conversione automatica in WebP + thumbnail.
+- CDN immagini opzionale: imposta `NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME` in `.env.local` per servire card, dettaglio menu e piatti in evidenza tramite Cloudinary fetch CDN.
 - Migrazione immagini gia presenti:
 
 ```bash
