@@ -29,6 +29,8 @@ export const metadata: Metadata = {
   title: "Duecento Grammi",
   description:
     "Pizzeria Duecento Grammi - prenotazioni, menu e atmosfera napoletana.",
+  applicationName: "Duecento Grammi",
+  manifest: "/site.webmanifest",
   openGraph: {
     title: "Duecento Grammi",
     description:
@@ -54,9 +56,20 @@ export const metadata: Metadata = {
     images: [DEFAULT_OG_IMAGE],
   },
   icons: {
-    icon: "/assets/logo1_tab_circle.png",
-    shortcut: "/assets/logo1_tab_circle.png",
-    apple: "/assets/logo1_tab_circle.png",
+    icon: [
+      { url: "/icon.png", sizes: "512x512", type: "image/png" },
+      { url: "/favicon-32x32.png", sizes: "32x32", type: "image/png" },
+      { url: "/favicon-16x16.png", sizes: "16x16", type: "image/png" },
+      { url: "/assets/logo1_tab_premium.svg", type: "image/svg+xml" },
+    ],
+    shortcut: ["/favicon-32x32.png"],
+    apple: [{ url: "/apple-icon.png", sizes: "512x512", type: "image/png" }],
+  },
+  other: {
+    "theme-color": "#1f3440",
+    "mobile-web-app-capable": "yes",
+    "apple-mobile-web-app-capable": "yes",
+    "apple-mobile-web-app-title": "Duecento Grammi",
   },
 };
 
