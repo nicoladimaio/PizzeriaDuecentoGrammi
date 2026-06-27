@@ -15,7 +15,6 @@ const iconForCategory = (name: string): string => {
   if (normalized.includes("pizza")) return "🍕";
   if (normalized.includes("fritt")) return "🍟";
   if (normalized.includes("bev")) return "🥤";
-  if (normalized.includes("dolc")) return "🍰";
   return "";
 };
 

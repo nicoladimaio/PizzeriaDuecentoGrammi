@@ -90,6 +90,8 @@ const defaultSettings: ReservationSettings = {
   specialOpenings: [],
 };
 
+const TOTAL_SEATS_FALLBACK = 80;
+
 const todayKey = () => {
   const now = new Date();
   const year = now.getFullYear();
@@ -373,7 +375,7 @@ export function AdminReservationsPanel({
   const [holidayMonth, setHolidayMonth] = useState(monthKey(new Date()));
   const [reservationsView, setReservationsView] = useState<
     "open" | "confirmed"
-  >("open");
+  >("confirmed");
   const [confirmedSelectedDate, setConfirmedSelectedDate] = useState("");
   const [decisionDialogMode, setDecisionDialogMode] =
     useState<DecisionDialogMode | null>(null);
@@ -400,6 +402,7 @@ export function AdminReservationsPanel({
       guests: "2",
       notes: "",
     });
+  const [currentTime, setCurrentTime] = useState(() => new Date());
 
   useEffect(() => {
     const db = getClientDb();
@@ -421,6 +424,14 @@ export function AdminReservationsPanel({
     );
 
     return () => unsubscribe();
+  }, []);
+
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      setCurrentTime(new Date());
+    }, 60000);
+
+    return () => window.clearInterval(timer);
   }, []);
 
   useEffect(() => {
@@ -569,14 +580,18 @@ export function AdminReservationsPanel({
   }, []);
 
   const confirmedDateSummaries = useMemo(() => {
-    return bookingWindowDayKeys.map((dateValue) => {
-      const rowsForDay = confirmedRows.filter((row) => row.date === dateValue);
-      return {
-        date: dateValue,
-        reservationsCount: rowsForDay.length,
-        isSelectable: rowsForDay.length > 0,
-      };
-    }).filter((day) => isBookingOpenOnDateKey(day.date, settings));
+    return bookingWindowDayKeys
+      .map((dateValue) => {
+        const rowsForDay = confirmedRows.filter(
+          (row) => row.date === dateValue,
+        );
+        return {
+          date: dateValue,
+          reservationsCount: rowsForDay.length,
+          isSelectable: rowsForDay.length > 0,
+        };
+      })
+      .filter((day) => isBookingOpenOnDateKey(day.date, settings));
   }, [bookingWindowDayKeys, confirmedRows, settings]);
 
   const confirmedRowsForSelectedDate = useMemo(() => {
@@ -604,6 +619,62 @@ export function AdminReservationsPanel({
       }));
   }, [confirmedRowsForSelectedDate]);
 
+  const confirmedSelectedSummary = useMemo(() => {
+    const reservationsCount = confirmedRowsForSelectedDate.length;
+    const guestsCount = confirmedRowsForSelectedDate.reduce(
+      (sum, row) => sum + (Number.isFinite(row.guests) ? row.guests : 0),
+      0,
+    );
+    const totalSeats = Math.max(
+      deriveTotalCapacity(settings),
+      TOTAL_SEATS_FALLBACK,
+    );
+    const availableSeats = Math.max(totalSeats - guestsCount, 0);
+
+    return {
+      reservationsCount,
+      guestsCount,
+      totalSeats,
+      availableSeats,
+    };
+  }, [confirmedRowsForSelectedDate, settings]);
+
+  const confirmedSelectedIndex = useMemo(
+    () =>
+      confirmedDateSummaries.findIndex(
+        (day) => day.date === confirmedSelectedDate,
+      ),
+    [confirmedDateSummaries, confirmedSelectedDate],
+  );
+
+  const manualReservationMaxDate = useMemo(
+    () => dateKeyDaysAhead(30),
+    [],
+  );
+
+  const highlightedCurrentTimeSlot = useMemo(() => {
+    const selectedDate = confirmedSelectedDate || bookingWindowDayKeys[0];
+    if (!selectedDate || selectedDate !== todayKey()) return "";
+
+    const nowMinutes =
+      currentTime.getHours() * 60 + currentTime.getMinutes();
+    const slotMinutes = getSlotMinutesForDateKey(selectedDate, settings);
+    const threshold = Math.max(15, Math.round(slotMinutes / 2));
+
+    const matchingGroup = confirmedRowsByTime.find((group) => {
+      const slotTime = parseMinutes(group.time);
+      return Number.isFinite(slotTime) && Math.abs(slotTime - nowMinutes) <= threshold;
+    });
+
+    return matchingGroup?.time ?? "";
+  }, [
+    bookingWindowDayKeys,
+    confirmedRowsByTime,
+    confirmedSelectedDate,
+    currentTime,
+    settings,
+  ]);
+
   const currentSettingsSnapshot = useMemo(
     () =>
       buildSettingsSnapshot(
@@ -621,17 +692,13 @@ export function AdminReservationsPanel({
         savedInsideCapacityDraft,
         savedOutsideCapacityDraft,
       ),
-    [
-      savedInsideCapacityDraft,
-      savedOutsideCapacityDraft,
-      savedSettings,
-    ],
+    [savedInsideCapacityDraft, savedOutsideCapacityDraft, savedSettings],
   );
 
   const hasUnsavedSettingsChanges = Boolean(
     settingsOnly &&
-      !settingsLoading &&
-      currentSettingsSnapshot !== savedSettingsSnapshot,
+    !settingsLoading &&
+    currentSettingsSnapshot !== savedSettingsSnapshot,
   );
 
   const manualTimeOptions = useMemo(() => {
@@ -1387,10 +1454,6 @@ export function AdminReservationsPanel({
     <article className="admin-reservations-layout">
       {!settingsOnly ? (
         <section className="card-block admin-reservations-card">
-          <div className="admin-reservations-head">
-            <h3>Prenotazioni</h3>
-          </div>
-
           {error ? <p className="error-text">{error}</p> : null}
 
           <div className="admin-reservation-tabs">
@@ -1473,189 +1536,194 @@ export function AdminReservationsPanel({
           {reservationsView === "confirmed" ? (
             <div className="admin-reservation-group admin-confirmed-group">
               <>
-                  <div className="admin-confirmed-day-nav">
-                    <button
-                      type="button"
-                      className="admin-confirmed-day-btn"
-                      disabled={
-                        confirmedDateSummaries.findIndex(
-                          (day) => day.date === confirmedSelectedDate,
-                        ) <= 0
-                      }
-                      onClick={() => {
-                        const idx = confirmedDateSummaries.findIndex(
-                          (day) => day.date === confirmedSelectedDate,
-                        );
-                        if (idx > 0) {
-                          const previousDay = confirmedDateSummaries
-                            .slice(0, idx)
-                            .reverse()
-                            .find((day) => day.isSelectable);
-                          if (previousDay) {
-                            setConfirmedSelectedDate(previousDay.date);
-                          }
+                <div className="admin-confirmed-day-hero">
+                  <button
+                    type="button"
+                    className="admin-confirmed-day-btn"
+                    disabled={confirmedSelectedIndex <= 0}
+                    onClick={() => {
+                      const idx = confirmedSelectedIndex;
+                      if (idx > 0) {
+                        const previousDay = confirmedDateSummaries
+                          .slice(0, idx)
+                          .reverse()
+                          .find((day) => day.isSelectable);
+                        if (previousDay) {
+                          setConfirmedSelectedDate(previousDay.date);
                         }
-                      }}
-                    >
-                      ←
-                    </button>
-                    <div className="admin-confirmed-day-label">
-                      <strong>
-                        {parseDateKey(
-                          confirmedSelectedDate || bookingWindowDayKeys[0],
-                        ).toLocaleDateString("it-IT", {
-                          weekday: "long",
-                          day: "2-digit",
-                          month: "long",
-                          year: "numeric",
-                        })}
-                      </strong>
-                      <small>
-                        {(
-                          confirmedDateSummaries.find(
-                            (day) =>
-                              day.date ===
-                              (confirmedSelectedDate || bookingWindowDayKeys[0]),
-                          )?.reservationsCount ?? 0
-                        )}{" "}
-                        prenotazioni
-                      </small>
-                    </div>
-                    <button
-                      type="button"
-                      className="admin-confirmed-day-btn"
-                      disabled={
-                        confirmedDateSummaries.findIndex(
-                          (day) => day.date === confirmedSelectedDate,
-                        ) >=
-                        confirmedDateSummaries.length - 1
                       }
-                      onClick={() => {
-                        const idx = confirmedDateSummaries.findIndex(
-                          (day) => day.date === confirmedSelectedDate,
-                        );
-                        if (idx >= 0 && idx < confirmedDateSummaries.length - 1) {
-                          const nextDay = confirmedDateSummaries
-                            .slice(idx + 1)
-                            .find((day) => day.isSelectable);
-                          if (nextDay) {
-                            setConfirmedSelectedDate(nextDay.date);
-                          }
+                    }}
+                  >
+                    ←
+                  </button>
+                  <div className="admin-confirmed-day-label">
+                    <strong>
+                      {parseDateKey(
+                        confirmedSelectedDate || bookingWindowDayKeys[0],
+                      ).toLocaleDateString("it-IT", {
+                        weekday: "long",
+                        day: "numeric",
+                        month: "long",
+                      })}
+                    </strong>
+                    <small className="admin-confirmed-day-summary">
+                      {`👥 ${confirmedSelectedSummary.guestsCount} coperti · 🍕 ${confirmedSelectedSummary.reservationsCount} ${
+                        confirmedSelectedSummary.reservationsCount === 1
+                          ? "prenotazione"
+                          : "prenotazioni"
+                      } · 🪑 ${confirmedSelectedSummary.availableSeats} posti liberi`}
+                    </small>
+                  </div>
+                  <button
+                    type="button"
+                    className="admin-confirmed-day-btn"
+                    disabled={
+                      confirmedSelectedIndex >=
+                      confirmedDateSummaries.length - 1
+                    }
+                    onClick={() => {
+                      const idx = confirmedSelectedIndex;
+                      if (idx >= 0 && idx < confirmedDateSummaries.length - 1) {
+                        const nextDay = confirmedDateSummaries
+                          .slice(idx + 1)
+                          .find((day) => day.isSelectable);
+                        if (nextDay) {
+                          setConfirmedSelectedDate(nextDay.date);
                         }
-                      }}
-                    >
-                      →
-                    </button>
-                  </div>
+                      }
+                    }}
+                  >
+                    →
+                  </button>
+                </div>
 
-                  <div className="admin-confirmed-day-strip-wrap">
-                    <div
-                      className="admin-confirmed-day-strip"
-                      role="tablist"
-                      aria-label="Date prenotazioni confermate"
-                    >
-                      {confirmedDateSummaries.map((day) => (
-                        <button
-                          key={day.date}
-                          type="button"
-                          role="tab"
-                          aria-selected={confirmedSelectedDate === day.date}
-                          disabled={!day.isSelectable}
-                          className={
-                            confirmedSelectedDate === day.date
-                              ? "admin-confirmed-day-pill active"
-                              : "admin-confirmed-day-pill"
-                          }
-                          onClick={() => {
-                            if (!day.isSelectable) return;
-                            setConfirmedSelectedDate(day.date);
-                          }}
-                        >
-                          <strong>{formatDateShort(day.date)}</strong>
-                          <small>{day.reservationsCount} prenotazioni</small>
-                        </button>
-                      ))}
-                    </div>
+                <div className="admin-confirmed-day-strip-wrap">
+                  <div
+                    className="admin-confirmed-day-strip"
+                    role="tablist"
+                    aria-label="Date prenotazioni confermate"
+                  >
+                    {confirmedDateSummaries.map((day) => (
+                      <button
+                        key={day.date}
+                        type="button"
+                        role="tab"
+                        aria-selected={confirmedSelectedDate === day.date}
+                        disabled={!day.isSelectable}
+                        className={
+                          confirmedSelectedDate === day.date
+                            ? "admin-confirmed-day-pill active"
+                            : "admin-confirmed-day-pill"
+                        }
+                        onClick={() => {
+                          if (!day.isSelectable) return;
+                          setConfirmedSelectedDate(day.date);
+                        }}
+                      >
+                        <span className="admin-confirmed-day-pill-weekday">
+                          {parseDateKey(day.date).toLocaleDateString("it-IT", {
+                            weekday: "short",
+                          })}
+                        </span>
+                        <small>
+                          {`${parseDateKey(day.date).getDate()} ${parseDateKey(
+                            day.date,
+                          )
+                            .toLocaleDateString("it-IT", {
+                              month: "short",
+                            })
+                            .replace(".", "")}`}
+                        </small>
+                      </button>
+                    ))}
                   </div>
+                </div>
 
-                  {confirmedRowsByTime.length === 0 ? (
-                    <p className="section-subtitle">
-                      Nessuna prenotazione confermata nel giorno selezionato.
-                    </p>
-                  ) : (
-                    <div className="admin-confirmed-time-groups">
-                      {confirmedRowsByTime.map((group) => (
-                        <div key={group.time} className="admin-time-slot-block">
-                          <h5>{group.time}</h5>
-                          <div className="admin-reservation-list admin-reservation-list-compact-grid">
-                            {group.rows.map((row) => (
-                              <div
-                                key={row.id}
-                                role="button"
-                                tabIndex={0}
+                {confirmedRowsByTime.length === 0 ? (
+                  <p className="section-subtitle">
+                    Nessuna prenotazione confermata nel giorno selezionato.
+                  </p>
+                ) : (
+                  <div className="admin-confirmed-time-groups">
+                    {confirmedRowsByTime.map((group) => (
+                      <div
+                        key={group.time}
+                        className={
+                          highlightedCurrentTimeSlot === group.time
+                            ? "admin-time-slot-block current"
+                            : "admin-time-slot-block"
+                        }
+                      >
+                        <h5>{group.time}</h5>
+                        <div className="admin-reservation-list admin-reservation-list-compact-grid">
+                          {group.rows.map((row) => (
+                            <div
+                              key={row.id}
+                              role="button"
+                              tabIndex={0}
+                              className={
+                                row.arrived
+                                  ? "admin-reservation-item admin-reservation-item-compact admin-reservation-item-arrived"
+                                  : "admin-reservation-item admin-reservation-item-compact"
+                              }
+                              onClick={() => setSelectedCode(row.code)}
+                              onKeyDown={(event) => {
+                                if (
+                                  event.key === "Enter" ||
+                                  event.key === " "
+                                ) {
+                                  event.preventDefault();
+                                  setSelectedCode(row.code);
+                                }
+                              }}
+                            >
+                              <span className="admin-reservation-main">
+                                <strong>{row.customerName}</strong>
+                                <small>
+                                  {row.guests} persone ·{" "}
+                                  {row.diningArea === "outside"
+                                    ? "Sala esterna"
+                                    : "Sala interna"}
+                                </small>
+                                {row.arrived ? (
+                                  <span className="admin-arrived-badge">
+                                    Arrivato
+                                  </span>
+                                ) : null}
+                              </span>
+                              <button
+                                type="button"
                                 className={
                                   row.arrived
-                                    ? "admin-reservation-item admin-reservation-item-compact admin-reservation-item-arrived"
-                                    : "admin-reservation-item admin-reservation-item-compact"
+                                    ? "admin-presence-toggle active"
+                                    : "admin-presence-toggle"
                                 }
-                                onClick={() => setSelectedCode(row.code)}
-                                onKeyDown={(event) => {
-                                  if (
-                                    event.key === "Enter" ||
-                                    event.key === " "
-                                  ) {
-                                    event.preventDefault();
-                                    setSelectedCode(row.code);
-                                  }
+                                disabled={arrivedPendingCode === row.code}
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  void toggleReservationArrived(row);
                                 }}
+                                title={
+                                  row.arrived
+                                    ? "Segna cliente non presente"
+                                    : "Segna cliente presente"
+                                }
+                                aria-label={
+                                  row.arrived
+                                    ? "Segna cliente non presente"
+                                    : "Segna cliente presente"
+                                }
                               >
-                                <span className="admin-reservation-main">
-                                  <strong>{row.customerName}</strong>
-                                  <small>
-                                    {row.guests} persone ·{" "}
-                                    {row.diningArea === "outside"
-                                      ? "Sala esterna"
-                                      : "Sala interna"}
-                                  </small>
-                                  {row.arrived ? (
-                                    <span className="admin-arrived-badge">
-                                      Arrivato
-                                    </span>
-                                  ) : null}
-                                </span>
-                                <button
-                                  type="button"
-                                  className={
-                                    row.arrived
-                                      ? "admin-presence-toggle active"
-                                      : "admin-presence-toggle"
-                                  }
-                                  disabled={arrivedPendingCode === row.code}
-                                  onClick={(event) => {
-                                    event.stopPropagation();
-                                    void toggleReservationArrived(row);
-                                  }}
-                                  title={
-                                    row.arrived
-                                      ? "Segna cliente non presente"
-                                      : "Segna cliente presente"
-                                  }
-                                  aria-label={
-                                    row.arrived
-                                      ? "Segna cliente non presente"
-                                      : "Segna cliente presente"
-                                  }
-                                >
-                                  {row.arrived ? "✓" : "✕"}
-                                </button>
-                              </div>
-                            ))}
-                          </div>
+                                {row.arrived ? "✓" : "✕"}
+                              </button>
+                            </div>
+                          ))}
                         </div>
-                      ))}
-                    </div>
-                  )}
-                </>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </>
             </div>
           ) : null}
         </section>
@@ -2380,6 +2448,7 @@ export function AdminReservationsPanel({
                     type="date"
                     value={manualReservationForm.date}
                     min={todayKey()}
+                    max={manualReservationMaxDate}
                     onChange={(event) =>
                       setManualReservationForm((prev) => ({
                         ...prev,

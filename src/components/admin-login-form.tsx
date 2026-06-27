@@ -1,8 +1,8 @@
 "use client";
 
-import { FormEvent, useState } from "react";
+import { FormEvent, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { signInWithEmailAndPassword } from "firebase/auth";
+import { onAuthStateChanged, signInWithEmailAndPassword } from "firebase/auth";
 import { getClientAuth } from "@/lib/firebase";
 import { isAllowedAdminEmail } from "@/lib/auth";
 
@@ -12,8 +12,21 @@ export function AdminLoginForm() {
   const [error, setError] = useState<string | null>(null);
   const [showPassword, setShowPassword] = useState(false);
 
+  useEffect(() => {
+    const auth = getClientAuth();
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      if (user && isAllowedAdminEmail(user.email)) {
+        router.replace("/riservato/dashboard");
+      }
+    });
+
+    return () => unsubscribe();
+  }, [router]);
+
   const onSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    if (loading) return;
+
     setError(null);
     setLoading(true);
 
@@ -33,13 +46,14 @@ export function AdminLoginForm() {
       if (!isAllowedAdminEmail(currentEmail)) {
         await auth.signOut();
         setError("Accesso negato.");
+        setLoading(false);
         return;
       }
 
-      router.push("/riservato/dashboard");
+      router.replace("/riservato/dashboard");
+      router.refresh();
     } catch {
       setError("Credenziali non valide.");
-    } finally {
       setLoading(false);
     }
   };
@@ -76,6 +90,19 @@ export function AdminLoginForm() {
         {loading ? "Accesso..." : "Accedi"}
       </button>
       {error ? <p className="error-text">{error}</p> : null}
+
+      {loading ? (
+        <div className="booking-loader-overlay" role="status" aria-live="polite">
+          <div className="booking-loader-card admin-login-loader-card">
+            <img
+              src="/assets/loader.gif"
+              alt="Caricamento"
+              className="app-loader-gif"
+            />
+            <p>Verifica credenziali in corso...</p>
+          </div>
+        </div>
+      ) : null}
     </form>
   );
 }

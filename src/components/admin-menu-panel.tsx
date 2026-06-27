@@ -284,6 +284,19 @@ const normalizePrice = (value: unknown): number | null => {
   return Number(parsed.toFixed(2));
 };
 
+const formatPriceDraft = (value: string): string => {
+  const sanitized = value.replace(/[^\d.,]/g, "").replace(/\./g, ",");
+  const [integerPartRaw = "", ...decimalsRaw] = sanitized.split(",");
+  const integerPart = integerPartRaw.replace(/^0+(?=\d)/, "");
+  const decimals = decimalsRaw.join("").slice(0, 2);
+
+  if (sanitized.includes(",")) {
+    return `${integerPart || "0"},${decimals}`;
+  }
+
+  return integerPart;
+};
+
 const parseSpiceLevel = (value: unknown): number => {
   if (typeof value === "boolean") return value ? 1 : 0;
 
@@ -641,6 +654,17 @@ export function AdminMenuPanel() {
   const [newImageFile, setNewImageFile] = useState<File | null>(null);
   const [newImageAnalysis, setNewImageAnalysis] =
     useState<ImageUploadAnalysis | null>(null);
+  const [newImageDragActive, setNewImageDragActive] = useState(false);
+  const [dishCreatedToast, setDishCreatedToast] = useState<string | null>(null);
+  const [newDishActiveTab, setNewDishActiveTab] = useState<
+    "identity" | "ingredients" | "image"
+  >("identity");
+  const [newDishIdentityOpen, setNewDishIdentityOpen] = useState(true);
+  const [newDishIngredientsOpen, setNewDishIngredientsOpen] = useState(false);
+  const [newDishImageOpen, setNewDishImageOpen] = useState(false);
+  const [showNewExtraAllergensPanel, setShowNewExtraAllergensPanel] =
+    useState(false);
+  const [showMobilePhotoPicker, setShowMobilePhotoPicker] = useState(false);
 
   const [editItemName, setEditItemName] = useState("");
   const [editItemDescription, setEditItemDescription] = useState("");
@@ -673,6 +697,8 @@ export function AdminMenuPanel() {
   const [quickIngredientTarget, setQuickIngredientTarget] = useState<
     "new" | "edit"
   >("new");
+  const newImageInputRef = useRef<HTMLInputElement | null>(null);
+  const newImageCameraInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
     if (!showReorderMode) return;
@@ -1070,6 +1096,8 @@ export function AdminMenuPanel() {
 
   const onNewImageChange = async (file: File | null) => {
     setNewImageFile(file);
+    setNewImageDragActive(false);
+    setShowMobilePhotoPicker(false);
     if (!file) {
       setNewImageAnalysis(null);
       return;
@@ -1136,6 +1164,22 @@ export function AdminMenuPanel() {
       clearItemToggleUndoTimer();
     };
   }, []);
+
+  useEffect(() => {
+    if (!dishCreatedToast) return;
+
+    const timer = window.setTimeout(() => {
+      setDishCreatedToast(null);
+    }, 2600);
+
+    return () => window.clearTimeout(timer);
+  }, [dishCreatedToast]);
+
+  useEffect(() => {
+    setNewDishIdentityOpen(newDishActiveTab === "identity");
+    setNewDishIngredientsOpen(newDishActiveTab === "ingredients");
+    setNewDishImageOpen(newDishActiveTab === "image");
+  }, [newDishActiveTab]);
 
   const uploadImage = async (
     file: File,
@@ -1458,7 +1502,7 @@ export function AdminMenuPanel() {
 
     if (prezzo === null) {
       setBusy(false);
-      setError("Prezzo non valido. Usa solo numeri, es. 8.50.");
+      setError("Prezzo non valido. Usa solo numeri, es. 8,50.");
       return;
     }
 
@@ -1519,8 +1563,10 @@ export function AdminMenuPanel() {
       setNewItemAllergens([]);
       setNewImageFile(null);
       setNewImageAnalysis(null);
+      setNewImageDragActive(false);
       setShowItemModal(false);
       setFeedback("Piatto aggiunto.");
+      setDishCreatedToast("Piatto aggiunto");
     } catch {
       setError("Errore durante il salvataggio del piatto.");
     } finally {
@@ -1904,6 +1950,9 @@ export function AdminMenuPanel() {
     if (activeCategory) {
       setNewItemCategory(activeCategory);
     }
+    setNewDishActiveTab("identity");
+    setShowNewExtraAllergensPanel(false);
+    setShowMobilePhotoPicker(false);
     setShowItemModal(true);
   };
 
@@ -1942,6 +1991,16 @@ export function AdminMenuPanel() {
               Chiudi
             </button>
           </div>
+        </div>
+      ) : null}
+
+      {dishCreatedToast ? (
+        <div
+          className="admin-action-toast admin-action-toast-success"
+          role="status"
+          aria-live="polite"
+        >
+          <p>{dishCreatedToast}</p>
         </div>
       ) : null}
 
@@ -2758,6 +2817,7 @@ export function AdminMenuPanel() {
                 type="button"
                 className="icon-btn"
                 onClick={() => {
+                  setShowMobilePhotoPicker(false);
                   setShowItemModal(false);
                 }}
                 aria-label="Chiudi popup piatti"
@@ -2767,6 +2827,62 @@ export function AdminMenuPanel() {
             </div>
 
             <form className="booking-form menu-item-form" onSubmit={createItem}>
+              <div className="menu-item-tabs" role="tablist" aria-label="Nuovo piatto">
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={newDishActiveTab === "identity"}
+                  className={
+                    newDishActiveTab === "identity"
+                      ? "menu-item-tab active"
+                      : "menu-item-tab"
+                  }
+                  onClick={() => setNewDishActiveTab("identity")}
+                >
+                  Identita del piatto
+                </button>
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={newDishActiveTab === "ingredients"}
+                  className={
+                    newDishActiveTab === "ingredients"
+                      ? "menu-item-tab active"
+                      : "menu-item-tab"
+                  }
+                  onClick={() => setNewDishActiveTab("ingredients")}
+                >
+                  Ingredienti e allergeni
+                </button>
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={newDishActiveTab === "image"}
+                  className={
+                    newDishActiveTab === "image"
+                      ? "menu-item-tab active"
+                      : "menu-item-tab"
+                  }
+                  onClick={() => setNewDishActiveTab("image")}
+                >
+                  Immagine
+                </button>
+              </div>
+              <button
+                type="button"
+                className="menu-item-section-break menu-item-section-toggle"
+                onClick={() => setNewDishIdentityOpen((prev) => !prev)}
+                aria-expanded={newDishIdentityOpen}
+              >
+                <div>
+                  <h4>Identita del piatto</h4>
+                </div>
+                <span className="menu-item-section-chevron" aria-hidden>
+                  ↓
+                </span>
+              </button>
+              {newDishIdentityOpen ? (
+                <div className="menu-item-tab-panel" role="tabpanel">
               <label>
                 Nome
                 <input
@@ -2792,19 +2908,23 @@ export function AdminMenuPanel() {
               </label>
 
               <div className="two-cols">
-                <label>
-                  Prezzo
-                  <input
-                    type="number"
-                    inputMode="decimal"
-                    min="0.01"
-                    step="0.01"
-                    value={newItemPrice}
-                    onChange={(event) => {
-                      setNewItemPrice(event.currentTarget.value);
-                    }}
-                    required
-                  />
+                <label className="menu-item-price-field">
+                  <span className="menu-item-price-label">Prezzo</span>
+                  <span className="menu-item-price-input-wrap">
+                    <span className="menu-item-price-currency">€</span>
+                    <input
+                      type="text"
+                      inputMode="decimal"
+                      placeholder="12,00"
+                      value={newItemPrice}
+                      onChange={(event) => {
+                        setNewItemPrice(
+                          formatPriceDraft(event.currentTarget.value),
+                        );
+                      }}
+                      required
+                    />
+                  </span>
                 </label>
                 <label>
                   Categoria
@@ -2824,7 +2944,35 @@ export function AdminMenuPanel() {
                 </label>
                 <label>
                   Piccantezza (opzionale)
+                  <div
+                    className="menu-item-spice-picker"
+                    role="group"
+                    aria-label="Piccantezza"
+                  >
+                    {[
+                      { value: 0, label: "No", icon: "○" },
+                      { value: 1, label: "Poco", icon: "🌶" },
+                      { value: 2, label: "Media", icon: "🌶🌶" },
+                      { value: 3, label: "Alta", icon: "🌶🌶🌶" },
+                    ].map((option) => (
+                      <button
+                        key={option.value}
+                        type="button"
+                        className={
+                          newItemSpiceLevel === option.value
+                            ? "menu-item-spice-btn active"
+                            : "menu-item-spice-btn"
+                        }
+                        onClick={() => setNewItemSpiceLevel(option.value)}
+                        aria-pressed={newItemSpiceLevel === option.value}
+                      >
+                        <span aria-hidden>{option.icon}</span>
+                        <span>{option.label}</span>
+                      </button>
+                    ))}
+                  </div>
                   <select
+                    className="menu-item-spice-select-hidden"
                     value={String(newItemSpiceLevel)}
                     onChange={(event) => {
                       setNewItemSpiceLevel(
@@ -2839,7 +2987,24 @@ export function AdminMenuPanel() {
                   </select>
                 </label>
               </div>
+                </div>
+              ) : null}
 
+              <button
+                type="button"
+                className="menu-item-section-break menu-item-section-toggle"
+                onClick={() => setNewDishIngredientsOpen((prev) => !prev)}
+                aria-expanded={newDishIngredientsOpen}
+              >
+                <div>
+                  <h4>Ingredienti e allergeni</h4>
+                </div>
+                <span className="menu-item-section-chevron" aria-hidden>
+                  ↓
+                </span>
+              </button>
+              {newDishIngredientsOpen ? (
+              <div className="menu-item-tab-panel" role="tabpanel">
               <label className="menu-item-field-ingredients">
                 Ingredienti
                 <div className="ingredient-picker-wrap">
@@ -3028,35 +3193,82 @@ export function AdminMenuPanel() {
                     </span>
                   )}
                 </div>
-                <div className="ingredient-selected-head">
-                  <strong>Allergeni extra</strong>
-                </div>
-                <div className="allergen-picker compact">
-                  {newSelectableExtraAllergens.map((allergen) => {
-                    const active = newItemAllergens.includes(allergen.key);
-                    return (
-                      <button
-                        key={allergen.key}
-                        type="button"
-                        className={
-                          active ? "allergen-toggle active" : "allergen-toggle"
-                        }
-                        onClick={() => {
-                          setNewItemAllergens((prev) =>
-                            toggleInArray(prev, allergen.key),
-                          );
-                        }}
-                      >
-                        <span className="allergen-mini-icon" aria-hidden>
-                          <AllergenIcon type={allergen.key} />
+                <div className="menu-item-allergen-panel">
+                  <button
+                    type="button"
+                    className="menu-item-allergen-trigger"
+                    onClick={() =>
+                      setShowNewExtraAllergensPanel((prev) => !prev)
+                    }
+                    aria-expanded={showNewExtraAllergensPanel}
+                  >
+                    <span>Allergeni extra</span>
+                    <strong>
+                      {newItemAllergens.length > 0
+                        ? `${newItemAllergens.length} selezionati`
+                        : "Nessuno"}
+                    </strong>
+                  </button>
+                  {newItemAllergens.length > 0 ? (
+                    <div className="chip-wrap menu-item-allergen-summary">
+                      {newItemAllergens.map((key) => (
+                        <span className="allergen-chip" key={`new-extra-${key}`}>
+                          <span className="allergen-mini-icon" aria-hidden>
+                            <AllergenIcon type={key} />
+                          </span>
+                          <span>{allergenMap[key]?.label ?? key}</span>
                         </span>
-                        <span>{allergen.label}</span>
-                      </button>
-                    );
-                  })}
+                      ))}
+                    </div>
+                  ) : null}
+                  {showNewExtraAllergensPanel ? (
+                    <div className="allergen-picker compact menu-item-allergen-drawer">
+                      {newSelectableExtraAllergens.map((allergen) => {
+                        const active = newItemAllergens.includes(allergen.key);
+                        return (
+                          <button
+                            key={allergen.key}
+                            type="button"
+                            className={
+                              active
+                                ? "allergen-toggle active"
+                                : "allergen-toggle"
+                            }
+                            onClick={() => {
+                              setNewItemAllergens((prev) =>
+                                toggleInArray(prev, allergen.key),
+                              );
+                            }}
+                          >
+                            <span className="allergen-mini-icon" aria-hidden>
+                              <AllergenIcon type={allergen.key} />
+                            </span>
+                            <span>{allergen.label}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  ) : null}
                 </div>
               </label>
+              </div>
+              ) : null}
 
+              <button
+                type="button"
+                className="menu-item-section-break menu-item-section-toggle"
+                onClick={() => setNewDishImageOpen((prev) => !prev)}
+                aria-expanded={newDishImageOpen}
+              >
+                <div>
+                  <h4>Immagine e resa visiva</h4>
+                </div>
+                <span className="menu-item-section-chevron" aria-hidden>
+                  ↓
+                </span>
+              </button>
+              {newDishImageOpen ? (
+                <div className="menu-item-tab-panel" role="tabpanel">
               <label className="menu-item-field-image">
                 <span className="menu-item-image-head">
                   <span>Immagine</span>
@@ -3090,6 +3302,8 @@ export function AdminMenuPanel() {
                   </span>
                 </span>
                 <input
+                  ref={newImageInputRef}
+                  className="menu-item-hidden-file-input"
                   type="file"
                   accept="image/*"
                   onChange={(event) => {
@@ -3097,6 +3311,90 @@ export function AdminMenuPanel() {
                     void onNewImageChange(file);
                   }}
                 />
+                <input
+                  ref={newImageCameraInputRef}
+                  className="menu-item-hidden-file-input"
+                  type="file"
+                  accept="image/*"
+                  capture="environment"
+                  onChange={(event) => {
+                    const file = event.currentTarget.files?.[0] ?? null;
+                    void onNewImageChange(file);
+                  }}
+                />
+                <div
+                  className={
+                    newImageDragActive
+                      ? "menu-item-upload-dropzone active"
+                      : "menu-item-upload-dropzone"
+                  }
+                  onDragOver={(event) => {
+                    event.preventDefault();
+                    setNewImageDragActive(true);
+                  }}
+                  onDragLeave={(event) => {
+                    event.preventDefault();
+                    setNewImageDragActive(false);
+                  }}
+                  onDrop={(event) => {
+                    event.preventDefault();
+                    const file = event.dataTransfer.files?.[0] ?? null;
+                    void onNewImageChange(file);
+                  }}
+                >
+                  <div className="menu-item-upload-copy">
+                    <strong>
+                      {hasNewImage
+                        ? "Immagine pronta"
+                        : "Trascina qui la foto del piatto"}
+                    </strong>
+                    <span>
+                      Desktop: drag and drop. Mobile: scatta o scegli dalla
+                      galleria.
+                    </span>
+                  </div>
+                  <div className="menu-item-upload-actions">
+                    <button
+                      type="button"
+                      className="admin-mini-btn menu-item-desktop-upload-btn"
+                      onClick={() => newImageInputRef.current?.click()}
+                    >
+                      Scegli foto
+                    </button>
+                    <button
+                      type="button"
+                      className="admin-mini-btn menu-item-mobile-upload-btn"
+                      onClick={() => setShowMobilePhotoPicker(true)}
+                    >
+                      Aggiungi foto
+                    </button>
+                  </div>
+                  {showMobilePhotoPicker ? (
+                    <div className="menu-item-mobile-picker">
+                      <button
+                        type="button"
+                        className="menu-item-mobile-picker-option"
+                        onClick={() => newImageInputRef.current?.click()}
+                      >
+                        Scegli da galleria
+                      </button>
+                      <button
+                        type="button"
+                        className="menu-item-mobile-picker-option"
+                        onClick={() => newImageCameraInputRef.current?.click()}
+                      >
+                        Scatta foto
+                      </button>
+                      <button
+                        type="button"
+                        className="menu-item-mobile-picker-cancel"
+                        onClick={() => setShowMobilePhotoPicker(false)}
+                      >
+                        Annulla
+                      </button>
+                    </div>
+                  ) : null}
+                </div>
               </label>
 
               {newImageAnalysis ? (
@@ -3118,20 +3416,8 @@ export function AdminMenuPanel() {
                   ) : null}
                 </div>
               ) : null}
-
-              <div className="admin-preview-box">
-                {newImagePreview ? (
-                  <img
-                    src={newImagePreview}
-                    alt="Anteprima nuovo piatto"
-                    className="admin-preview-image"
-                  />
-                ) : (
-                  <div className="admin-preview-placeholder">
-                    Nessuna immagine caricata
-                  </div>
-                )}
-              </div>
+                </div>
+              ) : null}
 
               <button
                 className="btn-success menu-item-submit"

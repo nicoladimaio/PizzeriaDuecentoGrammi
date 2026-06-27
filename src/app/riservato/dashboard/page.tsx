@@ -20,20 +20,18 @@ export default async function AdminDashboardPage({
 
   const initialTab =
     typeof tabRaw === "string" &&
-    (tabRaw === "reservations" || tabRaw === "settings")
+    (
+      tabRaw === "home" ||
+      tabRaw === "reservations" ||
+      tabRaw === "menu" ||
+      tabRaw === "settings"
+    )
       ? tabRaw
-      : "menu";
+      : "home";
   const highlightedCode = typeof codeRaw === "string" ? codeRaw : undefined;
 
   return (
     <main className="page-main admin-page-main">
-      <section className="hero-mini admin-hero">
-        <div className="container">
-          <p className="hero-kicker">Gestione interna</p>
-          <h1>Pannello Amministrazione</h1>
-        </div>
-      </section>
-
       <div className="container">
         <AdminDashboard
           initialSection={initialTab}

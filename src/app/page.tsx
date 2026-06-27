@@ -119,7 +119,7 @@ export default function HomePage() {
             <p className="home-footer-minimal-label">Seguici</p>
             <div className="home-footer-social-icons" aria-label="Social">
               <a
-                href="https://instagram.com"
+                href="https://www.instagram.com/duecento_grammi/"
                 target="_blank"
                 rel="noreferrer"
                 aria-label="Instagram"
@@ -132,7 +132,7 @@ export default function HomePage() {
                 </svg>
               </a>
               <a
-                href="https://facebook.com"
+                href="https://www.facebook.com/duecentogrammipizzeria/"
                 target="_blank"
                 rel="noreferrer"
                 aria-label="Facebook"
@@ -143,7 +143,7 @@ export default function HomePage() {
                 </svg>
               </a>
               <a
-                href="https://wa.me/390823833221"
+                href="https://wa.me/393533386611"
                 target="_blank"
                 rel="noreferrer"
                 aria-label="WhatsApp"
