@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   collection,
   onSnapshot,
@@ -420,6 +420,9 @@ export function AdminReservationsPanel({
   const [showCopyConfigModal, setShowCopyConfigModal] = useState(false);
   const [copySourceWeekday, setCopySourceWeekday] = useState(new Date().getDay());
   const [copyTargetWeekdays, setCopyTargetWeekdays] = useState<number[]>([]);
+  const settingsTabsRef = useRef<HTMLDivElement | null>(null);
+  const availabilityWeekdayStripRef = useRef<HTMLDivElement | null>(null);
+  const confirmedDayStripRef = useRef<HTMLDivElement | null>(null);
   const [reservationsView, setReservationsView] = useState<
     "open" | "confirmed"
   >("confirmed");
@@ -1527,6 +1530,76 @@ export function AdminReservationsPanel({
   }, [settingsToast]);
 
   useEffect(() => {
+    const container = settingsTabsRef.current;
+    if (!container) return;
+
+    const activeTab = container.querySelector<HTMLButtonElement>(
+      '[role="tab"][aria-selected="true"]',
+    );
+    if (!activeTab) return;
+
+    const frame = window.requestAnimationFrame(() => {
+      activeTab.scrollIntoView({
+        behavior: "smooth",
+        block: "nearest",
+        inline: "center",
+      });
+    });
+
+    return () => window.cancelAnimationFrame(frame);
+  }, [settingsTab]);
+
+  useEffect(() => {
+    if (settingsTab !== "availability") return;
+
+    const container = availabilityWeekdayStripRef.current;
+    if (!container) return;
+
+    const activeDay = container.querySelector<HTMLButtonElement>(
+      '[role="tab"][aria-selected="true"]',
+    );
+    if (!activeDay) return;
+
+    let frame = 0;
+    const timer = window.setTimeout(() => {
+      frame = window.requestAnimationFrame(() => {
+        activeDay.scrollIntoView({
+          behavior: "smooth",
+          block: "nearest",
+          inline: "center",
+        });
+      });
+    }, 40);
+
+    return () => {
+      window.clearTimeout(timer);
+      if (frame) {
+        window.cancelAnimationFrame(frame);
+      }
+    };
+  }, [selectedAvailabilityWeekday, settingsTab]);
+
+  useEffect(() => {
+    const container = confirmedDayStripRef.current;
+    if (!container) return;
+
+    const activeDay = container.querySelector<HTMLButtonElement>(
+      ".admin-confirmed-day-pill.active",
+    );
+    if (!activeDay) return;
+
+    const frame = window.requestAnimationFrame(() => {
+      activeDay.scrollIntoView({
+        behavior: "smooth",
+        block: "nearest",
+        inline: "center",
+      });
+    });
+
+    return () => window.cancelAnimationFrame(frame);
+  }, [confirmedSelectedDate]);
+
+  useEffect(() => {
     if (!hasUnsavedSettingsChanges) {
       return;
     }
@@ -1847,6 +1920,7 @@ export function AdminReservationsPanel({
 
                 <div className="admin-confirmed-day-strip-wrap">
                   <div
+                    ref={confirmedDayStripRef}
                     className="admin-confirmed-day-strip"
                     role="toolbar"
                     aria-label="Navigazione giorni prenotazioni confermate"
@@ -2030,7 +2104,12 @@ export function AdminReservationsPanel({
             <p className="section-subtitle">Caricamento impostazioni...</p>
           ) : (
             <div className="booking-form">
-              <div className="admin-settings-tabs" role="tablist" aria-label="Impostazioni prenotazioni">
+              <div
+                ref={settingsTabsRef}
+                className="admin-settings-tabs"
+                role="tablist"
+                aria-label="Impostazioni prenotazioni"
+              >
                 <button
                   type="button"
                   role="tab"
@@ -2253,10 +2332,15 @@ export function AdminReservationsPanel({
                     <div>
                       <strong>Disponibilita settimanale</strong>
                       <p>
-                        Scegli gli orari disponibili per ciascun giorno della
-                        settimana. Gli slot disattivati non saranno piu
-                        prenotabili dai clienti. Le prenotazioni gia esistenti
-                        resteranno valide.
+                        <span className="admin-settings-copy-desktop">
+                          Scegli gli orari disponibili per ciascun giorno della
+                          settimana. Gli slot disattivati non saranno piu
+                          prenotabili dai clienti. Le prenotazioni gia
+                          esistenti resteranno valide.
+                        </span>
+                        <span className="admin-settings-copy-mobile">
+                          Attiva o disattiva gli orari prenotabili.
+                        </span>
                       </p>
                     </div>
                     <div className="admin-settings-actions-menu-wrap">
@@ -2298,7 +2382,12 @@ export function AdminReservationsPanel({
                     </div>
                   </div>
 
-                  <div className="admin-settings-weekday-strip" role="tablist" aria-label="Giorni disponibilita orarie">
+                  <div
+                    ref={availabilityWeekdayStripRef}
+                    className="admin-settings-weekday-strip"
+                    role="tablist"
+                    aria-label="Giorni disponibilita orarie"
+                  >
                     {weekdayOptions.map((day) => (
                       <button
                         key={day.key}
