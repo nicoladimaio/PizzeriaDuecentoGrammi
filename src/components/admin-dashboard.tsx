@@ -149,6 +149,31 @@ export function AdminDashboard({
 
   useEffect(() => {
     const auth = getClientAuth();
+    let active = true;
+
+    const resolveCurrentSession = async () => {
+      try {
+        if (typeof auth.authStateReady === "function") {
+          await auth.authStateReady();
+        }
+      } catch {
+        // Ignore and fall back to the auth listener below.
+      }
+
+      if (!active) return;
+
+      const user = auth.currentUser;
+      if (!user || !isAllowedAdminEmail(user.email)) {
+        setBooting(false);
+        router.replace("/riservato/accesso-200g");
+        return;
+      }
+
+      setBooting(false);
+    };
+
+    void resolveCurrentSession();
+
     const unsubscribeAuth = onAuthStateChanged(auth, (user) => {
       if (!user || !isAllowedAdminEmail(user.email)) {
         setBooting(false);
@@ -159,7 +184,10 @@ export function AdminDashboard({
       setBooting(false);
     });
 
-    return () => unsubscribeAuth();
+    return () => {
+      active = false;
+      unsubscribeAuth();
+    };
   }, [router]);
 
   useEffect(() => {

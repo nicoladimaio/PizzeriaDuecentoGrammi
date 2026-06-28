@@ -126,11 +126,36 @@ const parseMinutes = (value: string) => {
   return hours * 60 + minutes;
 };
 
+const isHalfHourTimeValue = (value: string) => {
+  const minutes = parseMinutes(value);
+  return Number.isFinite(minutes) && minutes % 30 === 0;
+};
+
+const getServiceEndMinutes = (openTime: string, closeTime: string) => {
+  const open = parseMinutes(openTime);
+  const close = parseMinutes(closeTime);
+
+  if (!Number.isFinite(open) || !Number.isFinite(close)) {
+    return null;
+  }
+
+  if (open === close) {
+    return null;
+  }
+
+  return close > open ? close : close + 24 * 60;
+};
+
 const minutesToTime = (value: number) => {
-  const hours = String(Math.floor(value / 60)).padStart(2, "0");
-  const minutes = String(value % 60).padStart(2, "0");
+  const normalized = ((value % (24 * 60)) + 24 * 60) % (24 * 60);
+  const hours = String(Math.floor(normalized / 60)).padStart(2, "0");
+  const minutes = String(normalized % 60).padStart(2, "0");
   return `${hours}:${minutes}`;
 };
+
+const halfHourTimeOptions = Array.from({ length: 48 }, (_, index) =>
+  minutesToTime(index * 30),
+);
 
 const monthKey = (date: Date) => {
   const year = date.getFullYear();
@@ -239,6 +264,12 @@ const normalizeSettings = (
   settings: ReservationSettings,
 ): ReservationSettings => ({
   ...settings,
+  openTime: isHalfHourTimeValue(settings.openTime)
+    ? settings.openTime
+    : defaultSettings.openTime,
+  closeTime: isHalfHourTimeValue(settings.closeTime)
+    ? settings.closeTime
+    : defaultSettings.closeTime,
   slotMinutes:
     typeof settings.slotMinutes === "number" &&
     Number.isFinite(settings.slotMinutes) &&
@@ -296,15 +327,18 @@ const getSlotTimesForWeekday = (
   settings: ReservationSettings,
 ): string[] => {
   const open = parseMinutes(settings.openTime);
-  const close = parseMinutes(settings.closeTime);
+  const endMinutes = getServiceEndMinutes(
+    settings.openTime,
+    settings.closeTime,
+  );
   const slotMinutes = settings.slotMinutes;
 
-  if (!Number.isFinite(open) || !Number.isFinite(close) || close < open) {
+  if (!Number.isFinite(open) || endMinutes === null) {
     return ["20:00"];
   }
 
   const slots: string[] = [];
-  for (let minute = open; minute <= close; minute += slotMinutes) {
+  for (let minute = open; minute <= endMinutes; minute += slotMinutes) {
     slots.push(minutesToTime(minute));
   }
 
@@ -2157,8 +2191,7 @@ export function AdminReservationsPanel({
                 <div className="admin-settings-time-inline">
                   <label>
                     Orario apertura
-                    <input
-                      type="time"
+                    <select
                       value={settings.openTime}
                       onChange={(event) =>
                         setSettings((prev) => ({
@@ -2166,12 +2199,17 @@ export function AdminReservationsPanel({
                           openTime: event.target.value,
                         }))
                       }
-                    />
+                    >
+                      {halfHourTimeOptions.map((time) => (
+                        <option key={time} value={time}>
+                          {time}
+                        </option>
+                      ))}
+                    </select>
                   </label>
                   <label>
                     Orario chiusura
-                    <input
-                      type="time"
+                    <select
                       value={settings.closeTime}
                       onChange={(event) =>
                         setSettings((prev) => ({
@@ -2179,7 +2217,13 @@ export function AdminReservationsPanel({
                           closeTime: event.target.value,
                         }))
                       }
-                    />
+                    >
+                      {halfHourTimeOptions.map((time) => (
+                        <option key={time} value={time}>
+                          {time}
+                        </option>
+                      ))}
+                    </select>
                   </label>
                 </div>
                     <label className="admin-settings-interval-field">

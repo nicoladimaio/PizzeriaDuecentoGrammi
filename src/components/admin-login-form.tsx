@@ -50,8 +50,8 @@ export function AdminLoginForm() {
         return;
       }
 
-      router.replace("/riservato/dashboard");
-      router.refresh();
+      await credentials.user.getIdToken(true);
+      window.location.replace("/riservato/dashboard");
     } catch {
       setError("Credenziali non valide.");
       setLoading(false);

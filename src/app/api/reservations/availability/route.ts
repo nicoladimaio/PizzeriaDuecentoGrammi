@@ -28,6 +28,17 @@ const parseMinutes = (value: string): number => {
   return hours * 60 + minutes;
 };
 
+const getServiceEndMinutes = (openTime: string, closeTime: string): number | null => {
+  const open = parseMinutes(openTime);
+  const close = parseMinutes(closeTime);
+
+  if (open === close) {
+    return null;
+  }
+
+  return close > open ? close : close + 24 * 60;
+};
+
 const parseSlotMinutes = (value: unknown): number | null => {
   return typeof value === "number" &&
     Number.isFinite(value) &&
@@ -39,8 +50,9 @@ const parseSlotMinutes = (value: unknown): number | null => {
 };
 
 const minutesToTime = (value: number): string => {
-  const hours = String(Math.floor(value / 60)).padStart(2, "0");
-  const minutes = String(value % 60).padStart(2, "0");
+  const normalized = ((value % (24 * 60)) + 24 * 60) % (24 * 60);
+  const hours = String(Math.floor(normalized / 60)).padStart(2, "0");
+  const minutes = String(normalized % 60).padStart(2, "0");
   return `${hours}:${minutes}`;
 };
 
@@ -59,7 +71,7 @@ const getSlotSettings = () => {
   );
 
   const openMinutes = parseMinutes(openTime);
-  const closeMinutes = parseMinutes(closeTime);
+  const closeMinutes = getServiceEndMinutes(openTime, closeTime) ?? parseMinutes(closeTime);
 
   const safeSlot =
     Number.isFinite(slotMinutes) && slotMinutes > 0 ? slotMinutes : 30;
@@ -206,7 +218,8 @@ const resolveSlotSettings = async (db: ReturnType<typeof getAdminDb>) => {
       insideCapacityPerSlot,
       outsideCapacityPerSlot,
       openMinutes: parseMinutes(openTime),
-      closeMinutes: parseMinutes(closeTime),
+      closeMinutes:
+        getServiceEndMinutes(openTime, closeTime) ?? parseMinutes(closeTime),
       workingDays: workingDays.length > 0 ? workingDays : defaultWorkingDays,
       holidays: new Set(holidays),
       specialOpenings: new Set(specialOpenings),

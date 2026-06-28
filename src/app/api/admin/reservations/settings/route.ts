@@ -41,6 +41,20 @@ const parseMinutes = (value: string): number => {
   return hours * 60 + minutes;
 };
 
+const isHalfHourTimeValue = (value: string): boolean =>
+  parseMinutes(value) % 30 === 0;
+
+const getServiceEndMinutes = (openTime: string, closeTime: string): number | null => {
+  const open = parseMinutes(openTime);
+  const close = parseMinutes(closeTime);
+
+  if (open === close) {
+    return null;
+  }
+
+  return close > open ? close : close + 24 * 60;
+};
+
 const defaultSettings = () => ({
   openTime: process.env.RESERVATION_OPEN_TIME ?? "19:00",
   closeTime: process.env.RESERVATION_CLOSE_TIME ?? "23:00",
@@ -124,11 +138,29 @@ export async function POST(request: Request) {
       );
     }
 
-    const open = parseMinutes(parsed.data.openTime);
-    const close = parseMinutes(parsed.data.closeTime);
-    if (close <= open) {
+    if (
+      !isHalfHourTimeValue(parsed.data.openTime) ||
+      !isHalfHourTimeValue(parsed.data.closeTime)
+    ) {
       return NextResponse.json(
-        { error: "L'orario di chiusura deve essere successivo all'apertura." },
+        {
+          error:
+            "Orario apertura e chiusura devono essere impostati a intervalli di 30 minuti.",
+        },
+        { status: 400 },
+      );
+    }
+
+    const serviceEnd = getServiceEndMinutes(
+      parsed.data.openTime,
+      parsed.data.closeTime,
+    );
+    if (!serviceEnd) {
+      return NextResponse.json(
+        {
+          error:
+            "Orario apertura e chiusura non possono coincidere. Se il servizio termina dopo mezzanotte, imposta l'orario del giorno successivo.",
+        },
         { status: 400 },
       );
     }
