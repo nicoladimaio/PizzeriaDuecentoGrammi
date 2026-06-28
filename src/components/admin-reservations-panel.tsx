@@ -1928,7 +1928,7 @@ export function AdminReservationsPanel({
                         confirmedSelectedSummary.reservationsCount === 1
                           ? "prenotazione"
                           : "prenotazioni"
-                      } · 🪑 ${confirmedSelectedSummary.availableSeats} posti liberi`}
+                      }`}
                     </small>
                   </div>
                   <button

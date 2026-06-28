@@ -265,14 +265,26 @@ export function AdminDashboard({
   }, []);
 
   useEffect(() => {
+    if (booting) return;
+
     let ignore = false;
 
     const loadReservationSettings = async () => {
       try {
         const auth = getClientAuth();
-        const token = await auth.currentUser?.getIdToken();
-        if (!token) return;
+        if (typeof auth.authStateReady === "function") {
+          await auth.authStateReady();
+        }
 
+        const user = auth.currentUser;
+        if (!user || !isAllowedAdminEmail(user.email)) {
+          if (!ignore) {
+            setReservationSettings(defaultReservationSettings);
+          }
+          return;
+        }
+
+        const token = await user.getIdToken();
         const response = await fetch("/api/admin/reservations/settings", {
           headers: {
             Authorization: `Bearer ${token}`,
@@ -296,7 +308,7 @@ export function AdminDashboard({
     return () => {
       ignore = true;
     };
-  }, []);
+  }, [booting]);
 
   useEffect(() => {
     const db = getClientDb();
@@ -491,9 +503,15 @@ export function AdminDashboard({
             <strong className="admin-home-card-metric">
               {todayReservations.length}
             </strong>
-            <p className="admin-home-card-copy">Prenotazioni previste oggi</p>
+            <p className="admin-home-card-copy">
+              {todayReservations.length > 0
+                ? "Coperti confermati oggi"
+                : "Nessuna prenotazione per oggi"}
+            </p>
             <div className="admin-home-card-meta">
-              <span>Coperti: {todayGuestsCount} / {totalCapacity}</span>
+              {todayReservations.length > 0 ? (
+                <>
+                  <span>Coperti: {todayGuestsCount}</span>
               <div
                 className="admin-home-progress"
                 aria-hidden
@@ -506,6 +524,8 @@ export function AdminDashboard({
               <span className="admin-home-meta-neutral">
                 🕘 Prima: {firstReservationTime}
               </span>
+                </>
+              ) : null}
               {reservationsAttentionCount > 0 ? (
                 <span className="admin-home-meta-warm">
                   ⚠️ Da gestire: {reservationsAttentionCount}
