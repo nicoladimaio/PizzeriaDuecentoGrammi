@@ -31,7 +31,6 @@ const defaultReservationSettings: ReservationSettings = {
   openTime: "19:00",
   closeTime: "23:00",
   slotMinutes: 30,
-  saturdaySlotMinutes: 30,
   capacityPerSlot: 40,
   insideActive: true,
   outsideActive: true,
@@ -40,6 +39,7 @@ const defaultReservationSettings: ReservationSettings = {
   workingDays: [1, 2, 3, 4, 5, 6, 0],
   holidays: [],
   specialOpenings: [],
+  weeklyDisabledSlots: {},
 };
 
 const deriveTotalCapacity = (settings: ReservationSettings): number => {
@@ -475,9 +475,14 @@ export function AdminDashboard({
                   style={{ width: `${occupancyRatio}%` }}
                 />
               </div>
-              <span>👥 {todayGuestsCount} coperti</span>
-              <span>🕘 Prima: {firstReservationTime}</span>
-              <span>⚠️ Da gestire: {reservationsAttentionCount}</span>
+              <span className="admin-home-meta-neutral">
+                🕘 Prima: {firstReservationTime}
+              </span>
+              {reservationsAttentionCount > 0 ? (
+                <span className="admin-home-meta-warm">
+                  ⚠️ Da gestire: {reservationsAttentionCount}
+                </span>
+              ) : null}
             </div>
             <button
               type="button"

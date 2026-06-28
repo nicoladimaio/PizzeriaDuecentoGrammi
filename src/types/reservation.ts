@@ -38,8 +38,7 @@ export type ReservationDoc = ReservationInput & {
 export type ReservationSettings = {
   openTime: string;
   closeTime: string;
-  slotMinutes: 15 | 30 | 60;
-  saturdaySlotMinutes: 15 | 30 | 60;
+  slotMinutes: number;
   capacityPerSlot: number;
   insideActive: boolean;
   outsideActive: boolean;
@@ -48,4 +47,5 @@ export type ReservationSettings = {
   workingDays: number[];
   holidays: string[];
   specialOpenings: string[];
+  weeklyDisabledSlots: Record<string, string[]>;
 };

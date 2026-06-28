@@ -28,8 +28,14 @@ const parseMinutes = (value: string): number => {
   return hours * 60 + minutes;
 };
 
-const parseSlotMinutes = (value: unknown): 15 | 30 | 60 | null => {
-  return value === 15 || value === 30 || value === 60 ? value : null;
+const parseSlotMinutes = (value: unknown): number | null => {
+  return typeof value === "number" &&
+    Number.isFinite(value) &&
+    Number.isInteger(value) &&
+    value >= 5 &&
+    value <= 180
+    ? value
+    : null;
 };
 
 const minutesToTime = (value: number): string => {
@@ -94,6 +100,9 @@ const uniqueWeekdays = (source: unknown): number[] => {
   return [...new Set(values)];
 };
 
+const isValidTimeValue = (value: unknown): value is string =>
+  typeof value === "string" && /^([01]\d|2[0-3]):([0-5]\d)$/.test(value);
+
 const resolveSlotSettings = async (db: ReturnType<typeof getAdminDb>) => {
   const envSettings = getSlotSettings();
   const defaultWorkingDays = [1, 2, 3, 4, 5, 6, 0];
@@ -108,7 +117,6 @@ const resolveSlotSettings = async (db: ReturnType<typeof getAdminDb>) => {
           openTime?: unknown;
           closeTime?: unknown;
           slotMinutes?: unknown;
-          saturdaySlotMinutes?: unknown;
           capacityPerSlot?: unknown;
           insideActive?: unknown;
           outsideActive?: unknown;
@@ -117,6 +125,7 @@ const resolveSlotSettings = async (db: ReturnType<typeof getAdminDb>) => {
           workingDays?: unknown;
           holidays?: unknown;
           specialOpenings?: unknown;
+          weeklyDisabledSlots?: unknown;
         }
       | undefined;
 
@@ -136,8 +145,6 @@ const resolveSlotSettings = async (db: ReturnType<typeof getAdminDb>) => {
       parseSlotMinutes(data?.slotMinutes) ??
       parseSlotMinutes(envSettings.slotMinutes) ??
       30;
-    const saturdaySlotMinutes =
-      parseSlotMinutes(data?.saturdaySlotMinutes) ?? slotMinutes;
 
     const capacityPerSlot =
       typeof data?.capacityPerSlot === "number" &&
@@ -174,13 +181,25 @@ const resolveSlotSettings = async (db: ReturnType<typeof getAdminDb>) => {
           .map(asDateKey)
           .filter((value): value is string => Boolean(value))
       : [];
+    const weeklyDisabledSlots =
+      data?.weeklyDisabledSlots &&
+      typeof data.weeklyDisabledSlots === "object" &&
+      !Array.isArray(data.weeklyDisabledSlots)
+        ? Object.fromEntries(
+            Object.entries(data.weeklyDisabledSlots).map(([weekday, values]) => [
+              weekday,
+              Array.isArray(values)
+                ? values.filter(isValidTimeValue)
+                : [],
+            ]),
+          )
+        : {};
 
     return {
       ...envSettings,
       openTime,
       closeTime,
       slotMinutes,
-      saturdaySlotMinutes,
       capacityPerSlot,
       insideActive,
       outsideActive,
@@ -191,13 +210,13 @@ const resolveSlotSettings = async (db: ReturnType<typeof getAdminDb>) => {
       workingDays: workingDays.length > 0 ? workingDays : defaultWorkingDays,
       holidays: new Set(holidays),
       specialOpenings: new Set(specialOpenings),
+      weeklyDisabledSlots,
     };
   } catch {
     const fallbackSlotMinutes = parseSlotMinutes(envSettings.slotMinutes) ?? 30;
     return {
       ...envSettings,
       slotMinutes: fallbackSlotMinutes,
-      saturdaySlotMinutes: fallbackSlotMinutes,
       capacityPerSlot: envSettings.capacityPerSlot,
       insideActive: true,
       outsideActive: true,
@@ -206,18 +225,15 @@ const resolveSlotSettings = async (db: ReturnType<typeof getAdminDb>) => {
       workingDays: defaultWorkingDays,
       holidays: new Set<string>(),
       specialOpenings: new Set<string>(),
+      weeklyDisabledSlots: {},
     };
   }
 };
 
 const getSlotMinutesForDate = (
-  date: Date,
+  _date: Date,
   settings: Awaited<ReturnType<typeof resolveSlotSettings>>,
-): 15 | 30 | 60 => {
-  return date.getDay() === 6
-    ? settings.saturdaySlotMinutes
-    : settings.slotMinutes;
-};
+): number => settings.slotMinutes;
 
 export async function GET(request: Request) {
   try {
@@ -346,12 +362,14 @@ export async function GET(request: Request) {
               remainingSeats: 0,
             }))
           : slotTimes.map((time) => {
+              const isSlotDisabled =
+                (settings.weeklyDisabledSlots[String(weekDay)] ?? []).includes(time);
               const reserved =
                 occupancy.get(`${date}|${time}|${activeRoom}`) ?? 0;
               const remainingSeats = Math.max(roomCapacity - reserved, 0);
               return {
                 time,
-                available: remainingSeats >= guests,
+                available: !isSlotDisabled && remainingSeats >= guests,
                 remainingSeats,
               };
             });
@@ -374,7 +392,6 @@ export async function GET(request: Request) {
         openTime: settings.openTime,
         closeTime: settings.closeTime,
         slotMinutes: settings.slotMinutes,
-        saturdaySlotMinutes: settings.saturdaySlotMinutes,
         capacityPerSlot: settings.capacityPerSlot,
         activeRoom,
         insideActive: settings.insideActive,

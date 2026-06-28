@@ -2301,15 +2301,11 @@ p {
   font-size: 0.8rem;
 }
 
-.admin-home-grid > .admin-home-card:first-child .admin-home-card-meta span:nth-of-type(2) {
-  display: none;
-}
-
-.admin-home-grid > .admin-home-card:first-child .admin-home-card-meta span:nth-of-type(3) {
+.admin-home-meta-neutral {
   color: #61717a;
 }
 
-.admin-home-grid > .admin-home-card:first-child .admin-home-card-meta span:nth-of-type(4) {
+.admin-home-meta-warm {
   display: inline-flex;
   align-items: center;
   width: fit-content;
@@ -2387,6 +2383,215 @@ p {
   gap: 0.6rem;
 }
 
+.admin-settings-interval-field {
+  max-width: 210px;
+}
+
+.admin-settings-tabs {
+  display: flex;
+  gap: 0.45rem;
+  overflow-x: auto;
+  padding-bottom: 0.15rem;
+  margin-bottom: 0.85rem;
+  scrollbar-width: thin;
+  -webkit-overflow-scrolling: touch;
+}
+
+.admin-settings-tab {
+  min-height: 42px;
+  padding: 0.56rem 0.82rem;
+  border-radius: 999px;
+  border: 1px solid rgba(40, 69, 83, 0.16);
+  background: rgba(255, 255, 255, 0.82);
+  color: #47616b;
+  font-size: 0.82rem;
+  font-weight: 700;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.admin-settings-tab.active {
+  border-color: #2a4a59;
+  background: linear-gradient(135deg, #2a4a59, #365f72);
+  color: #f2f9fb;
+}
+
+.admin-settings-tab-panel {
+  display: grid;
+  gap: 0.9rem;
+}
+
+.admin-settings-weekday-strip {
+  display: flex;
+  gap: 0.45rem;
+  overflow-x: auto;
+  padding-bottom: 0.1rem;
+  scrollbar-width: thin;
+  -webkit-overflow-scrolling: touch;
+}
+
+.admin-settings-weekday-tab {
+  min-height: 40px;
+  min-width: 56px;
+  padding: 0.48rem 0.72rem;
+  border-radius: 999px;
+  border: 1px solid rgba(40, 69, 83, 0.16);
+  background: rgba(255, 255, 255, 0.84);
+  color: #4b636d;
+  font-size: 0.8rem;
+  font-weight: 700;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.admin-settings-weekday-tab.active {
+  border-color: #294651;
+  background: linear-gradient(145deg, #27424e, #365765);
+  color: #f4fafb;
+  box-shadow: 0 10px 18px rgba(39, 66, 78, 0.16);
+}
+
+.admin-settings-slot-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.48rem;
+}
+
+.admin-settings-slot-chip {
+  min-height: 40px;
+  padding: 0.5rem 0.76rem;
+  border-radius: 999px;
+  border: 1px solid rgba(40, 69, 83, 0.14);
+  background: rgba(255, 255, 255, 0.9);
+  color: #6d8088;
+  font-size: 0.8rem;
+  font-weight: 700;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.36rem;
+  text-decoration: line-through;
+  text-decoration-thickness: 1px;
+}
+
+.admin-settings-slot-chip.active {
+  border-color: #294651;
+  background: linear-gradient(145deg, #27424e, #365765);
+  color: #f4fafb;
+  text-decoration: none;
+  box-shadow: 0 10px 18px rgba(39, 66, 78, 0.14);
+}
+
+.admin-settings-slot-chip small {
+  padding: 0.16rem 0.42rem;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.72);
+  color: #7d5a2d;
+  font-size: 0.64rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  text-decoration: none;
+}
+
+.admin-settings-note {
+  margin: 0;
+  color: #607782;
+  font-size: 0.81rem;
+  line-height: 1.55;
+}
+
+.admin-settings-info-card {
+  border: 1px solid rgba(40, 69, 83, 0.14);
+  border-radius: 16px;
+  background: rgba(250, 252, 252, 0.88);
+  padding: 0.85rem;
+}
+
+.admin-settings-info-card strong {
+  display: block;
+  color: #2d4a56;
+  margin-bottom: 0.25rem;
+}
+
+.admin-settings-info-card p {
+  margin: 0;
+  color: #627b84;
+  font-size: 0.82rem;
+  line-height: 1.55;
+}
+
+.admin-settings-info-card-with-actions {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.85rem;
+}
+
+.admin-settings-actions-menu-wrap {
+  position: relative;
+  flex: 0 0 auto;
+}
+
+.admin-settings-actions-menu {
+  position: absolute;
+  top: calc(100% + 0.4rem);
+  right: 0;
+  z-index: 5;
+  min-width: 220px;
+  display: grid;
+  gap: 0.15rem;
+  padding: 0.35rem;
+  border: 1px solid rgba(40, 69, 83, 0.12);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.98);
+  box-shadow: 0 16px 32px rgba(31, 50, 58, 0.12);
+}
+
+.admin-settings-actions-menu button {
+  min-height: 38px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: #415b66;
+  font-size: 0.8rem;
+  font-weight: 650;
+  text-align: left;
+  padding: 0.55rem 0.65rem;
+  cursor: pointer;
+}
+
+.admin-settings-actions-menu button:hover {
+  background: rgba(40, 69, 83, 0.06);
+}
+
+.admin-settings-empty-note {
+  margin: 0;
+  color: #637b84;
+  font-size: 0.82rem;
+  line-height: 1.55;
+}
+
+.admin-settings-toast {
+  position: fixed;
+  left: 50%;
+  top: 20px;
+  transform: translateX(-50%);
+  z-index: 180;
+  width: min(420px, calc(100vw - 2rem));
+  padding: 0.72rem 1rem;
+  border: 1px solid rgba(40, 69, 83, 0.14);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.96);
+  color: #36515d;
+  font-size: 0.83rem;
+  font-weight: 700;
+  box-shadow: 0 18px 36px rgba(31, 50, 58, 0.14);
+  backdrop-filter: blur(10px);
+  text-align: center;
+}
+
 .admin-room-cards-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -2445,6 +2650,18 @@ p {
 
 .admin-reservations-head h3 {
   margin: 0;
+}
+
+.admin-settings-head-copy {
+  display: grid;
+  gap: 0.22rem;
+}
+
+.admin-settings-head-note {
+  margin: 0;
+  color: #627984;
+  font-size: 0.8rem;
+  line-height: 1.5;
 }
 
 .admin-reservations-head-actions {
@@ -2729,10 +2946,11 @@ p {
 .admin-confirmed-day-btn {
   min-height: 46px;
   border-radius: 14px;
-  border: 1px solid rgba(40, 69, 83, 0.16);
-  background: rgba(255, 255, 255, 0.88);
-  color: #2b4753;
-  font-size: 1.05rem;
+  min-width: 46px;
+  border: 1px solid rgba(40, 69, 83, 0.2);
+  background: rgba(255, 255, 255, 0.94);
+  color: #35535f;
+  font-size: 1rem;
   font-weight: 700;
   cursor: pointer;
   transition:
@@ -2743,13 +2961,12 @@ p {
 
 .admin-confirmed-day-btn:hover:not(:disabled) {
   transform: translateY(-1px);
-  border-color: rgba(40, 69, 83, 0.28);
-  box-shadow: 0 10px 24px rgba(31, 50, 58, 0.12);
+  border-color: rgba(40, 69, 83, 0.3);
+  box-shadow: 0 8px 18px rgba(31, 50, 58, 0.1);
 }
 
 .admin-confirmed-day-btn:disabled {
-  opacity: 0.38;
-  cursor: not-allowed;
+  opacity: 0.48;
 }
 
 .admin-confirmed-day-label {
@@ -2765,18 +2982,34 @@ p {
 }
 
 .admin-confirmed-day-label small {
-  color: #516a75;
-  font-size: 0.8rem;
+  color: #5d737d;
+  font-size: 0.84rem;
+}
+
+.admin-confirmed-day-meta-chip {
+  margin-top: 0.24rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.18rem 0.5rem;
+  border-radius: 999px;
+  border: 1px solid rgba(40, 69, 83, 0.12);
+  background: rgba(255, 255, 255, 0.7);
+  color: #647b84;
+  font-size: 0.72rem;
+  font-weight: 700;
 }
 
 .admin-confirmed-day-summary {
   display: inline-flex;
   justify-content: center;
   gap: 0.3rem;
+  align-items: center;
+  white-space: nowrap;
 }
 
 .admin-confirmed-day-strip {
-  display: flex;
+  display: inline-flex;
   flex-wrap: nowrap;
   gap: 0.45rem;
   width: max-content;
@@ -2791,29 +3024,27 @@ p {
   min-width: 0;
   overflow-x: auto;
   overflow-y: hidden;
-  padding-bottom: 0.35rem;
-  margin-bottom: 0.9rem;
+  padding: 0 0 0.12rem;
+  margin: 0.45rem 0 0.9rem;
   scrollbar-width: thin;
-  overscroll-behavior-x: contain;
   -webkit-overflow-scrolling: touch;
   box-sizing: border-box;
 }
 
 .admin-confirmed-day-pill {
-  min-width: 74px;
-  min-height: 62px;
-  border-radius: 18px;
-  border: 1px solid rgba(40, 69, 83, 0.12);
-  background: rgba(255, 255, 255, 0.78);
-  padding: 0.52rem 0.45rem;
-  text-align: center;
+  min-height: 46px;
+  min-width: 78px;
+  border-radius: 999px;
+  border: 1px solid rgba(40, 69, 83, 0.14);
+  background: rgba(255, 255, 255, 0.84);
+  padding: 0.62rem 1rem;
   color: #294651;
   cursor: pointer;
   flex: 0 0 auto;
-  display: grid;
-  gap: 0.16rem;
+  display: inline-flex;
+  gap: 0.48rem;
   align-items: center;
-  justify-items: center;
+  justify-content: center;
   transition:
     transform 180ms ease,
     border-color 180ms ease,
@@ -2821,49 +3052,197 @@ p {
     background 180ms ease;
 }
 
-.admin-confirmed-day-pill:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-  filter: grayscale(0.08);
-}
-
-.admin-confirmed-day-pill:hover:not(:disabled) {
+.admin-confirmed-day-pill:hover {
   transform: translateY(-1px);
-  border-color: rgba(40, 69, 83, 0.2);
+  border-color: rgba(40, 69, 83, 0.24);
+  box-shadow: 0 8px 18px rgba(31, 50, 58, 0.08);
 }
 
-.admin-confirmed-day-pill-weekday {
-  font-size: 0.68rem;
-  color: #6d8189;
-  text-transform: uppercase;
+.admin-confirmed-day-pill:focus-visible,
+.admin-confirmed-day-btn:focus-visible {
+  outline: none;
+  box-shadow:
+    0 0 0 3px rgba(74, 111, 127, 0.14),
+    0 8px 18px rgba(31, 50, 58, 0.08);
 }
 
-.admin-confirmed-day-pill strong {
-  display: none;
-}
-
-.admin-confirmed-day-pill small {
-  color: #6d8189;
-  font-size: 0.82rem;
+.admin-confirmed-day-pill-label {
+  color: #4f6770;
+  font-size: 0.84rem;
   font-weight: 700;
   white-space: nowrap;
+}
+
+.admin-confirmed-day-pill-badge {
+  min-width: 1.2rem;
+  height: 1.2rem;
+  padding: 0 0.34rem;
+  border-radius: 999px;
+  background: rgba(38, 67, 78, 0.1);
+  color: #2f4e5a;
+  font-size: 0.72rem;
+  font-weight: 800;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .admin-confirmed-day-pill.active {
   background: linear-gradient(145deg, #27424e, #365765);
   border-color: #27424e;
   color: #f3fafb;
-  box-shadow: 0 16px 28px rgba(39, 66, 78, 0.22);
+  box-shadow: 0 12px 22px rgba(39, 66, 78, 0.18);
 }
 
-.admin-confirmed-day-pill.active small,
-.admin-confirmed-day-pill.active .admin-confirmed-day-pill-weekday {
-  color: rgba(243, 250, 251, 0.82);
+.admin-confirmed-day-pill.active .admin-confirmed-day-pill-label {
+  color: #f3fafb;
+}
+
+.admin-confirmed-day-pill.active .admin-confirmed-day-pill-badge {
+  background: rgba(243, 250, 251, 0.18);
+  color: #f3fafb;
+}
+
+.admin-confirmed-day-pill-icon {
+  width: 0.92rem;
+  height: 0.92rem;
+  color: #617983;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.admin-confirmed-day-pill-icon svg {
+  width: 100%;
+  height: 100%;
+}
+
+.admin-confirmed-day-strip {
+  display: flex;
+  padding: 0.38rem;
+  border: 1px solid rgba(40, 69, 83, 0.12);
+  border-radius: 18px;
+  background: rgba(249, 251, 252, 0.86);
+  width: 100%;
+  min-width: max-content;
+  box-sizing: border-box;
 }
 
 .admin-confirmed-time-groups {
   display: grid;
   gap: 0.75rem;
+}
+
+.admin-confirmed-empty-state {
+  display: grid;
+  justify-items: center;
+  gap: 0.26rem;
+  padding: 1rem 0.8rem 0.9rem;
+  text-align: center;
+}
+
+.admin-confirmed-empty-icon {
+  width: 2.3rem;
+  height: 2.3rem;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #6d838d;
+  background: rgba(54, 87, 101, 0.06);
+}
+
+.admin-confirmed-empty-icon svg {
+  width: 1rem;
+  height: 1rem;
+}
+
+.admin-confirmed-empty-state strong {
+  color: #314b56;
+  font-size: 0.94rem;
+  font-weight: 700;
+}
+
+.admin-confirmed-empty-state p {
+  margin: 0;
+  color: #6a7f88;
+  font-size: 0.8rem;
+  line-height: 1.45;
+}
+
+.admin-confirmed-calendar-modal {
+  width: min(420px, 96vw);
+}
+
+.admin-confirmed-calendar-close {
+  opacity: 0.78;
+}
+
+.admin-confirmed-calendar {
+  margin-bottom: 0;
+  border-radius: 18px;
+  padding: 0.72rem;
+  background:
+    radial-gradient(circle at top right, rgba(110, 151, 159, 0.12), transparent 36%),
+    linear-gradient(165deg, rgba(250, 252, 252, 0.98), rgba(243, 248, 249, 0.96));
+}
+
+.admin-confirmed-calendar-day {
+  min-height: 42px;
+  border-radius: 12px;
+  padding: 0.2rem 0;
+  display: grid;
+  justify-items: center;
+  align-content: center;
+  gap: 0.08rem;
+}
+
+.admin-confirmed-calendar-day.past {
+  color: #70848d;
+  border-color: rgba(44, 70, 82, 0.14);
+  background: rgba(255, 255, 255, 0.74);
+}
+
+.admin-confirmed-calendar-day.past span:first-child {
+  color: #70848d;
+}
+
+.admin-confirmed-calendar-day-meta {
+  min-height: 0.72rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.22rem;
+}
+
+.admin-confirmed-calendar-day small {
+  font-size: 0.62rem;
+  line-height: 1;
+  color: #647d87;
+  font-weight: 700;
+}
+
+.admin-confirmed-calendar-dot {
+  width: 0.28rem;
+  height: 0.28rem;
+  border-radius: 999px;
+  background: rgba(40, 69, 83, 0.48);
+  display: inline-block;
+}
+
+.admin-confirmed-calendar-day.active small {
+  color: rgba(244, 249, 250, 0.82);
+}
+
+.admin-confirmed-calendar-day.active .admin-confirmed-calendar-dot {
+  background: rgba(244, 249, 250, 0.86);
+}
+
+.admin-confirmed-calendar-legend {
+  margin: 0.55rem 0 0;
+  text-align: center;
+  color: #697f88;
+  font-size: 0.76rem;
+  line-height: 1.45;
 }
 
 .admin-leave-settings-modal {

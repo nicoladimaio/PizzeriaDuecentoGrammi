@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { getAdminAuth, getAdminDb } from "@/lib/firebase-admin";
 
+const HISTORY_RETENTION_DAYS = 14;
+
 const getBearerToken = (request: Request): string | null => {
   const authHeader = request.headers.get("authorization");
   if (!authHeader?.startsWith("Bearer ")) return null;
@@ -23,6 +25,12 @@ const toDateKey = (date: Date): string => {
   return `${year}-${month}-${day}`;
 };
 
+const addDays = (date: Date, amount: number): Date => {
+  const next = new Date(date);
+  next.setDate(next.getDate() + amount);
+  return next;
+};
+
 export async function POST(request: Request) {
   try {
     const token = getBearerToken(request);
@@ -39,11 +47,13 @@ export async function POST(request: Request) {
     const db = getAdminDb();
     const today = new Date();
     today.setHours(0, 0, 0, 0);
-    const todayKey = toDateKey(today);
+    const retentionCutoffKey = toDateKey(
+      addDays(today, -(HISTORY_RETENTION_DAYS + 1)),
+    );
 
     const oldReservations = await db
       .collection("reservations")
-      .where("date", "<", todayKey)
+      .where("date", "<=", retentionCutoffKey)
       .get();
 
     if (oldReservations.empty) {

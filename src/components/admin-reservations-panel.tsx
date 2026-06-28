@@ -55,7 +55,7 @@ export type SettingsLeaveGuard = {
   discardChanges: () => void;
 };
 
-const slotMinuteOptions: Array<15 | 30 | 60> = [15, 30, 60];
+const slotMinuteOptions = [15, 30] as const;
 
 const weekdayOptions = [
   { key: 1, label: "Lun" },
@@ -66,6 +66,8 @@ const weekdayOptions = [
   { key: 6, label: "Sab" },
   { key: 0, label: "Dom" },
 ];
+
+type SettingsTab = "general" | "availability" | "exceptions";
 
 const defaultRejectMessage =
   "Non riusciamo a garantirti il posto prenotato per l'orario richiesto. Ti invitiamo a riprovare con una nuova richiesta.";
@@ -79,7 +81,6 @@ const defaultSettings: ReservationSettings = {
   openTime: "19:00",
   closeTime: "23:00",
   slotMinutes: 30,
-  saturdaySlotMinutes: 30,
   capacityPerSlot: 40,
   insideActive: true,
   outsideActive: true,
@@ -88,9 +89,11 @@ const defaultSettings: ReservationSettings = {
   workingDays: [1, 2, 3, 4, 5, 6, 0],
   holidays: [],
   specialOpenings: [],
+  weeklyDisabledSlots: {},
 };
 
 const TOTAL_SEATS_FALLBACK = 80;
+const HISTORY_RETENTION_DAYS = 14;
 
 const todayKey = () => {
   const now = new Date();
@@ -148,6 +151,16 @@ const monthLabel = (value: string) => {
   });
 };
 
+const startOfMonthFromKey = (value: string) => {
+  const [year, month] = value.split("-").map(Number);
+  return new Date(year, (month || 1) - 1, 1);
+};
+
+const endOfMonthFromKey = (value: string) => {
+  const [year, month] = value.split("-").map(Number);
+  return new Date(year, month || 1, 0);
+};
+
 const shiftMonth = (value: string, delta: number) => {
   const [year, month] = value.split("-").map(Number);
   const date = new Date(year, month - 1 + delta, 1);
@@ -176,6 +189,19 @@ const formatDateShort = (value: string) => {
     day: "2-digit",
     month: "2-digit",
   });
+};
+
+const getOperationalDayLabel = (value: string) => {
+  if (value === dateKeyDaysAgo(1)) return "Ieri";
+  if (value === todayKey()) return "Oggi";
+  if (value === dateKeyDaysAhead(1)) return "Domani";
+
+  const parsed = parseDateKey(value);
+  return `${parsed.getDate()} ${parsed
+    .toLocaleDateString("it-IT", {
+      month: "short",
+    })
+    .replace(".", "")}`;
 };
 
 const buildMonthCells = (value: string): CalendarCell[] => {
@@ -214,21 +240,12 @@ const normalizeSettings = (
 ): ReservationSettings => ({
   ...settings,
   slotMinutes:
-    settings.slotMinutes === 15 ||
-    settings.slotMinutes === 30 ||
-    settings.slotMinutes === 60
+    typeof settings.slotMinutes === "number" &&
+    Number.isFinite(settings.slotMinutes) &&
+    settings.slotMinutes >= 5 &&
+    settings.slotMinutes <= 180
       ? settings.slotMinutes
       : 30,
-  saturdaySlotMinutes:
-    settings.saturdaySlotMinutes === 15 ||
-    settings.saturdaySlotMinutes === 30 ||
-    settings.saturdaySlotMinutes === 60
-      ? settings.saturdaySlotMinutes
-      : settings.slotMinutes === 15 ||
-          settings.slotMinutes === 30 ||
-          settings.slotMinutes === 60
-        ? settings.slotMinutes
-        : 30,
   capacityPerSlot:
     typeof settings.capacityPerSlot === "number" &&
     Number.isFinite(settings.capacityPerSlot) &&
@@ -252,6 +269,14 @@ const normalizeSettings = (
   workingDays: [...new Set(settings.workingDays)].sort((a, b) => a - b),
   holidays: [...new Set(settings.holidays)].sort(),
   specialOpenings: [...new Set(settings.specialOpenings)].sort(),
+  weeklyDisabledSlots: Object.fromEntries(
+    Object.entries(settings.weeklyDisabledSlots ?? {}).map(([weekday, values]) => [
+      weekday,
+      [...new Set(Array.isArray(values) ? values : [])]
+        .filter((value) => /^([01]\d|2[0-3]):([0-5]\d)$/.test(value))
+        .sort(),
+    ]),
+  ),
 });
 
 const deriveTotalCapacity = (settings: ReservationSettings): number => {
@@ -266,16 +291,30 @@ const getDefaultDiningArea = (
 ): "inside" | "outside" =>
   settings.insideActive || !settings.outsideActive ? "inside" : "outside";
 
-const getSlotMinutesForDateKey = (
-  dateKey: string,
+const getSlotTimesForWeekday = (
+  _weekday: number,
   settings: ReservationSettings,
-): 15 | 30 | 60 => {
-  const [year, month, day] = dateKey.split("-").map(Number);
-  const date = new Date(year, (month || 1) - 1, day || 1);
-  return date.getDay() === 6
-    ? settings.saturdaySlotMinutes
-    : settings.slotMinutes;
+): string[] => {
+  const open = parseMinutes(settings.openTime);
+  const close = parseMinutes(settings.closeTime);
+  const slotMinutes = settings.slotMinutes;
+
+  if (!Number.isFinite(open) || !Number.isFinite(close) || close < open) {
+    return ["20:00"];
+  }
+
+  const slots: string[] = [];
+  for (let minute = open; minute <= close; minute += slotMinutes) {
+    slots.push(minutesToTime(minute));
+  }
+
+  return slots.length > 0 ? slots : ["20:00"];
 };
+
+const getSlotMinutesForDateKey = (
+  _dateKey: string,
+  settings: ReservationSettings,
+): number => settings.slotMinutes;
 
 const isBookingOpenOnDateKey = (
   dateKey: string,
@@ -358,7 +397,7 @@ export function AdminReservationsPanel({
   const [settingsLoading, setSettingsLoading] = useState(true);
   const [settingsSaving, setSettingsSaving] = useState(false);
   const [settingsError, setSettingsError] = useState<string | null>(null);
-  const [settingsFeedback, setSettingsFeedback] = useState<string | null>(null);
+  const [settingsToast, setSettingsToast] = useState<string | null>(null);
   const [savedSettings, setSavedSettings] =
     useState<ReservationSettings>(defaultSettings);
   const [savedInsideCapacityDraft, setSavedInsideCapacityDraft] = useState(
@@ -373,6 +412,14 @@ export function AdminReservationsPanel({
     "holiday" | "opening"
   >("holiday");
   const [holidayMonth, setHolidayMonth] = useState(monthKey(new Date()));
+  const [settingsTab, setSettingsTab] = useState<SettingsTab>("general");
+  const [selectedAvailabilityWeekday, setSelectedAvailabilityWeekday] = useState(
+    new Date().getDay(),
+  );
+  const [availabilityActionsOpen, setAvailabilityActionsOpen] = useState(false);
+  const [showCopyConfigModal, setShowCopyConfigModal] = useState(false);
+  const [copySourceWeekday, setCopySourceWeekday] = useState(new Date().getDay());
+  const [copyTargetWeekdays, setCopyTargetWeekdays] = useState<number[]>([]);
   const [reservationsView, setReservationsView] = useState<
     "open" | "confirmed"
   >("confirmed");
@@ -403,6 +450,11 @@ export function AdminReservationsPanel({
       notes: "",
     });
   const [currentTime, setCurrentTime] = useState(() => new Date());
+  const [calendarSelectedDate, setCalendarSelectedDate] = useState("");
+  const [confirmedCalendarOpen, setConfirmedCalendarOpen] = useState(false);
+  const [confirmedCalendarMonth, setConfirmedCalendarMonth] = useState(
+    monthKey(new Date()),
+  );
 
   useEffect(() => {
     const db = getClientDb();
@@ -561,7 +613,9 @@ export function AdminReservationsPanel({
   const confirmedRows = useMemo(
     () =>
       orderedRows.filter(
-        (row) => row.date >= dateKeyDaysAgo(2) && row.status === "confirmed",
+        (row) =>
+          row.date >= dateKeyDaysAgo(HISTORY_RETENTION_DAYS) &&
+          row.status === "confirmed",
       ),
     [orderedRows],
   );
@@ -571,28 +625,70 @@ export function AdminReservationsPanel({
     [holidayMonth],
   );
 
-  const confirmedDayKeys = useMemo(() => {
-    return [...new Set(confirmedRows.map((row) => row.date))].sort();
+  const confirmedCalendarCells = useMemo(
+    () => buildMonthCells(confirmedCalendarMonth),
+    [confirmedCalendarMonth],
+  );
+
+  const confirmedCountsByDate = useMemo(() => {
+    const counts = new Map<string, number>();
+    confirmedRows.forEach((row) => {
+      counts.set(row.date, (counts.get(row.date) ?? 0) + 1);
+    });
+    return counts;
   }, [confirmedRows]);
 
-  const bookingWindowDayKeys = useMemo(() => {
-    return Array.from({ length: 31 }, (_, index) => dateKeyDaysAhead(index));
-  }, []);
+  const slotReservationCountsByWeekdayTime = useMemo(() => {
+    const counts = new Map<string, number>();
+    rows.forEach((row) => {
+      if (
+        row.date < todayKey() ||
+        (row.status !== "pending" &&
+          row.status !== "confirmed" &&
+          row.status !== "proposed")
+      ) {
+        return;
+      }
 
-  const confirmedDateSummaries = useMemo(() => {
-    return bookingWindowDayKeys
-      .map((dateValue) => {
-        const rowsForDay = confirmedRows.filter(
-          (row) => row.date === dateValue,
-        );
-        return {
-          date: dateValue,
-          reservationsCount: rowsForDay.length,
-          isSelectable: rowsForDay.length > 0,
-        };
-      })
-      .filter((day) => isBookingOpenOnDateKey(day.date, settings));
-  }, [bookingWindowDayKeys, confirmedRows, settings]);
+      const weekday = parseDateKey(row.date).getDay();
+      const key = `${weekday}|${row.time}`;
+      counts.set(key, (counts.get(key) ?? 0) + 1);
+    });
+    return counts;
+  }, [rows]);
+
+  const selectedAvailabilitySlots = useMemo(
+    () => getSlotTimesForWeekday(selectedAvailabilityWeekday, settings),
+    [selectedAvailabilityWeekday, settings],
+  );
+
+  const confirmedNavigationDays = useMemo(() => {
+    const baseDays = [
+      dateKeyDaysAgo(1),
+      todayKey(),
+      dateKeyDaysAhead(1),
+    ].map((date) => ({
+      date,
+      label: getOperationalDayLabel(date),
+      reservationsCount: confirmedCountsByDate.get(date) ?? 0,
+    }));
+
+    if (
+      calendarSelectedDate &&
+      !baseDays.some((day) => day.date === calendarSelectedDate)
+    ) {
+      return [
+        ...baseDays,
+        {
+          date: calendarSelectedDate,
+          label: getOperationalDayLabel(calendarSelectedDate),
+          reservationsCount: confirmedCountsByDate.get(calendarSelectedDate) ?? 0,
+        },
+      ];
+    }
+
+    return baseDays;
+  }, [calendarSelectedDate, confirmedCountsByDate]);
 
   const confirmedRowsForSelectedDate = useMemo(() => {
     if (!confirmedSelectedDate)
@@ -641,19 +737,43 @@ export function AdminReservationsPanel({
 
   const confirmedSelectedIndex = useMemo(
     () =>
-      confirmedDateSummaries.findIndex(
+      confirmedNavigationDays.findIndex(
         (day) => day.date === confirmedSelectedDate,
       ),
-    [confirmedDateSummaries, confirmedSelectedDate],
+    [confirmedNavigationDays, confirmedSelectedDate],
   );
 
   const manualReservationMaxDate = useMemo(
     () => dateKeyDaysAhead(30),
     [],
   );
+  const manualReservationMinHistoricDate = useMemo(
+    () => dateKeyDaysAgo(HISTORY_RETENTION_DAYS),
+    [],
+  );
+  const isConfirmedSelectedPastDay = Boolean(
+    confirmedSelectedDate && confirmedSelectedDate < todayKey(),
+  );
+  const isConfirmedSelectedHistoricDay = Boolean(
+    confirmedSelectedDate &&
+    confirmedSelectedDate >= manualReservationMinHistoricDate &&
+    confirmedSelectedDate < todayKey(),
+  );
+  const confirmedCalendarPrevMonthDisabled = useMemo(() => {
+    const previousMonthEnd = endOfMonthFromKey(
+      shiftMonth(confirmedCalendarMonth, -1),
+    );
+    return previousMonthEnd < parseDateKey(manualReservationMinHistoricDate);
+  }, [confirmedCalendarMonth, manualReservationMinHistoricDate]);
+  const confirmedCalendarNextMonthDisabled = useMemo(() => {
+    const nextMonthStart = startOfMonthFromKey(
+      shiftMonth(confirmedCalendarMonth, 1),
+    );
+    return nextMonthStart > parseDateKey(manualReservationMaxDate);
+  }, [confirmedCalendarMonth, manualReservationMaxDate]);
 
   const highlightedCurrentTimeSlot = useMemo(() => {
-    const selectedDate = confirmedSelectedDate || bookingWindowDayKeys[0];
+    const selectedDate = confirmedSelectedDate || todayKey();
     if (!selectedDate || selectedDate !== todayKey()) return "";
 
     const nowMinutes =
@@ -668,7 +788,6 @@ export function AdminReservationsPanel({
 
     return matchingGroup?.time ?? "";
   }, [
-    bookingWindowDayKeys,
     confirmedRowsByTime,
     confirmedSelectedDate,
     currentTime,
@@ -723,7 +842,6 @@ export function AdminReservationsPanel({
     manualReservationForm.date,
     settings.closeTime,
     settings.openTime,
-    settings.saturdaySlotMinutes,
     settings.slotMinutes,
   ]);
 
@@ -1014,7 +1132,6 @@ export function AdminReservationsPanel({
 
   const saveSettings = async (closeAfterSave = false) => {
     setSettingsError(null);
-    setSettingsFeedback(null);
     setSettingsSaving(true);
 
     try {
@@ -1054,7 +1171,7 @@ export function AdminReservationsPanel({
       setOutsideCapacityDraft(String(normalized.outsideCapacityPerSlot));
       setSavedInsideCapacityDraft(String(normalized.insideCapacityPerSlot));
       setSavedOutsideCapacityDraft(String(normalized.outsideCapacityPerSlot));
-      setSettingsFeedback("Impostazioni prenotazioni salvate.");
+      setSettingsToast("Impostazioni prenotazioni salvate.");
       if (closeAfterSave) {
         setCalendarPickerOpen(false);
       }
@@ -1072,7 +1189,7 @@ export function AdminReservationsPanel({
     setInsideCapacityDraft(savedInsideCapacityDraft);
     setOutsideCapacityDraft(savedOutsideCapacityDraft);
     setSettingsError(null);
-    setSettingsFeedback("Modifiche annullate.");
+    setSettingsToast("Modifiche annullate.");
   };
 
   const toggleWorkingDay = (day: number) => {
@@ -1099,6 +1216,70 @@ export function AdminReservationsPanel({
       ...prev,
       specialOpenings: prev.specialOpenings.filter((entry) => entry !== value),
     }));
+  };
+
+  const toggleWeeklySlotAvailability = (weekday: number, time: string) => {
+    setSettings((prev) => {
+      const key = String(weekday);
+      const disabledSlots = prev.weeklyDisabledSlots[key] ?? [];
+      const nextDisabledSlots = disabledSlots.includes(time)
+        ? disabledSlots.filter((entry) => entry !== time)
+        : [...disabledSlots, time].sort();
+
+      return {
+        ...prev,
+        weeklyDisabledSlots: {
+          ...prev.weeklyDisabledSlots,
+          [key]: nextDisabledSlots,
+        },
+      };
+    });
+  };
+
+  const toggleCopyTargetWeekday = (weekday: number) => {
+    setCopyTargetWeekdays((prev) =>
+      prev.includes(weekday)
+        ? prev.filter((value) => value !== weekday)
+        : [...prev, weekday].sort((a, b) => a - b),
+    );
+  };
+
+  const applyWeeklySlotCopy = () => {
+    if (copyTargetWeekdays.length === 0) return;
+
+    const sourceSlots = [
+      ...(settings.weeklyDisabledSlots[String(copySourceWeekday)] ?? []),
+    ];
+
+    setSettings((prev) => ({
+      ...prev,
+      weeklyDisabledSlots: {
+        ...prev.weeklyDisabledSlots,
+        ...Object.fromEntries(
+          copyTargetWeekdays.map((weekday) => [String(weekday), [...sourceSlots]]),
+        ),
+      },
+    }));
+    setCopyTargetWeekdays([]);
+    setShowCopyConfigModal(false);
+    setSettingsToast("Configurazione slot duplicata.");
+    setSettingsError(null);
+  };
+
+  const regenerateWeeklySlotAvailability = () => {
+    const confirmed = window.confirm(
+      "Questa operazione ricreera gli slot utilizzando le impostazioni generali. Le disponibilita personalizzate verranno sovrascritte. Le prenotazioni gia esistenti NON verranno modificate.",
+    );
+
+    if (!confirmed) return;
+
+    setSettings((prev) => ({
+      ...prev,
+      weeklyDisabledSlots: {},
+    }));
+    setSettingsToast("Configurazione slot ripristinata.");
+    setSettingsError(null);
+    setAvailabilityActionsOpen(false);
   };
 
   const finalizeAreaCapacityDraft = (area: "inside" | "outside") => {
@@ -1262,6 +1443,10 @@ export function AdminReservationsPanel({
     setManualReservationSaving(true);
 
     try {
+      if (manualReservationForm.date < todayKey()) {
+        throw new Error("Non puoi aggiungere prenotazioni in un giorno passato.");
+      }
+
       const auth = getClientAuth();
       const token = await auth.currentUser?.getIdToken();
       if (!token) {
@@ -1305,31 +1490,41 @@ export function AdminReservationsPanel({
   };
 
   useEffect(() => {
-    const selectableDayKeys = confirmedDateSummaries
-      .filter((day) => day.isSelectable)
-      .map((day) => day.date);
-
-    if (selectableDayKeys.length === 0) {
-      setConfirmedSelectedDate("");
+    if (!confirmedSelectedDate) {
+      setConfirmedSelectedDate(todayKey());
       return;
     }
 
-    const stillExists = selectableDayKeys.includes(confirmedSelectedDate);
+    const isBaseDay = [
+      dateKeyDaysAgo(1),
+      todayKey(),
+      dateKeyDaysAhead(1),
+    ].includes(confirmedSelectedDate);
 
-    if (!stillExists) {
-      const today = todayKey();
-      const nextDate =
-        selectableDayKeys.find((dateValue) => dateValue >= today) ??
-        selectableDayKeys[0];
-      setConfirmedSelectedDate(nextDate);
+    if (!isBaseDay && calendarSelectedDate !== confirmedSelectedDate) {
+      setCalendarSelectedDate(confirmedSelectedDate);
     }
-  }, [confirmedDateSummaries, confirmedSelectedDate]);
+  }, [calendarSelectedDate, confirmedSelectedDate]);
 
   useEffect(() => {
-    if (hasUnsavedSettingsChanges && settingsFeedback) {
-      setSettingsFeedback(null);
+    if (
+      confirmedSelectedDate === dateKeyDaysAgo(1) ||
+      confirmedSelectedDate === todayKey() ||
+      confirmedSelectedDate === dateKeyDaysAhead(1)
+    ) {
+      setCalendarSelectedDate("");
     }
-  }, [hasUnsavedSettingsChanges, settingsFeedback]);
+  }, [confirmedSelectedDate]);
+
+  useEffect(() => {
+    if (!settingsToast) return;
+
+    const timer = window.setTimeout(() => {
+      setSettingsToast(null);
+    }, 2600);
+
+    return () => window.clearTimeout(timer);
+  }, [settingsToast]);
 
   useEffect(() => {
     if (!hasUnsavedSettingsChanges) {
@@ -1446,7 +1641,63 @@ export function AdminReservationsPanel({
     });
   };
 
-  if (loading) {
+  useEffect(() => {
+    setSettings((prev) => {
+      const normalizedDisabledSlots = Object.fromEntries(
+        Object.entries(prev.weeklyDisabledSlots).map(([weekday, values]) => {
+          const validSlots = new Set(
+            getSlotTimesForWeekday(Number(weekday), prev),
+          );
+          return [
+            weekday,
+            values.filter((value) => validSlots.has(value)),
+          ];
+        }),
+      );
+
+      const sameSnapshot =
+        JSON.stringify(normalizedDisabledSlots) ===
+        JSON.stringify(prev.weeklyDisabledSlots);
+
+      if (sameSnapshot) {
+        return prev;
+      }
+
+      return {
+        ...prev,
+        weeklyDisabledSlots: normalizedDisabledSlots,
+      };
+    });
+  }, [settings.openTime, settings.closeTime, settings.slotMinutes]);
+
+  const openConfirmedCalendarPicker = () => {
+    const targetDate =
+      confirmedSelectedDate ||
+      calendarSelectedDate ||
+      todayKey();
+    setConfirmedCalendarMonth(monthKey(parseDateKey(targetDate)));
+    setConfirmedCalendarOpen(true);
+  };
+
+  const selectConfirmedCalendarDate = (dateKey: string) => {
+    setError(null);
+    setCalendarSelectedDate(dateKey);
+    setConfirmedSelectedDate(dateKey);
+    setConfirmedCalendarOpen(false);
+  };
+
+  const handleOpenManualReservationModal = () => {
+    if (reservationsView === "confirmed" && isConfirmedSelectedPastDay) {
+      setError("Non puoi aggiungere prenotazioni in un giorno passato.");
+      return;
+    }
+
+    setError(null);
+    resetManualReservationForm();
+    setShowManualReservationModal(true);
+  };
+
+  if (!settingsOnly && (loading || settingsLoading)) {
     return <p className="section-subtitle">Caricamento prenotazioni...</p>;
   }
 
@@ -1487,10 +1738,7 @@ export function AdminReservationsPanel({
             <button
               type="button"
               className="admin-reservation-tab admin-reservation-tab-plus"
-              onClick={() => {
-                resetManualReservationForm();
-                setShowManualReservationModal(true);
-              }}
+              onClick={handleOpenManualReservationModal}
               aria-label="Aggiungi prenotazione manuale"
             >
               +
@@ -1544,10 +1792,7 @@ export function AdminReservationsPanel({
                     onClick={() => {
                       const idx = confirmedSelectedIndex;
                       if (idx > 0) {
-                        const previousDay = confirmedDateSummaries
-                          .slice(0, idx)
-                          .reverse()
-                          .find((day) => day.isSelectable);
+                        const previousDay = confirmedNavigationDays[idx - 1];
                         if (previousDay) {
                           setConfirmedSelectedDate(previousDay.date);
                         }
@@ -1559,13 +1804,18 @@ export function AdminReservationsPanel({
                   <div className="admin-confirmed-day-label">
                     <strong>
                       {parseDateKey(
-                        confirmedSelectedDate || bookingWindowDayKeys[0],
+                        confirmedSelectedDate || todayKey(),
                       ).toLocaleDateString("it-IT", {
                         weekday: "long",
                         day: "numeric",
                         month: "long",
                       })}
                     </strong>
+                    {isConfirmedSelectedHistoricDay ? (
+                      <span className="admin-confirmed-day-meta-chip">
+                        Storico
+                      </span>
+                    ) : null}
                     <small className="admin-confirmed-day-summary">
                       {`👥 ${confirmedSelectedSummary.guestsCount} coperti · 🍕 ${confirmedSelectedSummary.reservationsCount} ${
                         confirmedSelectedSummary.reservationsCount === 1
@@ -1579,14 +1829,12 @@ export function AdminReservationsPanel({
                     className="admin-confirmed-day-btn"
                     disabled={
                       confirmedSelectedIndex >=
-                      confirmedDateSummaries.length - 1
+                      confirmedNavigationDays.length - 1
                     }
                     onClick={() => {
                       const idx = confirmedSelectedIndex;
-                      if (idx >= 0 && idx < confirmedDateSummaries.length - 1) {
-                        const nextDay = confirmedDateSummaries
-                          .slice(idx + 1)
-                          .find((day) => day.isSelectable);
+                      if (idx >= 0 && idx < confirmedNavigationDays.length - 1) {
+                        const nextDay = confirmedNavigationDays[idx + 1];
                         if (nextDay) {
                           setConfirmedSelectedDate(nextDay.date);
                         }
@@ -1600,49 +1848,77 @@ export function AdminReservationsPanel({
                 <div className="admin-confirmed-day-strip-wrap">
                   <div
                     className="admin-confirmed-day-strip"
-                    role="tablist"
-                    aria-label="Date prenotazioni confermate"
+                    role="toolbar"
+                    aria-label="Navigazione giorni prenotazioni confermate"
                   >
-                    {confirmedDateSummaries.map((day) => (
+                    {confirmedNavigationDays.map((day) => (
                       <button
                         key={day.date}
                         type="button"
-                        role="tab"
-                        aria-selected={confirmedSelectedDate === day.date}
-                        disabled={!day.isSelectable}
+                        aria-pressed={confirmedSelectedDate === day.date}
                         className={
                           confirmedSelectedDate === day.date
                             ? "admin-confirmed-day-pill active"
                             : "admin-confirmed-day-pill"
                         }
                         onClick={() => {
-                          if (!day.isSelectable) return;
                           setConfirmedSelectedDate(day.date);
                         }}
                       >
-                        <span className="admin-confirmed-day-pill-weekday">
-                          {parseDateKey(day.date).toLocaleDateString("it-IT", {
-                            weekday: "short",
-                          })}
+                        <span className="admin-confirmed-day-pill-label">
+                          {day.label}
                         </span>
-                        <small>
-                          {`${parseDateKey(day.date).getDate()} ${parseDateKey(
-                            day.date,
-                          )
-                            .toLocaleDateString("it-IT", {
-                              month: "short",
-                            })
-                            .replace(".", "")}`}
-                        </small>
+                        {day.reservationsCount > 0 ? (
+                          <span className="admin-confirmed-day-pill-badge">
+                            {day.reservationsCount}
+                          </span>
+                        ) : null}
                       </button>
                     ))}
+                    <button
+                      type="button"
+                      className="admin-confirmed-day-pill admin-confirmed-day-pill-calendar"
+                      onClick={openConfirmedCalendarPicker}
+                      aria-label="Apri calendario"
+                      aria-pressed={confirmedCalendarOpen}
+                    >
+                      <span className="admin-confirmed-day-pill-icon" aria-hidden>
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                          <rect x="3.5" y="5" width="17" height="15" rx="3" />
+                          <path d="M7.5 3.5v3" />
+                          <path d="M16.5 3.5v3" />
+                          <path d="M3.5 9.5h17" />
+                        </svg>
+                      </span>
+                      <span className="admin-confirmed-day-pill-label">
+                        Calendario
+                      </span>
+                    </button>
                   </div>
                 </div>
 
                 {confirmedRowsByTime.length === 0 ? (
-                  <p className="section-subtitle">
-                    Nessuna prenotazione confermata nel giorno selezionato.
-                  </p>
+                  <div className="admin-confirmed-empty-state">
+                    <span className="admin-confirmed-empty-icon" aria-hidden>
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+                        <rect x="4" y="5" width="16" height="15" rx="3" />
+                        <path d="M8 3.5v3" />
+                        <path d="M16 3.5v3" />
+                        <path d="M4 9.5h16" />
+                        <path d="M8.5 13h7" />
+                      </svg>
+                    </span>
+                    <strong>
+                      {isConfirmedSelectedPastDay
+                        ? "Nessuna prenotazione registrata in questo giorno."
+                        : "Nessuna prenotazione per questo giorno"}
+                    </strong>
+                    <p>
+                      {isConfirmedSelectedPastDay
+                        ? "Questo giorno e disponibile solo per consultazione."
+                        : "Puoi aggiungerne una manualmente con il pulsante +."}
+                    </p>
+                  </div>
                 ) : (
                   <div className="admin-confirmed-time-groups">
                     {confirmedRowsByTime.map((group) => (
@@ -1730,7 +2006,13 @@ export function AdminReservationsPanel({
       ) : (
         <section className="card-block admin-settings-landing">
           <div className="admin-reservations-head">
-            <h3>Impostazioni Prenotazioni</h3>
+            <div className="admin-settings-head-copy">
+              <h3>Impostazioni Prenotazioni</h3>
+              <p className="admin-settings-head-note">
+                Apertura, chiusura e intervallo standard vengono usati per
+                generare automaticamente gli slot orari disponibili.
+              </p>
+            </div>
             <div className="admin-reservations-head-actions">
               {onLogout ? (
                 <button
@@ -1748,6 +2030,50 @@ export function AdminReservationsPanel({
             <p className="section-subtitle">Caricamento impostazioni...</p>
           ) : (
             <div className="booking-form">
+              <div className="admin-settings-tabs" role="tablist" aria-label="Impostazioni prenotazioni">
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={settingsTab === "general"}
+                  className={
+                    settingsTab === "general"
+                      ? "admin-settings-tab active"
+                      : "admin-settings-tab"
+                  }
+                  onClick={() => setSettingsTab("general")}
+                >
+                  Generale
+                </button>
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={settingsTab === "availability"}
+                  className={
+                    settingsTab === "availability"
+                      ? "admin-settings-tab active"
+                      : "admin-settings-tab"
+                  }
+                  onClick={() => setSettingsTab("availability")}
+                >
+                  Disponibilita orarie
+                </button>
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={settingsTab === "exceptions"}
+                  className={
+                    settingsTab === "exceptions"
+                      ? "admin-settings-tab active"
+                      : "admin-settings-tab"
+                  }
+                  onClick={() => setSettingsTab("exceptions")}
+                >
+                  Date speciali
+                </button>
+              </div>
+
+              {settingsTab === "general" ? (
+                <div className="admin-settings-tab-panel">
               <div className="admin-settings-row admin-settings-row-3">
                 <div className="admin-settings-time-inline">
                   <label>
@@ -1777,19 +2103,15 @@ export function AdminReservationsPanel({
                     />
                   </label>
                 </div>
-                <label>
-                  Intervallo standard
-                  <select
-                    value={settings.slotMinutes}
+                    <label className="admin-settings-interval-field">
+                      Intervallo standard
+                      <select
+                        value={settings.slotMinutes}
                     onChange={(event) =>
                       setSettings((prev) => ({
                         ...prev,
                         slotMinutes:
-                          Number(event.target.value) === 15
-                            ? 15
-                            : Number(event.target.value) === 60
-                              ? 60
-                              : 30,
+                          Number(event.target.value) === 15 ? 15 : 30,
                       }))
                     }
                   >
@@ -1800,29 +2122,7 @@ export function AdminReservationsPanel({
                     ))}
                   </select>
                 </label>
-                <label>
-                  Intervallo sabato
-                  <select
-                    value={settings.saturdaySlotMinutes}
-                    onChange={(event) =>
-                      setSettings((prev) => ({
-                        ...prev,
-                        saturdaySlotMinutes:
-                          Number(event.target.value) === 15
-                            ? 15
-                            : Number(event.target.value) === 60
-                              ? 60
-                              : 30,
-                      }))
-                    }
-                  >
-                    {slotMinuteOptions.map((option) => (
-                      <option key={option} value={option}>
-                        {option} minuti
-                      </option>
-                    ))}
-                  </select>
-                </label>
+                    <div />
               </div>
 
               <div className="admin-room-cards-grid">
@@ -1944,8 +2244,124 @@ export function AdminReservationsPanel({
                   ))}
                 </div>
               </div>
+                </div>
+              ) : null}
 
-              <div>
+              {settingsTab === "availability" ? (
+                <div className="admin-settings-tab-panel">
+                  <div className="admin-settings-info-card admin-settings-info-card-with-actions">
+                    <div>
+                      <strong>Disponibilita settimanale</strong>
+                      <p>
+                        Scegli gli orari disponibili per ciascun giorno della
+                        settimana. Gli slot disattivati non saranno piu
+                        prenotabili dai clienti. Le prenotazioni gia esistenti
+                        resteranno valide.
+                      </p>
+                    </div>
+                    <div className="admin-settings-actions-menu-wrap">
+                      <button
+                        type="button"
+                        className="btn-secondary admin-modal-btn"
+                        onClick={() =>
+                          setAvailabilityActionsOpen((prev) => !prev)
+                        }
+                        aria-expanded={availabilityActionsOpen}
+                      >
+                        Azioni
+                      </button>
+                      {availabilityActionsOpen ? (
+                        <div className="admin-settings-actions-menu">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setAvailabilityActionsOpen(false);
+                              setShowCopyConfigModal(true);
+                            }}
+                          >
+                            Duplica configurazione
+                          </button>
+                          <button
+                            type="button"
+                            onClick={regenerateWeeklySlotAvailability}
+                          >
+                            Rigenera slot
+                          </button>
+                          <button
+                            type="button"
+                            onClick={regenerateWeeklySlotAvailability}
+                          >
+                            Ripristina configurazione standard
+                          </button>
+                        </div>
+                      ) : null}
+                    </div>
+                  </div>
+
+                  <div className="admin-settings-weekday-strip" role="tablist" aria-label="Giorni disponibilita orarie">
+                    {weekdayOptions.map((day) => (
+                      <button
+                        key={day.key}
+                        type="button"
+                        role="tab"
+                        aria-selected={selectedAvailabilityWeekday === day.key}
+                        className={
+                          selectedAvailabilityWeekday === day.key
+                            ? "admin-settings-weekday-tab active"
+                            : "admin-settings-weekday-tab"
+                        }
+                        onClick={() => setSelectedAvailabilityWeekday(day.key)}
+                      >
+                        {day.label}
+                      </button>
+                    ))}
+                  </div>
+
+                  <div className="admin-settings-slot-grid">
+                    {selectedAvailabilitySlots.map((slotTime) => {
+                      const isEnabled = !(
+                        settings.weeklyDisabledSlots[String(selectedAvailabilityWeekday)] ?? []
+                      ).includes(slotTime);
+                      const hasExistingReservations =
+                        (slotReservationCountsByWeekdayTime.get(
+                          `${selectedAvailabilityWeekday}|${slotTime}`,
+                        ) ?? 0) > 0;
+
+                      return (
+                        <button
+                          key={slotTime}
+                          type="button"
+                          className={
+                            isEnabled
+                              ? "admin-settings-slot-chip active"
+                              : "admin-settings-slot-chip"
+                          }
+                          onClick={() =>
+                            toggleWeeklySlotAvailability(
+                              selectedAvailabilityWeekday,
+                              slotTime,
+                            )
+                          }
+                        >
+                          <span>{slotTime}</span>
+                          {!isEnabled && hasExistingReservations ? (
+                            <small>Gia prenotato</small>
+                          ) : null}
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  <p className="admin-settings-note">
+                    Le prenotazioni gia esistenti restano valide anche se
+                    disattivi uno slot. La modifica blocca solo nuove
+                    prenotazioni.
+                  </p>
+                </div>
+              ) : null}
+
+              {settingsTab === "exceptions" ? (
+              <div className="admin-settings-tab-panel">
                 <div className="admin-chip-head">
                   <p className="booking-step-title">
                     Festività / chiusure straordinarie
@@ -1999,7 +2415,15 @@ export function AdminReservationsPanel({
                     </button>
                   ))}
                 </div>
+
+                {settings.holidays.length === 0 &&
+                settings.specialOpenings.length === 0 ? (
+                  <p className="admin-settings-empty-note">
+                    Nessuna data speciale configurata.
+                  </p>
+                ) : null}
               </div>
+              ) : null}
 
               <div className="booking-step-actions">
                 <button
@@ -2014,12 +2438,15 @@ export function AdminReservationsPanel({
             </div>
           )}
 
-          {settingsFeedback ? (
-            <p className="section-subtitle">{settingsFeedback}</p>
-          ) : null}
           {settingsError ? <p className="error-text">{settingsError}</p> : null}
         </section>
       )}
+
+      {settingsToast ? (
+        <div className="admin-settings-toast" role="status" aria-live="polite">
+          {settingsToast}
+        </div>
+      ) : null}
 
       {selectedReservation ? (
         <div className="admin-modal-backdrop" role="dialog" aria-modal="true">
@@ -2559,6 +2986,81 @@ export function AdminReservationsPanel({
         </div>
       ) : null}
 
+      {showCopyConfigModal ? (
+        <div className="admin-modal-backdrop" role="dialog" aria-modal="true">
+          <div className="admin-modal admin-settings-modal">
+            <div className="admin-modal-head">
+              <h3>Duplica configurazione</h3>
+              <button
+                type="button"
+                className="btn-secondary admin-modal-btn"
+                onClick={() => setShowCopyConfigModal(false)}
+              >
+                Annulla
+              </button>
+            </div>
+
+            <div className="booking-form">
+              <label>
+                Giorno sorgente
+                <select
+                  value={copySourceWeekday}
+                  onChange={(event) =>
+                    setCopySourceWeekday(Number(event.target.value))
+                  }
+                >
+                  {weekdayOptions.map((day) => (
+                    <option key={day.key} value={day.key}>
+                      {day.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              <div>
+                <p className="booking-step-title">Giorni di destinazione</p>
+                <div className="admin-inline-chips">
+                  {weekdayOptions
+                    .filter((day) => day.key !== copySourceWeekday)
+                    .map((day) => (
+                      <button
+                        key={day.key}
+                        type="button"
+                        className={
+                          copyTargetWeekdays.includes(day.key)
+                            ? "booking-chip active"
+                            : "booking-chip"
+                        }
+                        onClick={() => toggleCopyTargetWeekday(day.key)}
+                      >
+                        {day.label}
+                      </button>
+                    ))}
+                </div>
+              </div>
+
+              <div className="booking-step-actions two-buttons">
+                <button
+                  type="button"
+                  className="btn-secondary admin-modal-btn"
+                  onClick={() => setShowCopyConfigModal(false)}
+                >
+                  Annulla
+                </button>
+                <button
+                  type="button"
+                  className="btn-primary"
+                  onClick={applyWeeklySlotCopy}
+                  disabled={copyTargetWeekdays.length === 0}
+                >
+                  Duplica
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
       {selectedReservation &&
       pendingCode === selectedReservation.code &&
       activeDecisionAction ? (
@@ -2570,6 +3072,114 @@ export function AdminReservationsPanel({
               className="app-loader-gif"
             />
             <p>{actionLoadingLabel(activeDecisionAction)}</p>
+          </div>
+        </div>
+      ) : null}
+
+      {confirmedCalendarOpen ? (
+        <div className="admin-modal-backdrop" role="dialog" aria-modal="true">
+          <div className="admin-modal admin-calendar-modal admin-confirmed-calendar-modal">
+            <div className="admin-modal-head">
+              <h3>Seleziona un giorno</h3>
+              <button
+                type="button"
+                className="btn-secondary admin-modal-btn admin-confirmed-calendar-close"
+                onClick={() => setConfirmedCalendarOpen(false)}
+              >
+                Chiudi
+              </button>
+            </div>
+
+            <div className="admin-holiday-calendar admin-confirmed-calendar">
+              <div className="admin-holiday-calendar-head">
+                <button
+                  type="button"
+                  className="btn-secondary admin-modal-btn"
+                  disabled={confirmedCalendarPrevMonthDisabled}
+                  onClick={() =>
+                    setConfirmedCalendarMonth((prev) => shiftMonth(prev, -1))
+                  }
+                >
+                  ←
+                </button>
+                <strong>{monthLabel(confirmedCalendarMonth)}</strong>
+                <button
+                  type="button"
+                  className="btn-secondary admin-modal-btn"
+                  disabled={confirmedCalendarNextMonthDisabled}
+                  onClick={() =>
+                    setConfirmedCalendarMonth((prev) => shiftMonth(prev, 1))
+                  }
+                >
+                  →
+                </button>
+              </div>
+
+              <div className="admin-holiday-weekdays">
+                <span>L</span>
+                <span>M</span>
+                <span>M</span>
+                <span>G</span>
+                <span>V</span>
+                <span>S</span>
+                <span>D</span>
+              </div>
+
+              <div className="admin-holiday-days">
+                {confirmedCalendarCells.map((cell, index) => {
+                  if (cell.kind === "empty") {
+                    return (
+                      <span
+                        key={`confirmed-empty-${index}`}
+                        className="admin-holiday-empty"
+                      />
+                    );
+                  }
+
+                  const isDisabled =
+                    cell.dateKey < manualReservationMinHistoricDate ||
+                    cell.dateKey > manualReservationMaxDate;
+                  const isActive = confirmedSelectedDate === cell.dateKey;
+                  const isPast = cell.dateKey < todayKey();
+                  const reservationsCount =
+                    confirmedCountsByDate.get(cell.dateKey) ?? 0;
+
+                  return (
+                    <button
+                      key={cell.dateKey}
+                      type="button"
+                      className={
+                        isActive
+                          ? "admin-holiday-day admin-confirmed-calendar-day active"
+                          : isPast
+                            ? "admin-holiday-day admin-confirmed-calendar-day past"
+                            : "admin-holiday-day admin-confirmed-calendar-day"
+                      }
+                      disabled={isDisabled}
+                      onClick={() => selectConfirmedCalendarDate(cell.dateKey)}
+                    >
+                      <span>{cell.day}</span>
+                      <span className="admin-confirmed-calendar-day-meta">
+                        {reservationsCount > 0 ? (
+                          <small>{reservationsCount}</small>
+                        ) : (
+                          <small>&nbsp;</small>
+                        )}
+                        {reservationsCount > 0 ? (
+                          <span
+                            className="admin-confirmed-calendar-dot"
+                            aria-hidden
+                          />
+                        ) : null}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+              <p className="admin-confirmed-calendar-legend">
+                Gli ultimi 14 giorni sono disponibili come storico.
+              </p>
+            </div>
           </div>
         </div>
       ) : null}
