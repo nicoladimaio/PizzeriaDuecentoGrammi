@@ -33,7 +33,7 @@ export default function HomePage() {
             className="home-brand-logo-reveal"
           />
           <p className="home-tagline">
-            Identita contemporanea, gusto autentico.
+            Identità contemporanea, gusto autentico.
           </p>
           <div className="hero-actions home-cta-row">
             <Link href="/menu" className="btn-primary home-cta home-cta-menu">

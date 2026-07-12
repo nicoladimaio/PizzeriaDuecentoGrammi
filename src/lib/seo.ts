@@ -20,7 +20,9 @@ export const buildPageMetadata = ({
   const canonicalUrl = `${SITE_URL}${path}`;
 
   return {
-    title,
+    title: {
+      absolute: title,
+    },
     description,
     alternates: {
       canonical: canonicalUrl,

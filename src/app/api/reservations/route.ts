@@ -15,7 +15,6 @@ const createReservationSchema = z.object({
   customerName: z.string().min(2),
   phone: z.string().trim().optional().or(z.literal("")),
   email: z.string().email(),
-  diningArea: z.enum(["inside", "outside"]),
   date: z.string().min(1),
   time: z.string().min(1),
   guests: z.number().int().min(1).max(20),
@@ -52,10 +51,12 @@ export async function POST(request: Request) {
     const code = buildCode();
     const reservationId = db.collection("reservations").doc().id;
     const normalizedPhone = (parsed.data.phone ?? "").trim();
+    const diningArea = "inside" as const;
 
     const reservationDoc = {
       ...parsed.data,
       phone: normalizedPhone,
+      diningArea,
       legalAcceptedAt: nowIso,
       code,
       status: "pending",
@@ -77,7 +78,7 @@ export async function POST(request: Request) {
       customerName: parsed.data.customerName,
       phone: normalizedPhone,
       email: parsed.data.email,
-      diningArea: parsed.data.diningArea,
+      diningArea,
       date: parsed.data.date,
       time: parsed.data.time,
       guests: parsed.data.guests,
@@ -113,7 +114,6 @@ export async function POST(request: Request) {
         date: parsed.data.date,
         time: parsed.data.time,
         guests: parsed.data.guests,
-        diningArea: parsed.data.diningArea,
         notes: parsed.data.notes,
         logoUrl,
       });

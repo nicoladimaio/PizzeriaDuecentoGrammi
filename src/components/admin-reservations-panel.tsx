@@ -38,7 +38,6 @@ type ManualReservationForm = {
   customerName: string;
   phone: string;
   email: string;
-  diningArea: "inside" | "outside";
   date: string;
   time: string;
   guests: string;
@@ -317,11 +316,6 @@ const deriveTotalCapacity = (settings: ReservationSettings): number => {
   return total > 0 ? total : settings.capacityPerSlot;
 };
 
-const getDefaultDiningArea = (
-  settings: ReservationSettings,
-): "inside" | "outside" =>
-  settings.insideActive || !settings.outsideActive ? "inside" : "outside";
-
 const getSlotTimesForWeekday = (
   _weekday: number,
   settings: ReservationSettings,
@@ -480,7 +474,6 @@ export function AdminReservationsPanel({
       customerName: "",
       phone: "",
       email: "",
-      diningArea: getDefaultDiningArea(defaultSettings),
       date: todayKey(),
       time: "20:00",
       guests: "2",
@@ -581,24 +574,6 @@ export function AdminReservationsPanel({
       ignore = true;
     };
   }, []);
-
-  useEffect(() => {
-    setManualReservationForm((prev) => {
-      const selectedRoomVisible =
-        prev.diningArea === "inside"
-          ? settings.insideActive
-          : settings.outsideActive;
-
-      if (selectedRoomVisible) {
-        return prev;
-      }
-
-      return {
-        ...prev,
-        diningArea: getDefaultDiningArea(settings),
-      };
-    });
-  }, [settings]);
 
   const orderedRows = useMemo(() => {
     if (!highlightedCode) return rows;
@@ -860,10 +835,7 @@ export function AdminReservationsPanel({
   const manualTimeOptions = useMemo(() => {
     const open = parseMinutes(settings.openTime);
     const close = parseMinutes(settings.closeTime);
-    const slotMinutes = getSlotMinutesForDateKey(
-      manualReservationForm.date,
-      settings,
-    );
+    const slotMinutes = settings.slotMinutes;
 
     if (!Number.isFinite(open) || !Number.isFinite(close) || close < open) {
       return ["20:00"];
@@ -876,7 +848,6 @@ export function AdminReservationsPanel({
 
     return slots.length > 0 ? slots : ["20:00"];
   }, [
-    manualReservationForm.date,
     settings.closeTime,
     settings.openTime,
     settings.slotMinutes,
@@ -986,10 +957,8 @@ export function AdminReservationsPanel({
     setDecisionError(null);
 
     try {
-      const selectedRow = rows.find((row) => row.code === code);
-      const room = selectedRow?.diningArea === "outside" ? "outside" : "inside";
       const response = await fetch(
-        `/api/reservations/availability?guests=${guests}&room=${room}`,
+        `/api/reservations/availability?guests=${guests}`,
       );
       const data = await parseJsonResponse<DecisionAvailability>(response);
 
@@ -1466,7 +1435,6 @@ export function AdminReservationsPanel({
       customerName: "",
       phone: "",
       email: "",
-      diningArea: getDefaultDiningArea(settings),
       date: todayKey(),
       time: manualTimeOptions[0] ?? "20:00",
       guests: "2",
@@ -1500,7 +1468,6 @@ export function AdminReservationsPanel({
           customerName: manualReservationForm.customerName,
           phone: manualReservationForm.phone,
           email: manualReservationForm.email,
-          diningArea: manualReservationForm.diningArea,
           date: manualReservationForm.date,
           time: manualReservationForm.time,
           guests: Number(manualReservationForm.guests),
@@ -1842,14 +1809,6 @@ export function AdminReservationsPanel({
             >
               CONFERMATE
             </button>
-            <button
-              type="button"
-              className="admin-reservation-tab admin-reservation-tab-plus"
-              onClick={handleOpenManualReservationModal}
-              aria-label="Aggiungi prenotazione manuale"
-            >
-              +
-            </button>
           </div>
 
           {reservationsView === "open" ? (
@@ -2064,10 +2023,7 @@ export function AdminReservationsPanel({
                               <span className="admin-reservation-main">
                                 <strong>{row.customerName}</strong>
                                 <small>
-                                  {row.guests} persone ·{" "}
-                                  {row.diningArea === "outside"
-                                    ? "Sala esterna"
-                                    : "Sala interna"}
+                                  {row.guests} persone
                                 </small>
                                 {row.arrived ? (
                                   <span className="admin-arrived-badge">
@@ -2248,104 +2204,29 @@ export function AdminReservationsPanel({
                     <div />
               </div>
 
-              <div className="admin-room-cards-grid">
-                <div className="admin-room-card">
-                  <div className="admin-room-card-head">
-                    <strong>SALA INTERNA</strong>
-                    <button
-                      type="button"
-                      className="admin-room-visibility-btn"
-                      onClick={() =>
-                        setSettings((prev) => ({
-                          ...prev,
-                          insideActive: !prev.insideActive,
-                        }))
-                      }
-                      aria-label={
-                        settings.insideActive
-                          ? "Nascondi sala interna"
-                          : "Mostra sala interna"
-                      }
-                    >
-                      {settings.insideActive ? "👁" : "🚫"}
-                    </button>
-                  </div>
-                  <label>
-                    Capienza sala interna
-                    <input
-                      type="number"
-                      min={1}
-                      max={500}
-                      value={insideCapacityDraft}
-                      onChange={(event) => {
-                        const raw = event.target.value;
-                        if (!/^\d*$/.test(raw)) return;
-                        setInsideCapacityDraft(raw);
-
-                        if (raw === "") return;
-                        const parsed = Number(raw);
-                        if (!Number.isFinite(parsed) || parsed < 1) return;
-
-                        const normalized = Math.min(500, Math.round(parsed));
-                        setSettings((prev) => ({
-                          ...prev,
-                          insideCapacityPerSlot: normalized,
-                        }));
-                      }}
-                      onBlur={() => finalizeAreaCapacityDraft("inside")}
-                      disabled={!settings.insideActive}
-                    />
-                  </label>
-                </div>
-
-                <div className="admin-room-card">
-                  <div className="admin-room-card-head">
-                    <strong>SALA ESTERNA</strong>
-                    <button
-                      type="button"
-                      className="admin-room-visibility-btn"
-                      onClick={() =>
-                        setSettings((prev) => ({
-                          ...prev,
-                          outsideActive: !prev.outsideActive,
-                        }))
-                      }
-                      aria-label={
-                        settings.outsideActive
-                          ? "Nascondi sala esterna"
-                          : "Mostra sala esterna"
-                      }
-                    >
-                      {settings.outsideActive ? "👁" : "🚫"}
-                    </button>
-                  </div>
-                  <label>
-                    Capienza sala esterna
-                    <input
-                      type="number"
-                      min={1}
-                      max={500}
-                      value={outsideCapacityDraft}
-                      onChange={(event) => {
-                        const raw = event.target.value;
-                        if (!/^\d*$/.test(raw)) return;
-                        setOutsideCapacityDraft(raw);
-
-                        if (raw === "") return;
-                        const parsed = Number(raw);
-                        if (!Number.isFinite(parsed) || parsed < 1) return;
-
-                        const normalized = Math.min(500, Math.round(parsed));
-                        setSettings((prev) => ({
-                          ...prev,
-                          outsideCapacityPerSlot: normalized,
-                        }));
-                      }}
-                      onBlur={() => finalizeAreaCapacityDraft("outside")}
-                      disabled={!settings.outsideActive}
-                    />
-                  </label>
-                </div>
+              <div>
+                <label>
+                  Capienza per fascia oraria
+                  <input
+                    type="number"
+                    min={1}
+                    max={500}
+                    value={settings.capacityPerSlot}
+                    onChange={(event) => {
+                      const parsed = Number(event.target.value);
+                      if (!Number.isFinite(parsed) || parsed < 1) return;
+                      const normalized = Math.min(500, Math.round(parsed));
+                      setSettings((prev) => ({
+                        ...prev,
+                        capacityPerSlot: normalized,
+                        insideCapacityPerSlot: normalized,
+                        outsideCapacityPerSlot: normalized,
+                        insideActive: true,
+                        outsideActive: false,
+                      }));
+                    }}
+                  />
+                </label>
               </div>
 
               <div>
@@ -2607,12 +2488,6 @@ export function AdminReservationsPanel({
             </p>
             <p>
               <strong>Persone:</strong> {selectedReservation.guests}
-            </p>
-            <p>
-              <strong>Sala:</strong>{" "}
-              {selectedReservation.diningArea === "outside"
-                ? "Esterno"
-                : "Interno"}
             </p>
             <p>
               <strong>Stato:</strong> {statusLabel(selectedReservation)}
@@ -3053,28 +2928,6 @@ export function AdminReservationsPanel({
                     }
                   />
                 </label>
-                <label>
-                  Sala
-                  <select
-                    value={manualReservationForm.diningArea}
-                    onChange={(event) =>
-                      setManualReservationForm((prev) => ({
-                        ...prev,
-                        diningArea:
-                          event.target.value === "outside"
-                            ? "outside"
-                            : "inside",
-                      }))
-                    }
-                  >
-                    <option value="inside" disabled={!settings.insideActive}>
-                      Sala interna
-                    </option>
-                    <option value="outside" disabled={!settings.outsideActive}>
-                      Sala esterna
-                    </option>
-                  </select>
-                </label>
               </div>
 
               <label>
@@ -3192,6 +3045,18 @@ export function AdminReservationsPanel({
             </div>
           </div>
         </div>
+      ) : null}
+
+      {!settingsOnly ? (
+        <button
+          type="button"
+          className="admin-reservation-fab"
+          onClick={handleOpenManualReservationModal}
+          aria-label="Aggiungi prenotazione manuale"
+          title="Aggiungi prenotazione"
+        >
+          +
+        </button>
       ) : null}
 
       {selectedReservation &&

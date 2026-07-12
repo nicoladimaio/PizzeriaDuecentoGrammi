@@ -4,7 +4,6 @@ import { getAdminDb } from "@/lib/firebase-admin";
 
 const querySchema = z.object({
   guests: z.coerce.number().int().min(1).max(20),
-  room: z.enum(["inside", "outside"]).optional(),
 });
 
 const MAX_DAYS = 31;
@@ -262,38 +261,13 @@ export async function GET(request: Request) {
       );
     }
 
-    const { guests, room } = parsed.data;
+    const { guests } = parsed.data;
     const db = getAdminDb();
     const settings = await resolveSlotSettings(db);
-
-    const activeRoom: "inside" | "outside" = room
-      ? room
-      : settings.insideActive && !settings.outsideActive
-        ? "inside"
-        : settings.outsideActive && !settings.insideActive
-          ? "outside"
-          : "inside";
-
-    const roomEnabled =
-      activeRoom === "inside" ? settings.insideActive : settings.outsideActive;
-
-    if (room && !roomEnabled) {
-      return NextResponse.json(
-        {
-          error: "La sala selezionata non e disponibile per la prenotazione.",
-          config: {
-            insideActive: settings.insideActive,
-            outsideActive: settings.outsideActive,
-          },
-        },
-        { status: 400 },
-      );
-    }
-
-    const roomCapacity =
-      activeRoom === "inside"
-        ? settings.insideCapacityPerSlot
-        : settings.outsideCapacityPerSlot;
+    const totalCapacity =
+      (settings.insideActive ? settings.insideCapacityPerSlot : 0) +
+      (settings.outsideActive ? settings.outsideCapacityPerSlot : 0) ||
+      settings.capacityPerSlot;
 
     const today = new Date();
     today.setHours(0, 0, 0, 0);
@@ -319,14 +293,12 @@ export async function GET(request: Request) {
         time?: string;
         guests?: number;
         status?: string;
-        diningArea?: "inside" | "outside";
       };
 
       if (!data.date || !data.time || !data.guests || !data.status) continue;
       if (!ACTIVE_STATUSES.has(data.status)) continue;
 
-      const area = data.diningArea === "outside" ? "outside" : "inside";
-      const key = `${data.date}|${data.time}|${area}`;
+      const key = `${data.date}|${data.time}`;
       occupancy.set(key, (occupancy.get(key) ?? 0) + data.guests);
     }
 
@@ -368,24 +340,17 @@ export async function GET(request: Request) {
             available: false,
             remainingSeats: 0,
           }))
-        : !roomEnabled
-          ? slotTimes.map((time) => ({
+        : slotTimes.map((time) => {
+            const isSlotDisabled =
+              (settings.weeklyDisabledSlots[String(weekDay)] ?? []).includes(time);
+            const reserved = occupancy.get(`${date}|${time}`) ?? 0;
+            const remainingSeats = Math.max(totalCapacity - reserved, 0);
+            return {
               time,
-              available: false,
-              remainingSeats: 0,
-            }))
-          : slotTimes.map((time) => {
-              const isSlotDisabled =
-                (settings.weeklyDisabledSlots[String(weekDay)] ?? []).includes(time);
-              const reserved =
-                occupancy.get(`${date}|${time}|${activeRoom}`) ?? 0;
-              const remainingSeats = Math.max(roomCapacity - reserved, 0);
-              return {
-                time,
-                available: !isSlotDisabled && remainingSeats >= guests,
-                remainingSeats,
-              };
-            });
+              available: !isSlotDisabled && remainingSeats >= guests,
+              remainingSeats,
+            };
+          });
 
       const availableSlots = slots.filter((slot) => slot.available).length;
 
@@ -406,11 +371,6 @@ export async function GET(request: Request) {
         closeTime: settings.closeTime,
         slotMinutes: settings.slotMinutes,
         capacityPerSlot: settings.capacityPerSlot,
-        activeRoom,
-        insideActive: settings.insideActive,
-        outsideActive: settings.outsideActive,
-        insideCapacityPerSlot: settings.insideCapacityPerSlot,
-        outsideCapacityPerSlot: settings.outsideCapacityPerSlot,
         workingDays: settings.workingDays,
         sameDayClosedAfterOpen,
       },

@@ -2872,11 +2872,36 @@ p {
 
 .admin-reservation-tabs {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   gap: 0.45rem;
   margin-bottom: 0.65rem;
   width: 100%;
   align-items: center;
+}
+
+.admin-reservation-fab {
+  position: fixed;
+  right: 1rem;
+  bottom: calc(6.4rem + env(safe-area-inset-bottom));
+  width: 56px;
+  height: 56px;
+  border-radius: 999px;
+  border: 0;
+  background: linear-gradient(145deg, #27424e, #365765);
+  color: #f4fbfc;
+  font-size: 1.65rem;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 16px 28px rgba(28, 46, 54, 0.28);
+  cursor: pointer;
+  z-index: 130;
+}
+
+.admin-reservation-fab:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 20px 32px rgba(28, 46, 54, 0.32);
 }
 
 .admin-reservation-tab {
@@ -5190,7 +5215,7 @@ p {
   }
 
   .admin-reservation-tabs {
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
     gap: 0.32rem;
   }
 
@@ -5212,6 +5237,14 @@ p {
     min-width: 42px;
     min-height: 42px;
     font-size: 1.1rem;
+  }
+
+  .admin-reservation-fab {
+    width: 52px;
+    height: 52px;
+    right: 0.8rem;
+    bottom: calc(6rem + env(safe-area-inset-bottom));
+    font-size: 1.5rem;
   }
 
   .admin-menu-toolbar-desktop {

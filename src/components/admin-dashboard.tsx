@@ -468,8 +468,6 @@ export function AdminDashboard({
       .sort((left, right) => left.localeCompare(right))[0] ?? "--:--";
 
   const dashboardDate = formatDashboardDate();
-  const activeRoomsCount =
-    Number(reservationSettings.insideActive) + Number(reservationSettings.outsideActive);
   const totalCapacity = deriveTotalCapacity(reservationSettings);
   const occupancyRatio =
     totalCapacity > 0
@@ -579,7 +577,6 @@ export function AdminDashboard({
               Assetto del servizio prenotazioni di oggi
             </p>
             <div className="admin-home-card-meta">
-              <span>Sale attive: {activeRoomsCount}</span>
               <span>Capienza totale: {totalCapacity}</span>
               <span>
                 Servizio: {reservationSettings.openTime} - {reservationSettings.closeTime}

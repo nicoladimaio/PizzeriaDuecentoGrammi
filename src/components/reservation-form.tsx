@@ -15,7 +15,6 @@ const reservationSchema = z.object({
   customerName: z.string().min(2, "Inserisci nome e cognome."),
   phone: z.string().optional(),
   email: z.string().email("Inserisci una email valida."),
-  diningArea: z.enum(["inside", "outside"]),
   date: z.string().min(1, "Seleziona una data."),
   time: z.string().min(1, "Seleziona un orario."),
   guests: z.coerce.number().int().min(1).max(20),
@@ -52,11 +51,6 @@ type AvailabilityResponse = {
     closeTime: string;
     slotMinutes: number;
     saturdaySlotMinutes?: number;
-    activeRoom?: "inside" | "outside";
-    insideActive?: boolean;
-    outsideActive?: boolean;
-    insideCapacityPerSlot?: number;
-    outsideCapacityPerSlot?: number;
     sameDayClosedAfterOpen?: boolean;
   };
   error?: string;
@@ -130,10 +124,9 @@ const parseJsonResponse = async <T,>(response: Response): Promise<T> => {
 };
 
 export function ReservationForm() {
-  const STEP_1_TO_2_MESSAGE = "Controllo le sale disponibili...";
+  const STEP_1_TO_2_MESSAGE = "Sto caricando il calendario...";
   const STEP_3_TO_4_MESSAGE =
     "Sto aprendo il riepilogo della tua prenotazione...";
-  const STEP_2_TO_3_MESSAGE = "Sto caricando il calendario...";
 
   const router = useRouter();
   const [step, setStep] = useState<BookingStep>(1);
@@ -145,9 +138,6 @@ export function ReservationForm() {
   );
 
   const [guests, setGuests] = useState<number | null>(null);
-  const [diningArea, setDiningArea] = useState<"inside" | "outside" | null>(
-    null,
-  );
   const [customGuestsOpen, setCustomGuestsOpen] = useState(false);
   const [customGuestsValue, setCustomGuestsValue] = useState("");
   const [customGuestsError, setCustomGuestsError] = useState<string | null>(
@@ -166,11 +156,6 @@ export function ReservationForm() {
   const [availability, setAvailability] = useState<AvailabilityResponse | null>(
     null,
   );
-  const [roomConfig, setRoomConfig] = useState<{
-    insideActive: boolean;
-    outsideActive: boolean;
-  } | null>(null);
-  const [loadingRoomConfig, setLoadingRoomConfig] = useState(false);
 
   const [error, setError] = useState<string | null>(null);
   const [reviewOpen, setReviewOpen] = useState(false);
@@ -232,10 +217,7 @@ export function ReservationForm() {
     Boolean(selectedTime) &&
     legalAccepted &&
     !pending;
-
-  const insideRoomEnabled = roomConfig?.insideActive ?? false;
-  const outsideRoomEnabled = roomConfig?.outsideActive ?? false;
-  const noRoomEnabled = !insideRoomEnabled && !outsideRoomEnabled;
+  const visualStep = step === 1 ? 1 : step === 3 ? 2 : 3;
 
   useEffect(() => {
     const resetBookingFlow = () => {
@@ -246,7 +228,6 @@ export function ReservationForm() {
       setPending(false);
       setRedirecting(false);
       setGuests(null);
-      setDiningArea(null);
       setCustomGuestsOpen(false);
       setCustomGuestsValue("");
       setCustomGuestsError(null);
@@ -259,10 +240,8 @@ export function ReservationForm() {
       setNotes("");
       setLegalAccepted(false);
       setAvailability(null);
-      setRoomConfig(null);
       setSelectedMonth("");
       setLoadingAvailability(false);
-      setLoadingRoomConfig(false);
     };
 
     window.addEventListener("booking:reset-to-step-1", resetBookingFlow);
@@ -272,77 +251,7 @@ export function ReservationForm() {
   }, []);
 
   useEffect(() => {
-    if (!guests || step < 2) {
-      setRoomConfig(null);
-      return;
-    }
-
-    let ignore = false;
-
-    const loadRoomConfig = async () => {
-      setLoadingRoomConfig(true);
-
-      try {
-        const response = await fetch(
-          `/api/reservations/availability?guests=${guests}`,
-        );
-        const data = await parseJsonResponse<AvailabilityResponse>(response);
-
-        if (ignore) return;
-
-        if (!response.ok) {
-          setRoomConfig({
-            insideActive: data.config?.insideActive ?? false,
-            outsideActive: data.config?.outsideActive ?? false,
-          });
-          return;
-        }
-
-        const insideActive = data.config.insideActive ?? true;
-        const outsideActive = data.config.outsideActive ?? true;
-
-        setRoomConfig({ insideActive, outsideActive });
-
-        if (insideActive && !outsideActive) {
-          setDiningArea("inside");
-        } else if (!insideActive && outsideActive) {
-          setDiningArea("outside");
-        } else if (
-          diningArea &&
-          ((diningArea === "inside" && !insideActive) ||
-            (diningArea === "outside" && !outsideActive))
-        ) {
-          setDiningArea(null);
-        }
-      } catch {
-        if (!ignore) {
-          setRoomConfig({ insideActive: false, outsideActive: false });
-        }
-      } finally {
-        if (!ignore) {
-          setLoadingRoomConfig(false);
-          setTransitionMessage((previous) =>
-            previous === STEP_1_TO_2_MESSAGE ? null : previous,
-          );
-        }
-      }
-    };
-
-    void loadRoomConfig();
-
-    return () => {
-      ignore = true;
-    };
-  }, [guests, step, diningArea]);
-
-  useEffect(() => {
-    if (!guests || !diningArea || step < 3) {
-      setAvailability(null);
-      setSelectedDate("");
-      setSelectedTime("");
-      setStep3View("date");
-      setSelectedMonth("");
-      setLoadingAvailability(false);
+    if (!guests || step < 3) {
       return;
     }
 
@@ -354,22 +263,13 @@ export function ReservationForm() {
 
       try {
         const response = await fetch(
-          `/api/reservations/availability?guests=${guests}&room=${diningArea}`,
+          `/api/reservations/availability?guests=${guests}`,
         );
         const data = await parseJsonResponse<AvailabilityResponse>(response);
 
         if (ignore) return;
 
         if (!response.ok) {
-          setRoomConfig((previous) =>
-            previous
-              ? {
-                  insideActive: data.config?.insideActive ?? previous.insideActive,
-                  outsideActive:
-                    data.config?.outsideActive ?? previous.outsideActive,
-                }
-              : previous,
-          );
           setError(data.error ?? "Impossibile caricare disponibilita.");
           setAvailability(null);
           return;
@@ -390,7 +290,7 @@ export function ReservationForm() {
         if (!ignore) {
           setLoadingAvailability(false);
           setTransitionMessage((previous) =>
-            previous === STEP_2_TO_3_MESSAGE ? null : previous,
+            previous === STEP_1_TO_2_MESSAGE ? null : previous,
           );
         }
       }
@@ -401,7 +301,19 @@ export function ReservationForm() {
     return () => {
       ignore = true;
     };
-  }, [guests, diningArea, step]);
+  }, [guests, step]);
+
+  useEffect(() => {
+    if (!guests || step < 3) {
+      setAvailability(null);
+      setSelectedDate("");
+      setSelectedTime("");
+      setStep3View("date");
+      setSelectedMonth("");
+      setLoadingAvailability(false);
+      return;
+    }
+  }, [guests, step]);
 
   useEffect(() => {
     if (!availability) return;
@@ -438,7 +350,7 @@ export function ReservationForm() {
   };
 
   const submitReservation = async () => {
-    if (!selectedDate || !selectedTime || !canOpenReview || !diningArea) {
+    if (!selectedDate || !selectedTime || !canOpenReview) {
       setError("Completa tutti i campi prima di inviare.");
       return;
     }
@@ -450,7 +362,6 @@ export function ReservationForm() {
       customerName: customerName.trim(),
       phone: phone.trim(),
       email: email.trim(),
-      diningArea,
       date: selectedDate,
       time: selectedTime,
       guests: guests ?? 0,
@@ -524,29 +435,25 @@ export function ReservationForm() {
           Prenota Un Tavolo
         </h2>
       </div>
-      <p className="section-subtitle">Procedi in 4 passaggi rapidi.</p>
+      <p className="section-subtitle">Procedi in 3 passaggi rapidi.</p>
 
       <form className="booking-form" onSubmit={onSubmit}>
         <div
           className="booking-wizard-head"
           role="status"
           aria-live="polite"
-          aria-label={`Step ${step} di 4`}
+          aria-label={`Step ${visualStep} di 3`}
         >
           <span
-            className={step >= 1 ? "wizard-line active" : "wizard-line"}
+            className={visualStep >= 1 ? "wizard-line active" : "wizard-line"}
             aria-hidden="true"
           />
           <span
-            className={step >= 2 ? "wizard-line active" : "wizard-line"}
+            className={visualStep >= 2 ? "wizard-line active" : "wizard-line"}
             aria-hidden="true"
           />
           <span
-            className={step >= 3 ? "wizard-line active" : "wizard-line"}
-            aria-hidden="true"
-          />
-          <span
-            className={step >= 4 ? "wizard-line active" : "wizard-line"}
+            className={visualStep >= 3 ? "wizard-line active" : "wizard-line"}
             aria-hidden="true"
           />
         </div>
@@ -656,106 +563,6 @@ export function ReservationForm() {
                 disabled={!canProceedStep1}
                 onClick={() => {
                   setTransitionMessage(STEP_1_TO_2_MESSAGE);
-                  setStep(2);
-                }}
-              >
-                Avanti
-              </button>
-            </div>
-          </div>
-        ) : null}
-
-        {step === 2 ? (
-          <div className="booking-step booking-step-screen booking-step-screen-2">
-            <p className="booking-step-title">
-              Scegli dove preferisci mangiare
-            </p>
-
-            {noRoomEnabled && !loadingRoomConfig ? (
-              <p className="booking-inline-error">
-                Nessuna sala disponibile in questo momento. Riprova tra poco.
-              </p>
-            ) : null}
-
-            <div
-              className="booking-area-cards"
-              role="group"
-              aria-label="Scelta sala"
-            >
-              <button
-                type="button"
-                className={
-                  diningArea === "inside"
-                    ? "booking-area-card active"
-                    : "booking-area-card"
-                }
-                onClick={() => {
-                  setDiningArea("inside");
-                  setSelectedDate("");
-                  setSelectedTime("");
-                }}
-                disabled={loadingRoomConfig || !insideRoomEnabled}
-              >
-                {!loadingRoomConfig && !insideRoomEnabled ? (
-                  <span className="booking-room-unavailable">
-                    NON DISPONIBILE
-                  </span>
-                ) : null}
-                <div className="booking-area-card-media">
-                  <img
-                    src="/assets/Sala%20interna.jpeg"
-                    alt="Sala interna"
-                  />
-                </div>
-                <span className="booking-area-card-label">Sala interna</span>
-              </button>
-
-              <button
-                type="button"
-                className={
-                  diningArea === "outside"
-                    ? "booking-area-card active"
-                    : "booking-area-card"
-                }
-                onClick={() => {
-                  setDiningArea("outside");
-                  setSelectedDate("");
-                  setSelectedTime("");
-                }}
-                disabled={loadingRoomConfig || !outsideRoomEnabled}
-              >
-                {!loadingRoomConfig && !outsideRoomEnabled ? (
-                  <span className="booking-room-unavailable">
-                    NON DISPONIBILE
-                  </span>
-                ) : null}
-                <div className="booking-area-card-media">
-                  <img
-                    src="/assets/Sala%20esterna.jpeg"
-                    alt="Sala esterna"
-                  />
-                </div>
-                <span className="booking-area-card-label">Sala esterna</span>
-              </button>
-            </div>
-
-            <div className="booking-step-actions two-buttons">
-              <button
-                type="button"
-                className="btn-secondary"
-                onClick={() => {
-                  setTransitionMessage(null);
-                  setStep(1);
-                }}
-              >
-                Indietro
-              </button>
-              <button
-                type="button"
-                className="btn-primary"
-                disabled={loadingRoomConfig || noRoomEnabled || !diningArea}
-                onClick={() => {
-                  setTransitionMessage(STEP_2_TO_3_MESSAGE);
                   setStep(3);
                 }}
               >
@@ -1027,10 +834,6 @@ export function ReservationForm() {
                 Persone: <strong>{guests}</strong>
               </p>
               <p className="booking-selection-summary">
-                Sala:{" "}
-                <strong>{diningArea === "outside" ? "Fuori" : "Dentro"}</strong>
-              </p>
-              <p className="booking-selection-summary">
                 Giorno: <strong>{selectedDateLabel || selectedDate}</strong>
               </p>
               <p className="booking-selection-summary">
@@ -1073,7 +876,7 @@ export function ReservationForm() {
 
       {error ? <p className="error-text">{error}</p> : null}
 
-      {transitionMessage || loadingRoomConfig || (loadingAvailability && step >= 3) ? (
+      {transitionMessage || (loadingAvailability && step >= 3) ? (
         <div
           className="booking-loader-overlay"
           role="status"
@@ -1087,10 +890,7 @@ export function ReservationForm() {
             />
             <p>
               {transitionMessage ??
-                (loadingRoomConfig
-                  ? STEP_1_TO_2_MESSAGE
-                  : null) ??
-                (loadingAvailability ? STEP_2_TO_3_MESSAGE : "Caricamento...")}
+                (loadingAvailability ? STEP_1_TO_2_MESSAGE : "Caricamento...")}
             </p>
           </div>
         </div>

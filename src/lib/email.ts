@@ -17,7 +17,6 @@ type NewReservationCustomerRecapEmailParams = {
   date: string;
   time: string;
   guests: number;
-  diningArea: "inside" | "outside";
   notes?: string;
   logoUrl?: string;
 };
@@ -144,7 +143,6 @@ const buildOwnerReservationHtml = (
 const buildCustomerReservationRecapHtml = (
   params: NewReservationCustomerRecapEmailParams,
 ): string => {
-  const areaLabel = params.diningArea === "outside" ? "Esterno" : "Interno";
   return `
     <p style="margin:0 0 12px;font-size:14px;line-height:1.55;">
       Ciao ${escapeHtml(params.customerName)}, abbiamo ricevuto la tua richiesta.
@@ -153,7 +151,6 @@ const buildCustomerReservationRecapHtml = (
     <table style="width:100%;border-collapse:collapse;font-size:14px;">
       <tr><td style="padding:8px 0;font-weight:700;width:38%;">Data e ora richieste</td><td style="padding:8px 0;">${escapeHtml(params.date)} alle ${escapeHtml(params.time)}</td></tr>
       <tr><td style="padding:8px 0;font-weight:700;">Numero persone</td><td style="padding:8px 0;">${params.guests}</td></tr>
-      <tr><td style="padding:8px 0;font-weight:700;">Sala</td><td style="padding:8px 0;">${areaLabel}</td></tr>
       <tr><td style="padding:8px 0;font-weight:700;vertical-align:top;">Note</td><td style="padding:8px 0;">${escapeHtml(params.notes || "-")}</td></tr>
     </table>
   `;
@@ -285,7 +282,6 @@ const buildCustomerReservationRecapText = (
     "Ti aggiorneremo appena la prenotazione sara stata gestita.",
     `Data e ora richieste: ${params.date} alle ${params.time}`,
     `Numero persone: ${params.guests}`,
-    `Sala: ${params.diningArea === "outside" ? "Esterno" : "Interno"}`,
     `Note: ${params.notes || "-"}`,
   ].join("\n");
 

@@ -26,7 +26,10 @@ const bodyFont = Manrope({
 
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
-  title: "Duecento Grammi",
+  title: {
+    default: "Duecento Grammi | Pizzeria Gourmet a Marcianise",
+    template: "%s | Duecento Grammi",
+  },
   description:
     "Pizzeria Duecento Grammi - prenotazioni, menu e atmosfera napoletana.",
   applicationName: "Duecento Grammi",

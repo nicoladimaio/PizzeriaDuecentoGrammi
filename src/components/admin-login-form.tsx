@@ -8,24 +8,57 @@ import { isAllowedAdminEmail } from "@/lib/auth";
 
 export function AdminLoginForm() {
   const router = useRouter();
+  const [checkingSession, setCheckingSession] = useState(true);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showPassword, setShowPassword] = useState(false);
 
   useEffect(() => {
     const auth = getClientAuth();
+    let active = true;
+
+    const checkExistingSession = async () => {
+      try {
+        if (typeof auth.authStateReady === "function") {
+          await auth.authStateReady();
+        }
+
+        if (!active) return;
+
+        const user = auth.currentUser;
+        if (user && isAllowedAdminEmail(user.email)) {
+          router.replace("/riservato/dashboard");
+          return;
+        }
+      } finally {
+        if (active) {
+          setCheckingSession(false);
+        }
+      }
+    };
+
+    void checkExistingSession();
+
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       if (user && isAllowedAdminEmail(user.email)) {
         router.replace("/riservato/dashboard");
+        return;
+      }
+
+      if (active) {
+        setCheckingSession(false);
       }
     });
 
-    return () => unsubscribe();
+    return () => {
+      active = false;
+      unsubscribe();
+    };
   }, [router]);
 
   const onSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (loading) return;
+    if (loading || checkingSession) return;
 
     setError(null);
     setLoading(true);
@@ -86,12 +119,16 @@ export function AdminLoginForm() {
           </span>
         </label>
       </div>
-      <button className="btn-primary admin-login-submit" type="submit" disabled={loading}>
+      <button
+        className="btn-primary admin-login-submit"
+        type="submit"
+        disabled={loading || checkingSession}
+      >
         {loading ? "Accesso..." : "Accedi"}
       </button>
       {error ? <p className="error-text">{error}</p> : null}
 
-      {loading ? (
+      {checkingSession || loading ? (
         <div className="booking-loader-overlay" role="status" aria-live="polite">
           <div className="booking-loader-card admin-login-loader-card">
             <img
@@ -99,7 +136,11 @@ export function AdminLoginForm() {
               alt="Caricamento"
               className="app-loader-gif"
             />
-            <p>Verifica credenziali in corso...</p>
+            <p>
+              {checkingSession
+                ? "Verifica sessione in corso..."
+                : "Verifica credenziali in corso..."}
+            </p>
           </div>
         </div>
       ) : null}
