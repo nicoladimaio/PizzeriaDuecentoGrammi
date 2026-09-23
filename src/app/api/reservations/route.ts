@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { FieldValue } from "firebase-admin/firestore";
 import { z } from "zod";
 import { getAdminDb } from "@/lib/firebase-admin";
+import { buildReservationCode } from "@/lib/reservation-code";
 import {
   sendCustomerReservationRecapEmail,
   sendOwnerNewReservationEmail,
@@ -10,6 +11,7 @@ import {
   BOOKING_TERMS_VERSION,
   PRIVACY_POLICY_VERSION,
 } from "@/lib/reservation-policies";
+import { verifyTurnstileToken } from "@/lib/turnstile";
 
 const createReservationSchema = z.object({
   customerName: z.string().min(2),
@@ -23,16 +25,12 @@ const createReservationSchema = z.object({
   bookingTermsAccepted: z.literal(true),
   privacyPolicyVersion: z.literal(PRIVACY_POLICY_VERSION),
   bookingTermsVersion: z.literal(BOOKING_TERMS_VERSION),
+  // Lingua del sito al momento della prenotazione (per future email tradotte).
+  locale: z.enum(["it", "en", "es", "de"]).optional(),
+  turnstileToken: z.string().max(2048).optional(),
+  // Campo trappola: invisibile per le persone, i bot lo compilano.
+  website: z.string().optional(),
 });
-
-const buildCode = () => {
-  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
-  let value = "DG-";
-  for (let i = 0; i < 6; i += 1) {
-    value += chars[Math.floor(Math.random() * chars.length)];
-  }
-  return value;
-};
 
 export async function POST(request: Request) {
   try {
@@ -46,15 +44,34 @@ export async function POST(request: Request) {
       );
     }
 
+    const { turnstileToken, website, ...reservationData } = parsed.data;
+
+    if (website) {
+      // Risposta finta: il bot crede di aver prenotato, noi non salviamo nulla.
+      return NextResponse.json({ ok: true });
+    }
+
+    const humanVerified = await verifyTurnstileToken(
+      turnstileToken,
+      request.headers.get("cf-connecting-ip") ??
+        request.headers.get("x-forwarded-for")?.split(",")[0]?.trim(),
+    );
+    if (!humanVerified) {
+      return NextResponse.json(
+        { error: "Verifica anti-spam non superata. Riprova.", code: "captcha_failed" },
+        { status: 400 },
+      );
+    }
+
     const db = getAdminDb();
     const nowIso = new Date().toISOString();
-    const code = buildCode();
+    const code = buildReservationCode();
     const reservationId = db.collection("reservations").doc().id;
-    const normalizedPhone = (parsed.data.phone ?? "").trim();
+    const normalizedPhone = (reservationData.phone ?? "").trim();
     const diningArea = "inside" as const;
 
     const reservationDoc = {
-      ...parsed.data,
+      ...reservationData,
       phone: normalizedPhone,
       diningArea,
       legalAcceptedAt: nowIso,

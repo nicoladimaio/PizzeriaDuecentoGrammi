@@ -1,6 +1,7 @@
 import Image from "next/image";
 import { AllergenBadge } from "@/components/allergens/allergen-badge";
 import { SpiceLevelIndicator } from "@/components/spice-level-indicator";
+import { useSpiceLabels } from "@/hooks/use-spice-labels";
 import { getMenuImageSrc } from "@/lib/menu-image-cdn";
 import type { MenuProduct } from "@/types/menu-app";
 
@@ -10,6 +11,7 @@ type MenuProductCardProps = {
     special: string;
     hot: string;
     recent: string;
+    infoAria: string;
   };
   onOpen: (product: MenuProduct) => void;
 };
@@ -31,6 +33,7 @@ export function MenuProductCard({
   labels,
   onOpen,
 }: MenuProductCardProps) {
+  const spiceLabels = useSpiceLabels();
   const baseImageSrc = product.image || product.imageThumb || "/assets/logo.jpg";
   const cardImageSrc = getMenuImageSrc(baseImageSrc, "card", product.imageFit);
 
@@ -96,7 +99,7 @@ export function MenuProductCard({
         {product.allergens.length > 0 || product.spiceLevel > 0 ? (
           <div
             className="qr-product-meta-row"
-            aria-label="Piccantezza e allergeni del piatto"
+            aria-label={labels?.infoAria ?? "Piccantezza e allergeni del piatto"}
           >
             <div className="qr-product-allergens">
               {product.allergens.map((allergen) => (
@@ -109,6 +112,7 @@ export function MenuProductCard({
             <div className="qr-product-spice-end">
               <SpiceLevelIndicator
                 level={product.spiceLevel}
+                labels={spiceLabels}
                 className="qr-spice-row-inline"
                 showLabel={false}
                 hideWhenZero

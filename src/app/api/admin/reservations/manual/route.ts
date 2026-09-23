@@ -1,7 +1,9 @@
 import { NextResponse } from "next/server";
 import { FieldValue } from "firebase-admin/firestore";
 import { z } from "zod";
-import { getAdminAuth, getAdminDb } from "@/lib/firebase-admin";
+import { requireAdmin } from "@/lib/admin-auth";
+import { getAdminDb } from "@/lib/firebase-admin";
+import { buildReservationCode } from "@/lib/reservation-code";
 
 const manualReservationSchema = z.object({
   customerName: z.string().min(2),
@@ -15,42 +17,10 @@ const manualReservationSchema = z.object({
 
 const ACTIVE_STATUSES = new Set(["pending", "confirmed", "proposed"]);
 
-const getBearerToken = (request: Request): string | null => {
-  const authHeader = request.headers.get("authorization");
-  if (!authHeader?.startsWith("Bearer ")) return null;
-  return authHeader.slice("Bearer ".length);
-};
-
-const isAllowedAdminEmail = (email: string | undefined): boolean => {
-  if (!email) return false;
-  const whitelist = (process.env.NEXT_PUBLIC_ADMIN_EMAILS ?? "")
-    .split(",")
-    .map((entry) => entry.trim().toLowerCase())
-    .filter(Boolean);
-  return whitelist.includes(email.toLowerCase());
-};
-
-const buildCode = () => {
-  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
-  let value = "DG-";
-  for (let i = 0; i < 6; i += 1) {
-    value += chars[Math.floor(Math.random() * chars.length)];
-  }
-  return value;
-};
-
 export async function POST(request: Request) {
   try {
-    const token = getBearerToken(request);
-    if (!token) {
-      return NextResponse.json({ error: "Non autorizzato." }, { status: 401 });
-    }
-
-    const auth = getAdminAuth();
-    const decoded = await auth.verifyIdToken(token);
-    if (!isAllowedAdminEmail(decoded.email)) {
-      return NextResponse.json({ error: "Accesso negato." }, { status: 403 });
-    }
+    const adminCheck = await requireAdmin(request);
+    if (!adminCheck.ok) return adminCheck.response;
 
     const payload = (await request.json()) as unknown;
     const parsed = manualReservationSchema.safeParse(payload);
@@ -64,7 +34,7 @@ export async function POST(request: Request) {
 
     const db = getAdminDb();
     const nowIso = new Date().toISOString();
-    const code = buildCode();
+    const code = buildReservationCode();
     const reservationId = db.collection("reservations").doc().id;
     const normalizedEmail = (parsed.data.email ?? "").trim();
     const normalizedPhone = (parsed.data.phone ?? "").trim();

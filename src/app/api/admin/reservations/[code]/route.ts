@@ -1,43 +1,20 @@
 import { NextResponse } from "next/server";
 import { FieldValue } from "firebase-admin/firestore";
 import { z } from "zod";
-import { getAdminAuth, getAdminDb } from "@/lib/firebase-admin";
+import { requireAdmin } from "@/lib/admin-auth";
+import { getAdminDb } from "@/lib/firebase-admin";
 
 const updateReservationSchema = z.object({
   arrived: z.boolean(),
 });
-
-const getBearerToken = (request: Request): string | null => {
-  const authHeader = request.headers.get("authorization");
-  if (!authHeader?.startsWith("Bearer ")) return null;
-  return authHeader.slice("Bearer ".length);
-};
-
-const isAllowedAdminEmail = (email: string | undefined): boolean => {
-  if (!email) return false;
-  const whitelist = (process.env.NEXT_PUBLIC_ADMIN_EMAILS ?? "")
-    .split(",")
-    .map((entry) => entry.trim().toLowerCase())
-    .filter(Boolean);
-  return whitelist.includes(email.toLowerCase());
-};
 
 export async function DELETE(
   request: Request,
   context: { params: Promise<{ code: string }> },
 ) {
   try {
-    const token = getBearerToken(request);
-    if (!token) {
-      return NextResponse.json({ error: "Non autorizzato." }, { status: 401 });
-    }
-
-    const auth = getAdminAuth();
-    const decoded = await auth.verifyIdToken(token);
-
-    if (!isAllowedAdminEmail(decoded.email)) {
-      return NextResponse.json({ error: "Accesso negato." }, { status: 403 });
-    }
+    const adminCheck = await requireAdmin(request);
+    if (!adminCheck.ok) return adminCheck.response;
 
     const { code } = await context.params;
     const db = getAdminDb();
@@ -77,17 +54,8 @@ export async function PATCH(
   context: { params: Promise<{ code: string }> },
 ) {
   try {
-    const token = getBearerToken(request);
-    if (!token) {
-      return NextResponse.json({ error: "Non autorizzato." }, { status: 401 });
-    }
-
-    const auth = getAdminAuth();
-    const decoded = await auth.verifyIdToken(token);
-
-    if (!isAllowedAdminEmail(decoded.email)) {
-      return NextResponse.json({ error: "Accesso negato." }, { status: 403 });
-    }
+    const adminCheck = await requireAdmin(request);
+    if (!adminCheck.ok) return adminCheck.response;
 
     const payload = (await request.json()) as unknown;
     const parsed = updateReservationSchema.safeParse(payload);

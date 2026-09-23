@@ -1,54 +1,22 @@
 import { NextResponse } from "next/server";
-import { getAdminAuth, getAdminDb } from "@/lib/firebase-admin";
+import { requireAdmin } from "@/lib/admin-auth";
+import { getAdminDb } from "@/lib/firebase-admin";
+import { addDaysToDateKey, getRomeNow } from "@/lib/rome-time";
 
 const HISTORY_RETENTION_DAYS = 14;
-
-const getBearerToken = (request: Request): string | null => {
-  const authHeader = request.headers.get("authorization");
-  if (!authHeader?.startsWith("Bearer ")) return null;
-  return authHeader.slice("Bearer ".length);
-};
-
-const isAllowedAdminEmail = (email: string | undefined): boolean => {
-  if (!email) return false;
-  const whitelist = (process.env.NEXT_PUBLIC_ADMIN_EMAILS ?? "")
-    .split(",")
-    .map((entry) => entry.trim().toLowerCase())
-    .filter(Boolean);
-  return whitelist.includes(email.toLowerCase());
-};
-
-const toDateKey = (date: Date): string => {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
-};
-
-const addDays = (date: Date, amount: number): Date => {
-  const next = new Date(date);
-  next.setDate(next.getDate() + amount);
-  return next;
-};
+// Firestore accetta al massimo 500 operazioni per batch e ogni prenotazione
+// ne richiede 2 (prenotazione + stato): 200 per batch lascia margine.
+const RESERVATIONS_PER_BATCH = 200;
 
 export async function POST(request: Request) {
   try {
-    const token = getBearerToken(request);
-    if (!token) {
-      return NextResponse.json({ error: "Non autorizzato." }, { status: 401 });
-    }
-
-    const auth = getAdminAuth();
-    const decoded = await auth.verifyIdToken(token);
-    if (!isAllowedAdminEmail(decoded.email)) {
-      return NextResponse.json({ error: "Accesso negato." }, { status: 403 });
-    }
+    const adminCheck = await requireAdmin(request);
+    if (!adminCheck.ok) return adminCheck.response;
 
     const db = getAdminDb();
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const retentionCutoffKey = toDateKey(
-      addDays(today, -(HISTORY_RETENTION_DAYS + 1)),
+    const retentionCutoffKey = addDaysToDateKey(
+      getRomeNow().dateKey,
+      -(HISTORY_RETENTION_DAYS + 1),
     );
 
     const oldReservations = await db
@@ -60,22 +28,25 @@ export async function POST(request: Request) {
       return NextResponse.json({ ok: true, deletedCount: 0 });
     }
 
-    const batch = db.batch();
+    const docs = oldReservations.docs;
     let deletedCount = 0;
 
-    for (const doc of oldReservations.docs) {
-      const data = doc.data() as { code?: string };
+    for (let start = 0; start < docs.length; start += RESERVATIONS_PER_BATCH) {
+      const batch = db.batch();
+      const chunk = docs.slice(start, start + RESERVATIONS_PER_BATCH);
 
-      batch.delete(doc.ref);
-      deletedCount += 1;
+      for (const doc of chunk) {
+        const data = doc.data() as { code?: string };
+        batch.delete(doc.ref);
 
-      if (data.code) {
-        const statusRef = db.collection("reservation_status").doc(data.code);
-        batch.delete(statusRef);
+        if (data.code) {
+          batch.delete(db.collection("reservation_status").doc(data.code));
+        }
       }
-    }
 
-    await batch.commit();
+      await batch.commit();
+      deletedCount += chunk.length;
+    }
 
     return NextResponse.json({ ok: true, deletedCount });
   } catch (error) {

@@ -9,7 +9,9 @@
     "start": "next start",
     "lint": "next lint",
     "images:migrate:webp": "node scripts/migrate-menu-images-webp.mjs",
-    "images:migrate:webp:dry": "node scripts/migrate-menu-images-webp.mjs --dry"
+    "images:migrate:webp:dry": "node scripts/migrate-menu-images-webp.mjs --dry",
+    "menu:i18n:export": "node --experimental-strip-types --no-warnings scripts/menu-i18n-export.mjs",
+    "menu:i18n:import": "node --experimental-strip-types --no-warnings scripts/menu-i18n-import.mjs"
   },
   "keywords": [
     "nextjs",
@@ -19,11 +21,13 @@
   "author": "",
   "license": "MIT",
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.128.0",
     "clsx": "^2.1.1",
     "date-fns": "^4.1.0",
     "firebase": "^12.13.0",
     "firebase-admin": "^13.10.0",
     "next": "^16.2.6",
+    "next-intl": "^4.14.6",
     "react": "^19.2.6",
     "react-dom": "^19.2.6",
     "resend": "^6.12.4",

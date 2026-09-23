@@ -1,23 +1,16 @@
 "use client";
 
-import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
-import type { Dispatch, DragEvent, SetStateAction, WheelEvent } from "react";
 import {
-  CeleryIcon,
-  CrustaceansIcon,
-  EggsIcon,
-  FishIcon,
-  GlutenIcon,
-  LupinsIcon,
-  MilkIcon,
-  MolluscsIcon,
-  MustardIcon,
-  PeanutsIcon,
-  SesameIcon,
-  SoyIcon,
-  SulphitesIcon,
-  TreeNutsIcon,
-} from "@/components/allergens/allergen-icons";
+  FormEvent,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type Dispatch,
+  type SetStateAction,
+  type WheelEvent,
+} from "react";
+import { AdminMenuTranslationsPanel } from "@/components/admin-menu-translations-panel";
 import { SpiceLevelIndicator } from "@/components/spice-level-indicator";
 import {
   addDoc,
@@ -29,543 +22,45 @@ import {
 } from "firebase/firestore";
 import { getDownloadURL, ref, uploadBytes } from "firebase/storage";
 import { getClientDb, getClientStorage } from "@/lib/firebase";
+import type { MenuImageFit, MenuImageMeta } from "@/types/menu-app";
 import type {
-  MenuImageFit,
-  MenuImageMeta,
-  MenuImageQualityTier,
-} from "@/types/menu-app";
-
-type AdminMenuItem = {
-  id: string;
-  nome: string;
-  descrizione: string;
-  ingredienti: string;
-  prezzo: number;
-  categoria: string;
-  specialita: boolean;
-  spiceLevel: number;
-  immagine: string;
-  immagineThumb: string;
-  imageFit?: MenuImageFit;
-  imageMeta?: MenuImageMeta;
-  ordine: number;
-  ingredientIds: string[];
-  allergeni: string[];
-  visible: boolean;
-};
-
-type MenuCategory = {
-  id: string;
-  name: string;
-  ordine: number;
-  visible: boolean;
-};
-
-type MenuIngredient = {
-  id: string;
-  name: string;
-  ordine: number;
-  allergeni: string[];
-};
-
-type AllergenDef = {
-  key: string;
-  label: string;
-};
-
-type ItemToggleUndoToast = {
-  action: "specialty" | "visibility";
-  itemId: string;
-  itemName: string;
-  nextValue: boolean;
-  message: string;
-};
-
-type ImageUploadAnalysis = {
-  originalWidth: number;
-  originalHeight: number;
-  originalFileSize: number;
-  qualityTier: MenuImageQualityTier;
-  warning: string | null;
-  needsUpscaling: boolean;
-};
-
-type OptimizedImageUpload = {
-  file: File;
-  meta: ImageUploadAnalysis & {
-    optimizedFileSize: number;
-  };
-};
-
-const ALLERGENS: AllergenDef[] = [
-  { key: "glutine", label: "Glutine" },
-  { key: "arachidi", label: "Arachidi" },
-  { key: "sedano", label: "Sedano" },
-  { key: "senape", label: "Senape" },
-  { key: "sesamo", label: "Sesamo" },
-  { key: "latte", label: "Latte" },
-  { key: "uova", label: "Uova" },
-  { key: "frutta_guscio", label: "Frutta a guscio" },
-  { key: "soia", label: "Soia" },
-  { key: "pesce", label: "Pesce" },
-  { key: "crostacei", label: "Crostacei" },
-  { key: "molluschi", label: "Molluschi" },
-  { key: "lupini", label: "Lupini" },
-  { key: "solfiti", label: "Solfiti" },
-];
-
-const MENU_DESCRIPTION_MAX_LENGTH = 1200;
-const DEFAULT_MENU_IMAGE_FIT: MenuImageFit = "cover";
-const DEFAULT_MENU_IMAGE = "assets/logo.jpg";
-const MENU_IMAGE_HD_MIN = 1200;
-const MENU_IMAGE_GOOD_MIN = 800;
-const MENU_IMAGE_MAX_SIDE = 1600;
-const MENU_IMAGE_WEBP_QUALITY = 0.82;
-const LOW_QUALITY_IMAGE_WARNING =
-  "Questa immagine potrebbe apparire sgranata quando i clienti la visualizzano o la ingrandiscono. Per un risultato migliore consigliamo una foto di almeno 1200×1200 pixel.";
-
-const normalizeMenuImagePath = (image: string | null | undefined) =>
-  image?.trim().replace(/^\/+/, "").toLowerCase() ?? "";
-
-const hasCustomMenuImage = (image: string | null | undefined) => {
-  const normalized = normalizeMenuImagePath(image);
-  return Boolean(normalized) && normalized !== DEFAULT_MENU_IMAGE.toLowerCase();
-};
-
-const getMenuImageQualityTier = (longestSide: number): MenuImageQualityTier => {
-  if (longestSide >= MENU_IMAGE_HD_MIN) return "hd";
-  if (longestSide >= MENU_IMAGE_GOOD_MIN) return "good";
-  return "low";
-};
-
-const getMenuImageQualityLabel = (tier: MenuImageQualityTier): string => {
-  if (tier === "hd") return "HD";
-  if (tier === "good") return "Buona";
-  return "Bassa qualita";
-};
-
-const getMenuImageMetaFromRaw = (data: Record<string, unknown>): MenuImageMeta => {
-  const originalWidth = Number(
-    data.imageOriginalWidth ?? data.originalWidth ?? data.immagineLarghezza,
-  );
-  const originalHeight = Number(
-    data.imageOriginalHeight ?? data.originalHeight ?? data.immagineAltezza,
-  );
-  const originalFileSize = Number(
-    data.imageOriginalFileSize ??
-      data.originalFileSize ??
-      data.immagineDimensioneOriginale,
-  );
-  const optimizedFileSize = Number(
-    data.imageOptimizedFileSize ??
-      data.optimizedFileSize ??
-      data.immagineDimensioneOttimizzata,
-  );
-  const qualityTier =
-    data.imageQualityTier === "hd" ||
-    data.imageQualityTier === "good" ||
-    data.imageQualityTier === "low"
-      ? data.imageQualityTier
-      : undefined;
-
-  return {
-    originalWidth: Number.isFinite(originalWidth) && originalWidth > 0
-      ? originalWidth
-      : undefined,
-    originalHeight: Number.isFinite(originalHeight) && originalHeight > 0
-      ? originalHeight
-      : undefined,
-    originalFileSize: Number.isFinite(originalFileSize) && originalFileSize > 0
-      ? originalFileSize
-      : undefined,
-    optimizedFileSize:
-      Number.isFinite(optimizedFileSize) && optimizedFileSize > 0
-        ? optimizedFileSize
-        : undefined,
-    qualityTier,
-  };
-};
-
-const formatBytes = (bytes: number | undefined): string => {
-  if (!bytes || bytes <= 0) return "";
-  if (bytes >= 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-  return `${Math.max(1, Math.round(bytes / 1024))} KB`;
-};
-
-function AllergenIcon({ type }: { type: string }) {
-  const iconProps = {
-    viewBox: "0 0 24 24",
-    fill: "none",
-    stroke: "currentColor",
-    strokeWidth: 1.7,
-    strokeLinecap: "round" as const,
-    strokeLinejoin: "round" as const,
-  };
-
-  switch (type) {
-    case "glutine":
-      return <GlutenIcon aria-hidden {...iconProps} />;
-    case "latte":
-      return <MilkIcon aria-hidden {...iconProps} />;
-    case "arachidi":
-      return <PeanutsIcon aria-hidden {...iconProps} />;
-    case "sedano":
-      return <CeleryIcon aria-hidden {...iconProps} />;
-    case "senape":
-      return <MustardIcon aria-hidden {...iconProps} />;
-    case "sesamo":
-      return <SesameIcon aria-hidden {...iconProps} />;
-    case "uova":
-      return <EggsIcon aria-hidden {...iconProps} />;
-    case "frutta_guscio":
-      return <TreeNutsIcon aria-hidden {...iconProps} />;
-    case "soia":
-      return <SoyIcon aria-hidden {...iconProps} />;
-    case "pesce":
-      return <FishIcon aria-hidden {...iconProps} />;
-    case "crostacei":
-      return <CrustaceansIcon aria-hidden {...iconProps} />;
-    case "molluschi":
-      return <MolluscsIcon aria-hidden {...iconProps} />;
-    case "lupini":
-      return <LupinsIcon aria-hidden {...iconProps} />;
-    case "solfiti":
-      return <SulphitesIcon aria-hidden {...iconProps} />;
-    default:
-      return <SesameIcon aria-hidden {...iconProps} />;
-  }
-}
-
-function VisibilityIcon({ visible }: { visible: boolean }) {
-  if (visible) {
-    return (
-      <svg viewBox="0 0 24 24" aria-hidden>
-        <path d="M2.2 12s3.6-5.7 9.8-5.7 9.8 5.7 9.8 5.7-3.6 5.7-9.8 5.7S2.2 12 2.2 12z" />
-        <circle cx="12" cy="12" r="2.8" />
-      </svg>
-    );
-  }
-
-  return (
-    <svg viewBox="0 0 24 24" aria-hidden>
-      <path d="M2.2 12s3.6-5.7 9.8-5.7 9.8 5.7 9.8 5.7-3.6 5.7-9.8 5.7S2.2 12 2.2 12z" />
-      <circle cx="12" cy="12" r="2.8" />
-      <path d="M4 20L20 4" />
-    </svg>
-  );
-}
-
-const toString = (value: unknown): string => String(value ?? "").trim();
-
-const parseStringArray = (value: unknown): string[] => {
-  if (!Array.isArray(value)) return [];
-  return value
-    .map((entry) => toString(entry))
-    .filter((entry) => entry.length > 0);
-};
-
-const uniqueInsensitive = (values: string[]): string[] => {
-  const out: string[] = [];
-  values.forEach((value) => {
-    if (!out.some((entry) => entry.toLowerCase() === value.toLowerCase())) {
-      out.push(value);
-    }
-  });
-  return out;
-};
-
-const normalizePrice = (value: unknown): number | null => {
-  const raw = String(value ?? "")
-    .trim()
-    .replace(",", ".");
-  if (!raw) return null;
-  const parsed = Number(raw);
-  if (!Number.isFinite(parsed) || parsed <= 0) return null;
-  return Number(parsed.toFixed(2));
-};
-
-const formatPriceDraft = (value: string): string => {
-  const sanitized = value.replace(/[^\d.,]/g, "").replace(/\./g, ",");
-  const [integerPartRaw = "", ...decimalsRaw] = sanitized.split(",");
-  const integerPart = integerPartRaw.replace(/^0+(?=\d)/, "");
-  const decimals = decimalsRaw.join("").slice(0, 2);
-
-  if (sanitized.includes(",")) {
-    return `${integerPart || "0"},${decimals}`;
-  }
-
-  return integerPart;
-};
-
-const parseSpiceLevel = (value: unknown): number => {
-  if (typeof value === "boolean") return value ? 1 : 0;
-
-  if (value && typeof value === "object") {
-    const asObject = value as Record<string, unknown>;
-    const nested =
-      asObject.level ?? asObject.value ?? asObject.intensity ?? asObject.degree;
-    if (nested !== undefined) return parseSpiceLevel(nested);
-    return 0;
-  }
-
-  const raw = String(value ?? "")
-    .trim()
-    .toLowerCase();
-  if (!raw) return 0;
-
-  if (
-    raw === "si" ||
-    raw === "sì" ||
-    raw === "yes" ||
-    raw === "true" ||
-    raw === "on"
-  ) {
-    return 1;
-  }
-
-  const parsed = Number(raw.replace(",", "."));
-  if (!Number.isFinite(parsed)) {
-    const peppers = (raw.match(/🌶/g) || []).length;
-    if (peppers > 0) return Math.min(3, peppers);
-    if (
-      raw.includes("poco") ||
-      raw.includes("lieve") ||
-      raw.includes("basso") ||
-      raw.includes("low")
-    ) {
-      return 1;
-    }
-    if (
-      raw.includes("medio") ||
-      raw.includes("media") ||
-      raw.includes("medium")
-    ) {
-      return 2;
-    }
-    if (
-      raw.includes("molto") ||
-      raw.includes("alto") ||
-      raw.includes("forte") ||
-      raw.includes("high")
-    ) {
-      return 3;
-    }
-    if (raw.includes("piccante") || raw.includes("spicy")) {
-      return 2;
-    }
-    return 0;
-  }
-  if (parsed <= 0) return 0;
-  if (parsed >= 3) return 3;
-  return Math.round(parsed);
-};
-
-const extractSpiceLevelFromRaw = (raw: Record<string, unknown>): number => {
-  const direct = parseSpiceLevel(
-    raw.piccantezza ??
-      raw.Piccantezza ??
-      raw.livelloPiccantezza ??
-      raw.piccante ??
-      raw.spiceLevel ??
-      raw.SpiceLevel ??
-      raw.spicyLevel ??
-      raw.SpicyLevel,
-  );
-  if (direct > 0) return direct;
-
-  let best = 0;
-  const seen = new WeakSet<object>();
-
-  const visit = (value: unknown, depth: number) => {
-    if (depth > 5 || best >= 3) return;
-
-    if (Array.isArray(value)) {
-      value.forEach((entry) => visit(entry, depth + 1));
-      return;
-    }
-
-    if (!value || typeof value !== "object") return;
-    const obj = value as Record<string, unknown>;
-    if (seen.has(obj)) return;
-    seen.add(obj);
-
-    Object.entries(obj).forEach(([key, entry]) => {
-      if (/piccant|spic/i.test(key)) {
-        best = Math.max(best, parseSpiceLevel(entry));
-      }
-      if (entry && typeof entry === "object") {
-        visit(entry, depth + 1);
-      }
-    });
-  };
-
-  visit(raw, 0);
-  return best;
-};
-
-const getSpiceLabel = (level: number): string => {
-  if (level <= 0) return "";
-  if (level === 1) return "Poco piccante";
-  if (level === 2) return "Piccante";
-  return "Molto piccante";
-};
-
-const sanitizeFileName = (name: string): string =>
-  name.replace(/[^a-zA-Z0-9._-]/g, "_");
-
-const loadImageFromUrl = (url: string): Promise<HTMLImageElement> =>
-  new Promise((resolve, reject) => {
-    const image = new Image();
-    image.decoding = "async";
-    image.onload = () => resolve(image);
-    image.onerror = () => reject(new Error("Impossibile leggere l'immagine."));
-    image.src = url;
-  });
-
-const analyzeImageFile = async (file: File): Promise<ImageUploadAnalysis> => {
-  if (!file.type.startsWith("image/")) {
-    throw new Error("Il file selezionato non e un'immagine valida.");
-  }
-
-  const objectUrl = URL.createObjectURL(file);
-  try {
-    const image = await loadImageFromUrl(objectUrl);
-    const originalWidth = Math.max(1, image.naturalWidth || image.width || 1);
-    const originalHeight = Math.max(1, image.naturalHeight || image.height || 1);
-    const longestSide = Math.max(originalWidth, originalHeight);
-    const qualityTier = getMenuImageQualityTier(longestSide);
-    const needsUpscaling = longestSide < MENU_IMAGE_GOOD_MIN;
-
-    return {
-      originalWidth,
-      originalHeight,
-      originalFileSize: file.size,
-      qualityTier,
-      warning: needsUpscaling ? LOW_QUALITY_IMAGE_WARNING : null,
-      needsUpscaling,
-    };
-  } finally {
-    URL.revokeObjectURL(objectUrl);
-  }
-};
-
-const maybeApplyFutureUpscaling = async (
-  file: File,
-  analysis: ImageUploadAnalysis,
-): Promise<File> => {
-  // Hook pronto per un futuro passaggio automatico di upscaling AI.
-  void analysis;
-  return file;
-};
-
-const optimizeImageForUpload = async (
-  file: File,
-  analysis: ImageUploadAnalysis,
-): Promise<OptimizedImageUpload> => {
-  const source = await maybeApplyFutureUpscaling(file, analysis);
-  const objectUrl = URL.createObjectURL(source);
-
-  try {
-    const image = await loadImageFromUrl(objectUrl);
-    const sourceWidth = Math.max(1, image.naturalWidth || image.width || 1);
-    const sourceHeight = Math.max(1, image.naturalHeight || image.height || 1);
-    const scale = Math.min(
-      1,
-      MENU_IMAGE_MAX_SIDE / Math.max(sourceWidth, sourceHeight),
-    );
-    const targetWidth = Math.max(1, Math.round(sourceWidth * scale));
-    const targetHeight = Math.max(1, Math.round(sourceHeight * scale));
-
-    const canvas = document.createElement("canvas");
-    canvas.width = targetWidth;
-    canvas.height = targetHeight;
-
-    const context = canvas.getContext("2d");
-    if (!context) {
-      return {
-        file: source,
-        meta: {
-          ...analysis,
-          optimizedFileSize: source.size,
-        },
-      };
-    }
-
-    context.imageSmoothingEnabled = true;
-    context.imageSmoothingQuality = "high";
-    context.drawImage(image, 0, 0, targetWidth, targetHeight);
-    const blob = await new Promise<Blob | null>((resolve) => {
-      canvas.toBlob(resolve, "image/webp", MENU_IMAGE_WEBP_QUALITY);
-    });
-    if (!blob) {
-      return {
-        file: source,
-        meta: {
-          ...analysis,
-          optimizedFileSize: source.size,
-        },
-      };
-    }
-
-    const baseName = sanitizeFileName(source.name).replace(/\.[^.]+$/, "");
-    const finalName = `${baseName || `menu-${Date.now()}`}.webp`;
-    const optimizedFile = new File([blob], finalName, {
-      type: "image/webp",
-      lastModified: Date.now(),
-    });
-    return {
-      file: optimizedFile,
-      meta: {
-        ...analysis,
-        optimizedFileSize: optimizedFile.size,
-      },
-    };
-  } catch {
-    return {
-      file: source,
-      meta: {
-        ...analysis,
-        optimizedFileSize: source.size,
-      },
-    };
-  } finally {
-    URL.revokeObjectURL(objectUrl);
-  }
-};
-
-const reorderIds = (ids: string[], movingId: string, targetId: string) => {
-  if (movingId === targetId) return ids;
-  const next = [...ids];
-  const from = next.indexOf(movingId);
-  const to = next.indexOf(targetId);
-  if (from < 0 || to < 0) return ids;
-  const [moved] = next.splice(from, 1);
-  next.splice(to, 0, moved);
-  return next;
-};
-
-const setReorderDragGhost = (event: DragEvent<HTMLElement>, title: string) => {
-  if (!event.dataTransfer) return;
-
-  const ghost = document.createElement("div");
-  ghost.className = "reorder-drag-ghost";
-  ghost.textContent = title;
-  document.body.appendChild(ghost);
-
-  event.dataTransfer.effectAllowed = "move";
-  event.dataTransfer.setData("text/plain", title);
-  event.dataTransfer.setDragImage(ghost, 14, 12);
-
-  window.setTimeout(() => {
-    ghost.remove();
-  }, 0);
-};
-
-const toggleInArray = (arr: string[], value: string): string[] => {
-  const exists = arr.includes(value);
-  if (exists) return arr.filter((entry) => entry !== value);
-  return [...arr, value];
-};
+  AdminMenuItem,
+  MenuCategory,
+  MenuIngredient,
+  AllergenDef,
+  ItemToggleUndoToast,
+  ImageUploadAnalysis,
+} from "@/components/admin-menu/types";
+import {
+  ALLERGENS,
+  MENU_DESCRIPTION_MAX_LENGTH,
+  DEFAULT_MENU_IMAGE_FIT,
+  DEFAULT_MENU_IMAGE,
+} from "@/components/admin-menu/constants";
+import {
+  hasCustomMenuImage,
+  getMenuImageQualityLabel,
+  getMenuImageMetaFromRaw,
+  formatBytes,
+  sanitizeFileName,
+  analyzeImageFile,
+  optimizeImageForUpload,
+} from "@/components/admin-menu/images";
+import { AllergenIcon, VisibilityIcon } from "@/components/admin-menu/icons";
+import {
+  normalizePrice,
+  formatPriceDraft,
+  reorderIds,
+  setReorderDragGhost,
+  toggleInArray,
+} from "@/components/admin-menu/helpers";
+import {
+  normalizeText,
+  parseStringArray,
+  unique as uniqueInsensitive,
+  parseSpiceLevel,
+  extractSpiceLevelFromRaw,
+} from "@/lib/menu-parsing";
 
 export function AdminMenuPanel() {
   const [items, setItems] = useState<AdminMenuItem[]>([]);
@@ -582,7 +77,7 @@ export function AdminMenuPanel() {
   const [fabOpen, setFabOpen] = useState(false);
   const [ingredientSearch, setIngredientSearch] = useState("");
 
-  const [menuSubview, setMenuSubview] = useState<"dishes" | "ingredients">(
+  const [menuSubview, setMenuSubview] = useState<"dishes" | "ingredients" | "translations">(
     "dishes",
   );
   const [activeCategory, setActiveCategory] = useState<string>("");
@@ -752,21 +247,21 @@ export function AdminMenuPanel() {
           const data = entry.data();
           return {
             id: entry.id,
-            nome: toString(data.nome ?? data.Nome),
-            descrizione: toString(data.descrizione ?? data.Descrizione),
-            ingredienti: toString(data.ingredienti ?? data.Ingredienti),
+            nome: normalizeText(data.nome ?? data.Nome),
+            descrizione: normalizeText(data.descrizione ?? data.Descrizione),
+            ingredienti: normalizeText(data.ingredienti ?? data.Ingredienti),
             prezzo: normalizePrice(data.prezzo ?? data.Prezzo) ?? 0,
-            categoria: toString(
+            categoria: normalizeText(
               (data.categoria ?? data.Categoria) || "Pizze classiche",
             ),
             specialita: Boolean(data.specialita ?? data.special),
             spiceLevel: extractSpiceLevelFromRaw(
               data as Record<string, unknown>,
             ),
-            immagine: toString(
+            immagine: normalizeText(
               (data.immagine ?? data.Immagine) || DEFAULT_MENU_IMAGE,
             ),
-            immagineThumb: toString(
+            immagineThumb: normalizeText(
               (data.immagineThumb ?? data.ImmagineThumb ?? data.imageThumb) ||
                 (data.immagine ?? data.Immagine) ||
                 DEFAULT_MENU_IMAGE,
@@ -821,7 +316,7 @@ export function AdminMenuPanel() {
             const data = item.data();
             return {
               id: item.id,
-              name: toString(data.name ?? data.nome),
+              name: normalizeText(data.name ?? data.nome),
               ordine: Number.isFinite(Number(data.ordine))
                 ? Number(data.ordine)
                 : Number.isFinite(Number(data.order))
@@ -866,7 +361,7 @@ export function AdminMenuPanel() {
             const data = entry.data();
             return {
               id: entry.id,
-              name: toString(data.name ?? data.nome),
+              name: normalizeText(data.name ?? data.nome),
               ordine: Number.isFinite(Number(data.ordine))
                 ? Number(data.ordine)
                 : Number.isFinite(Number(data.order))
@@ -1447,7 +942,7 @@ export function AdminMenuPanel() {
   };
 
   const renameCategory = async (categoryId: string) => {
-    const name = toString(categoryDrafts[categoryId]);
+    const name = normalizeText(categoryDrafts[categoryId]);
     if (name.length < 2) {
       setError("La categoria deve contenere almeno 2 caratteri.");
       return;
@@ -2071,81 +1566,98 @@ export function AdminMenuPanel() {
               >
                 Ingredienti
               </button>
-            </div>
 
-            <div className="category-actions">
               <button
                 type="button"
-                className={`category-actions-btn ${fabOpen ? "open" : ""}`}
-                onClick={() => setFabOpen((v) => !v)}
-                aria-label="Azioni"
+                className={
+                  menuSubview === "translations"
+                    ? "admin-tab active"
+                    : "admin-tab"
+                }
+                onClick={() => {
+                  setMenuSubview("translations");
+                  setFabOpen(false);
+                }}
               >
-                <span />
-                <span />
-                <span />
+                Traduzioni
               </button>
-
-              {fabOpen ? (
-                <div className="category-actions-menu">
-                  {menuSubview === "dishes" ? (
-                    <>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          openNewDishModal();
-                          setFabOpen(false);
-                        }}
-                      >
-                        Nuovo piatto
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() => {
-                          openCategoryManager();
-                          setFabOpen(false);
-                        }}
-                      >
-                        Categorie
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() => {
-                          openReorderModal();
-                          setFabOpen(false);
-                        }}
-                        disabled={!activeCategory || visibleItems.length <= 1}
-                      >
-                        Riordina
-                      </button>
-                    </>
-                  ) : (
-                    <>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setShowIngredientModal(true);
-                          setFabOpen(false);
-                        }}
-                      >
-                        Nuovo ingrediente
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setShowAllergenFilters(true);
-                          setFabOpen(false);
-                        }}
-                      >
-                        Filtra allergeni
-                      </button>
-                    </>
-                  )}
-                </div>
-              ) : null}
             </div>
+
+            {menuSubview !== "translations" ? (
+              <div className="category-actions">
+                <button
+                  type="button"
+                  className={`category-actions-btn ${fabOpen ? "open" : ""}`}
+                  onClick={() => setFabOpen((v) => !v)}
+                  aria-label="Azioni"
+                >
+                  <span />
+                  <span />
+                  <span />
+                </button>
+
+                {fabOpen ? (
+                  <div className="category-actions-menu">
+                    {menuSubview === "dishes" ? (
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            openNewDishModal();
+                            setFabOpen(false);
+                          }}
+                        >
+                          Nuovo piatto
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => {
+                            openCategoryManager();
+                            setFabOpen(false);
+                          }}
+                        >
+                          Categorie
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => {
+                            openReorderModal();
+                            setFabOpen(false);
+                          }}
+                          disabled={!activeCategory || visibleItems.length <= 1}
+                        >
+                          Riordina
+                        </button>
+                      </>
+                    ) : (
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setShowIngredientModal(true);
+                            setFabOpen(false);
+                          }}
+                        >
+                          Nuovo ingrediente
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setShowAllergenFilters(true);
+                            setFabOpen(false);
+                          }}
+                        >
+                          Filtra allergeni
+                        </button>
+                      </>
+                    )}
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
           </div>
 
           {menuSubview === "dishes" ? (
@@ -2205,7 +1717,7 @@ export function AdminMenuPanel() {
                 );
               })}
             </div>
-          ) : (
+          ) : menuSubview === "ingredients" ? (
             <div className="ingredient-search-row">
               <input
                 type="search"
@@ -2216,9 +1728,11 @@ export function AdminMenuPanel() {
                 }}
               />
             </div>
-          )}
+          ) : null}
         </div>
       </div>
+
+      {menuSubview === "translations" ? <AdminMenuTranslationsPanel /> : null}
 
       {menuSubview === "dishes" ? (
         <>

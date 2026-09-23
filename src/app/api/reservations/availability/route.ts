@@ -1,6 +1,11 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { getAdminDb } from "@/lib/firebase-admin";
+import {
+  addDaysToDateKey,
+  getRomeNow,
+  getWeekdayOfDateKey,
+} from "@/lib/rome-time";
 
 const querySchema = z.object({
   guests: z.coerce.number().int().min(1).max(20),
@@ -8,19 +13,6 @@ const querySchema = z.object({
 
 const MAX_DAYS = 31;
 const ACTIVE_STATUSES = new Set(["pending", "confirmed", "proposed"]);
-
-const toLocalDateKey = (date: Date): string => {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
-};
-
-const addDays = (date: Date, amount: number): Date => {
-  const next = new Date(date);
-  next.setDate(next.getDate() + amount);
-  return next;
-};
 
 const parseMinutes = (value: string): number => {
   const [hours, minutes] = value.split(":").map(Number);
@@ -243,7 +235,7 @@ const resolveSlotSettings = async (db: ReturnType<typeof getAdminDb>) => {
 };
 
 const getSlotMinutesForDate = (
-  _date: Date,
+  _dateKey: string,
   settings: Awaited<ReturnType<typeof resolveSlotSettings>>,
 ): number => settings.slotMinutes;
 
@@ -269,15 +261,11 @@ export async function GET(request: Request) {
       (settings.outsideActive ? settings.outsideCapacityPerSlot : 0) ||
       settings.capacityPerSlot;
 
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const now = new Date();
-    const nowMinutes = now.getHours() * 60 + now.getMinutes();
-    const sameDayClosedAfterOpen = nowMinutes >= settings.openMinutes;
+    const romeNow = getRomeNow();
+    const sameDayClosedAfterOpen = romeNow.minutes >= settings.openMinutes;
 
-    const endDate = addDays(today, MAX_DAYS - 1);
-    const startKey = toLocalDateKey(today);
-    const endKey = toLocalDateKey(endDate);
+    const startKey = romeNow.dateKey;
+    const endKey = addDaysToDateKey(startKey, MAX_DAYS - 1);
 
     const reservationSnapshot = await db
       .collection("reservations")
@@ -314,10 +302,9 @@ export async function GET(request: Request) {
     > = {};
 
     for (let i = 0; i < MAX_DAYS; i += 1) {
-      const dayDate = addDays(today, i);
-      const date = toLocalDateKey(dayDate);
-      const slotMinutesForDate = getSlotMinutesForDate(dayDate, settings);
-      const weekDay = dayDate.getDay();
+      const date = addDaysToDateKey(startKey, i);
+      const slotMinutesForDate = getSlotMinutesForDate(date, settings);
+      const weekDay = getWeekdayOfDateKey(date);
       const isClosedByRules =
         !settings.workingDays.includes(weekDay) || settings.holidays.has(date);
       const isClosedBySameDayCutoff = i === 0 && sameDayClosedAfterOpen;
