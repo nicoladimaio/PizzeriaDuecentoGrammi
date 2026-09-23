@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { FieldValue } from "firebase-admin/firestore";
 import { z } from "zod";
-import { getAdminAuth, getAdminDb } from "@/lib/firebase-admin";
+import { requireAdmin } from "@/lib/admin-auth";
+import { getAdminDb } from "@/lib/firebase-admin";
 
 const slotMinutesSchema = z.number().int().min(5).max(180);
 const timeValueSchema = z.string().regex(/^([01]\d|2[0-3]):([0-5]\d)$/);
@@ -20,21 +21,6 @@ const settingsSchema = z.object({
   specialOpenings: z.array(z.string().regex(/^\d{4}-\d{2}-\d{2}$/)).max(80),
   weeklyDisabledSlots: z.record(z.string(), z.array(timeValueSchema).max(80)),
 });
-
-const getBearerToken = (request: Request): string | null => {
-  const authHeader = request.headers.get("authorization");
-  if (!authHeader?.startsWith("Bearer ")) return null;
-  return authHeader.slice("Bearer ".length);
-};
-
-const isAllowedAdminEmail = (email: string | undefined): boolean => {
-  if (!email) return false;
-  const whitelist = (process.env.NEXT_PUBLIC_ADMIN_EMAILS ?? "")
-    .split(",")
-    .map((entry) => entry.trim().toLowerCase())
-    .filter(Boolean);
-  return whitelist.includes(email.toLowerCase());
-};
 
 const parseMinutes = (value: string): number => {
   const [hours, minutes] = value.split(":").map(Number);
@@ -76,16 +62,8 @@ const defaultSettings = () => ({
 
 export async function GET(request: Request) {
   try {
-    const token = getBearerToken(request);
-    if (!token) {
-      return NextResponse.json({ error: "Non autorizzato." }, { status: 401 });
-    }
-
-    const auth = getAdminAuth();
-    const decoded = await auth.verifyIdToken(token);
-    if (!isAllowedAdminEmail(decoded.email)) {
-      return NextResponse.json({ error: "Accesso negato." }, { status: 403 });
-    }
+    const adminCheck = await requireAdmin(request);
+    if (!adminCheck.ok) return adminCheck.response;
 
     const db = getAdminDb();
     const ref = db.collection("reservation_settings").doc("default");
@@ -114,16 +92,8 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
-    const token = getBearerToken(request);
-    if (!token) {
-      return NextResponse.json({ error: "Non autorizzato." }, { status: 401 });
-    }
-
-    const auth = getAdminAuth();
-    const decoded = await auth.verifyIdToken(token);
-    if (!isAllowedAdminEmail(decoded.email)) {
-      return NextResponse.json({ error: "Accesso negato." }, { status: 403 });
-    }
+    const adminCheck = await requireAdmin(request);
+    if (!adminCheck.ok) return adminCheck.response;
 
     const payload = (await request.json()) as unknown;
     const parsed = settingsSchema.safeParse(payload);

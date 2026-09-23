@@ -8,6 +8,7 @@ import {
   type SVGProps,
 } from "react";
 import clsx from "clsx";
+import { useTranslations } from "next-intl";
 import {
   CeleryIcon,
   CrustaceansIcon,
@@ -29,6 +30,7 @@ type IconType = (props: SVGProps<SVGSVGElement>) => ReactElement;
 
 type AllergenDefinition = {
   id: string;
+  /** Etichetta italiana di riserva (le traduzioni stanno in messages/*.json). */
   label: string;
   aliases: string[];
   icon: IconType;
@@ -166,9 +168,15 @@ export function AllergenBadge({
   const holdTimerRef = useRef<number | null>(null);
   const hideTimerRef = useRef<number | null>(null);
 
+  const t = useTranslations("Allergens");
   const resolved = useMemo(() => resolveAllergen(allergen), [allergen]);
   const Icon = resolved.icon;
-  const tooltipLabel = resolved.label;
+  const tooltipLabel = t(`contains.${resolved.id}`);
+  // Nome breve tradotto per i 14 allergeni UE, altrimenti il testo originale.
+  const displayName =
+    resolved.id === fallbackDefinition.id
+      ? allergen
+      : t(`names.${resolved.id}`);
 
   const clearTimers = () => {
     if (holdTimerRef.current) {
@@ -237,7 +245,7 @@ export function AllergenBadge({
         <Icon className="qr-allergen-icon" />
       </span>
       {showLabel ? (
-        <span className="qr-allergen-inline-label">{allergen}</span>
+        <span className="qr-allergen-inline-label">{displayName}</span>
       ) : null}
       {showTooltip ? (
         <span

@@ -1,7 +1,20 @@
 import clsx from "clsx";
 
+export type SpiceLabels = {
+  /** Etichette per i livelli 0..3. */
+  levels: [string, string, string, string];
+  /** Testo per screen reader, es. "Piccantezza: {label}". */
+  aria: (label: string) => string;
+};
+
+const defaultLabels: SpiceLabels = {
+  levels: ["Non piccante", "Poco piccante", "Piccante", "Molto piccante"],
+  aria: (label) => `Piccantezza: ${label}`,
+};
+
 type SpiceLevelIndicatorProps = {
   level: number;
+  labels?: SpiceLabels;
   max?: number;
   showLabel?: boolean;
   className?: string;
@@ -52,12 +65,8 @@ const parseLevel = (value: unknown): number => {
   return 0;
 };
 
-const getSpiceLabel = (level: number): string => {
-  if (level <= 0) return "Non piccante";
-  if (level === 1) return "Poco piccante";
-  if (level === 2) return "Piccante";
-  return "Molto piccante";
-};
+const getSpiceLabel = (level: number, labels: SpiceLabels): string =>
+  labels.levels[Math.min(Math.max(level, 0), 3)];
 
 function PepperIcon() {
   return (
@@ -98,6 +107,7 @@ function PepperIcon() {
 
 export function SpiceLevelIndicator({
   level,
+  labels = defaultLabels,
   max = 3,
   showLabel = true,
   className,
@@ -107,12 +117,12 @@ export function SpiceLevelIndicator({
   const safeLevel = clampLevel(parseLevel(level), safeMax);
   if (hideWhenZero && safeLevel <= 0) return null;
 
-  const label = getSpiceLabel(safeLevel);
+  const label = getSpiceLabel(safeLevel, labels);
 
   return (
     <div
       className={clsx("spice-level", className)}
-      aria-label={`Piccantezza: ${label}`}
+      aria-label={labels.aria(label)}
     >
       <span className="spice-level-icons" aria-hidden>
         {Array.from({ length: safeMax }).map((_, index) => {

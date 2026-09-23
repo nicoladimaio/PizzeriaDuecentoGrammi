@@ -1,94 +1,86 @@
-# Duecento Grammi - Next.js Edition
+# Duecento Grammi
 
-Migrazione completa del sito su stack moderno con Next.js, TypeScript e Firebase.
+Sito della pizzeria Duecento Grammi (Marcianise) con menu digitale, prenotazioni online e area riservata per gestire menu e prenotazioni.
 
-## Funzionalita implementate
+Stack: Next.js 16 (App Router), React 19, TypeScript, Firebase (Auth, Firestore, Storage), Resend per le email, next-intl per le traduzioni. Deploy su Netlify (`netlify.toml`).
 
-- Landing page professionale e responsive.
-- Menu dinamico basato su [public/assets/menu.json](public/assets/menu.json).
-- Login amministratore su route nascosta: `/riservato/accesso-200g`.
-- Dashboard prenotazioni su `/riservato/dashboard` con conferma/rifiuto.
-- Prenotazione tavoli pubblica con codice pratica.
-- Verifica stato prenotazione lato cliente tramite codice.
-- Regole Firestore di base in [firestore.rules](firestore.rules).
+## Funzionalità
+
+- **Home** con video e piatti in evidenza.
+- **Menu** (`/menu`; `/en/menu`, `/es/menu`, `/de/menu`): letto in tempo reale da Firestore, con ricerca, filtro allergeni e piccantezza.
+- **Prenotazioni** (`/prenotazioni` e le versioni `/en`, `/es`, `/de`): wizard in 3 passaggi con disponibilità reale per giorno e orario, protezione anti-spam (Cloudflare Turnstile + campo trappola). Il cliente riceve un'email di riepilogo e poi l'esito (conferma, rifiuto o proposta di un altro orario, accettabile via link firmato).
+- **Area riservata** (`/riservato/accesso-200g` → `/riservato/dashboard`): gestione prenotazioni, impostazioni del servizio (orari, capienza, giorni di chiusura), gestione menu (piatti, categorie, ingredienti, foto) e traduzioni del menu.
 
 ## Avvio locale
 
-1. Copia il file `.env.example` in `.env.local`.
-2. Inserisci le variabili Firebase reali.
-3. Inserisci gli admin in `NEXT_PUBLIC_ADMIN_EMAILS` (email separate da virgola).
-4. Configura SMTP Aruba per notifiche prenotazioni.
-5. Installa dipendenze:
-
 ```bash
+cp .env.example .env.local   # poi compila le variabili (vedi sotto)
 npm install
+npm run dev                  # http://localhost:3000
 ```
 
-5. Avvia:
+> Attenzione: se `.env.local` punta al progetto Firebase e al Resend di produzione, le prenotazioni di prova finiscono nel database vero e partono email vere.
+
+## Variabili d'ambiente
+
+Tutte elencate con commenti in [.env.example](.env.example). In sintesi:
+
+| Gruppo | Variabili | Note |
+|---|---|---|
+| Firebase client | `NEXT_PUBLIC_FIREBASE_*` | Pubbliche per natura. |
+| Firebase Admin | `FIREBASE_PROJECT_ID`, `FIREBASE_CLIENT_EMAIL`, `FIREBASE_PRIVATE_KEY` | Service account, usato dalle API. |
+| Admin | `NEXT_PUBLIC_ADMIN_EMAILS` | Deve coincidere con la lista in `firestore.rules` e `storage.rules`. |
+| Email | `RESEND_API_KEY`, `RESEND_FROM_EMAIL`, `OWNER_EMAIL` | |
+| Link email | `RESERVATION_ACTION_SECRET` | Firma HMAC dei link accetta/rifiuta proposta. Obbligatoria in produzione. |
+| Anti-spam | `NEXT_PUBLIC_TURNSTILE_SITE_KEY`, `TURNSTILE_SECRET_KEY` | Da [Cloudflare Turnstile](https://dash.cloudflare.com/?to=/:account/turnstile) (gratuito). Se vuote la protezione è disattivata. |
+| Traduzioni | `ANTHROPIC_API_KEY` | Serve solo al pulsante "Traduci automaticamente" in area riservata. |
+
+## Traduzioni (next-intl)
+
+- Lingue in [src/i18n/routing.ts](src/i18n/routing.ts): italiano senza prefisso (URL di sempre), inglese, spagnolo e tedesco con prefisso (`/en`, `/es`, `/de`). La lingua si cambia dal globo nella barra del menu o dalle sigle in cima al modulo di prenotazione ([language-switcher.tsx](src/components/language-switcher.tsx)); niente rilevamento automatico dal browser.
+- Sono tradotte solo le pagine elencate in `LOCALIZED_PATHS` (menu e prenotazioni), che stanno sotto `src/app/[locale]/`. Home, privacy e area riservata restano solo in italiano.
+- **Testi dell'interfaccia**: `messages/<lingua>.json` (stesse chiavi in tutti i file).
+- **Contenuti del menu** (nomi, descrizioni, ingredienti, categorie): campo `i18n.<lingua>` sui documenti Firestore. Se l'italiano di un piatto cambia, la versione tradotta mostra l'italiano finché non viene ritradotto (per non mostrare ingredienti sbagliati). Dettagli in [src/lib/menu-translations.ts](src/lib/menu-translations.ts).
+- **Tradurre piatti nuovi o modificati** (senza servizi a pagamento):
+  ```bash
+  npm run menu:i18n:export            # scrive menu-i18n-todo.json con ciò che manca, per lingua
+  # tradurre il file (un JSON per lingua: { "items": { id: {nome, descrizione, ingredienti} }, "cats": { id: nome } })
+  npm run menu:i18n:import -- es traduzioni-es.json --dry   # controlla senza scrivere
+  npm run menu:i18n:import -- es traduzioni-es.json         # scrive su Firestore (produzione)
+  ```
+  L'import rifiuta il file se un campo vuoto in italiano non lo è nella traduzione (o viceversa) o se il numero di ingredienti non coincide.
+- In alternativa, area riservata → Menu → Traduzioni: modifica manuale voce per voce, e il pulsante "Traduci automaticamente" (richiede `ANTHROPIC_API_KEY`, servizio a pagamento).
+- Per aggiungere una lingua: aggiungila a `routing.locales`, crea `messages/<lingua>.json`, aggiungila a `CONTENT_LOCALES`, al matcher in [src/proxy.ts](src/proxy.ts), all'enum `locale` in `api/reservations/route.ts`, a `LANGUAGES` in `language-switcher.tsx` e alle etichette in `site-header.tsx`.
+
+## Struttura
+
+```
+src/
+  app/
+    [locale]/menu, [locale]/prenotazioni   pagine tradotte
+    api/reservations/...                   API pubbliche (disponibilità, nuova prenotazione, risposta a proposta)
+    api/admin/...                          API admin (token Firebase + whitelist, vedi lib/admin-auth.ts)
+    riservato/...                          area riservata
+  components/
+    admin-menu/, admin-reservations/       tipi e funzioni di supporto dei pannelli admin
+  hooks/                                   hook client (menu live, etichette tradotte)
+  i18n/                                    configurazione next-intl
+  lib/                                     logica condivisa (Firebase, email, date in ora italiana, traduzioni)
+messages/                                  testi dell'interfaccia per lingua
+```
+
+Note:
+- Tutte le date di calendario lato server usano l'ora italiana ([src/lib/rome-time.ts](src/lib/rome-time.ts)): il server di hosting gira in UTC.
+- Le foto del menu possono essere servite solo da Firebase Storage e Cloudinary (`images.remotePatterns` in `next.config.ts`).
+
+## Regole Firebase
+
+Le regole di sicurezza sono in [firestore.rules](firestore.rules) e [storage.rules](storage.rules). Dopo ogni modifica vanno pubblicate:
 
 ```bash
-npm run dev
+firebase deploy --only firestore:rules,storage
 ```
 
-6. Apri `http://localhost:3000`.
+## Deploy (Netlify)
 
-## Configurazione email prenotazioni (SMTP Aruba)
-
-Nel file `.env.local` inserisci esattamente:
-
-```bash
-SMTP_HOST=smtps.aruba.it
-SMTP_PORT=465
-SMTP_USER=prenotazioni@pizzeriaduecentogrammi.it
-SMTP_PASSWORD=LA_PASSWORD_REALE_DELLA_CASELLA_PRENOTAZIONI
-OWNER_EMAIL=prenotazioni@pizzeriaduecentogrammi.it
-```
-
-Le prenotazioni vengono salvate anche se l'email fallisce; l'errore viene scritto nei log server.
-
-## Configurazione variabili ambiente Firebase (produzione)
-
-Se distribuisci su Firebase Functions, imposta i secret SMTP con CLI:
-
-```bash
-firebase functions:secrets:set SMTP_HOST
-firebase functions:secrets:set SMTP_PORT
-firebase functions:secrets:set SMTP_USER
-firebase functions:secrets:set SMTP_PASSWORD
-firebase functions:secrets:set OWNER_EMAIL
-```
-
-Valori da inserire:
-
-- `SMTP_HOST`: `smtps.aruba.it`
-- `SMTP_PORT`: `465`
-- `SMTP_USER`: `prenotazioni@pizzeriaduecentogrammi.it`
-- `SMTP_PASSWORD`: password reale della casella `prenotazioni@pizzeriaduecentogrammi.it`
-- `OWNER_EMAIL`: `prenotazioni@pizzeriaduecentogrammi.it`
-
-## Deploy
-
-- Frontend: Vercel.
-- Backend/data: Firebase (Auth + Firestore).
-
-## Note sicurezza
-
-- Aggiorna la whitelist admin in [firestore.rules](firestore.rules) sostituendo `admin@example.com`.
-- Verifica e pubblica le regole Firestore con Firebase CLI.
-- Imposta `RESERVATION_ACTION_SECRET` in produzione per firmare i link di conferma/rifiuto proposta.
-- Non indicizzare le route admin (gia configurato via metadata robots).
-
-## Ottimizzazione immagini menu
-
-- Nuovi upload da admin: conversione automatica in WebP + thumbnail.
-- CDN immagini opzionale: imposta `NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME` in `.env.local` per servire card, dettaglio menu e piatti in evidenza tramite Cloudinary fetch CDN.
-- Migrazione immagini gia presenti:
-
-```bash
-npm run images:migrate:webp:dry
-npm run images:migrate:webp
-```
-
-- Opzioni utili:
-  - `--limit=20` per processare solo i primi 20 documenti.
-  - `--force` per riconvertire anche record gia in webp.
+Imposta le stesse variabili di `.env.example` nelle impostazioni del sito Netlify. Build: `npm run build`.

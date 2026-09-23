@@ -1,395 +1,57 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import {
-  collection,
-  onSnapshot,
-  orderBy,
-  query,
-  type QueryDocumentSnapshot,
-} from "firebase/firestore";
+import { collection, onSnapshot, orderBy, query } from "firebase/firestore";
 import { getClientAuth, getClientDb } from "@/lib/firebase";
 import type { ReservationDoc, ReservationSettings } from "@/types/reservation";
-
-type ActionType = "confirmed" | "rejected" | "proposed" | "delete";
-
-type ProposalDraft = {
-  ownerResponse: string;
-  proposedDate: string;
-  proposedTime: string;
-};
-
-type CalendarCell =
-  | { kind: "empty" }
-  | { kind: "day"; dateKey: string; day: number };
-
-type DecisionDialogMode = "rejected" | "proposed";
-
-type DecisionAvailability = {
-  days: Array<{
-    date: string;
-    hasAvailability: boolean;
-  }>;
-  slotsByDate: Record<string, Array<{ time: string; available: boolean }>>;
-  error?: string;
-};
-
-type ManualReservationForm = {
-  customerName: string;
-  phone: string;
-  email: string;
-  date: string;
-  time: string;
-  guests: string;
-  notes: string;
-};
-
-type ApiErrorPayload = {
-  error?: string;
-};
-
-export type SettingsLeaveGuard = {
-  hasUnsavedChanges: () => boolean;
-  saveChanges: () => Promise<boolean>;
-  discardChanges: () => void;
-};
-
-const slotMinuteOptions = [15, 30] as const;
-
-const weekdayOptions = [
-  { key: 1, label: "Lun" },
-  { key: 2, label: "Mar" },
-  { key: 3, label: "Mer" },
-  { key: 4, label: "Gio" },
-  { key: 5, label: "Ven" },
-  { key: 6, label: "Sab" },
-  { key: 0, label: "Dom" },
-];
-
-type SettingsTab = "general" | "availability" | "exceptions";
-
-const defaultRejectMessage =
-  "Non riusciamo a garantirti il posto prenotato per l'orario richiesto. Ti invitiamo a riprovare con una nuova richiesta.";
-const defaultCancelConfirmedMessage =
-  "La tua prenotazione confermata e stata annullata. Se vuoi, contattaci per concordare una nuova disponibilita.";
-const defaultProposalMessage =
-  "Ti proponiamo un orario alternativo disponibile: se per te va bene, confermalo dal pulsante in email.";
-const proposalDatesPageSize = 8;
-
-const defaultSettings: ReservationSettings = {
-  openTime: "19:00",
-  closeTime: "23:00",
-  slotMinutes: 30,
-  capacityPerSlot: 40,
-  insideActive: true,
-  outsideActive: true,
-  insideCapacityPerSlot: 40,
-  outsideCapacityPerSlot: 24,
-  workingDays: [1, 2, 3, 4, 5, 6, 0],
-  holidays: [],
-  specialOpenings: [],
-  weeklyDisabledSlots: {},
-};
-
-const TOTAL_SEATS_FALLBACK = 80;
-const HISTORY_RETENTION_DAYS = 14;
-
-const todayKey = () => {
-  const now = new Date();
-  const year = now.getFullYear();
-  const month = String(now.getMonth() + 1).padStart(2, "0");
-  const day = String(now.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
-};
-
-const dateKeyDaysAgo = (days: number) => {
-  const date = new Date();
-  date.setDate(date.getDate() - days);
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
-};
-
-const dateKeyDaysAhead = (days: number) => {
-  const date = new Date();
-  date.setDate(date.getDate() + days);
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
-};
-
-const parseMinutes = (value: string) => {
-  const [hours, minutes] = value.split(":").map(Number);
-  return hours * 60 + minutes;
-};
-
-const isHalfHourTimeValue = (value: string) => {
-  const minutes = parseMinutes(value);
-  return Number.isFinite(minutes) && minutes % 30 === 0;
-};
-
-const getServiceEndMinutes = (openTime: string, closeTime: string) => {
-  const open = parseMinutes(openTime);
-  const close = parseMinutes(closeTime);
-
-  if (!Number.isFinite(open) || !Number.isFinite(close)) {
-    return null;
-  }
-
-  if (open === close) {
-    return null;
-  }
-
-  return close > open ? close : close + 24 * 60;
-};
-
-const minutesToTime = (value: number) => {
-  const normalized = ((value % (24 * 60)) + 24 * 60) % (24 * 60);
-  const hours = String(Math.floor(normalized / 60)).padStart(2, "0");
-  const minutes = String(normalized % 60).padStart(2, "0");
-  return `${hours}:${minutes}`;
-};
-
-const halfHourTimeOptions = Array.from({ length: 48 }, (_, index) =>
-  minutesToTime(index * 30),
-);
-
-const monthKey = (date: Date) => {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  return `${year}-${month}`;
-};
-
-const parseDateKey = (value: string) => {
-  const [year, month, day] = value.split("-").map(Number);
-  return new Date(year, (month || 1) - 1, day || 1);
-};
-
-const monthLabel = (value: string) => {
-  const [year, month] = value.split("-").map(Number);
-  return new Date(year, month - 1, 1).toLocaleDateString("it-IT", {
-    month: "long",
-    year: "numeric",
-  });
-};
-
-const startOfMonthFromKey = (value: string) => {
-  const [year, month] = value.split("-").map(Number);
-  return new Date(year, (month || 1) - 1, 1);
-};
-
-const endOfMonthFromKey = (value: string) => {
-  const [year, month] = value.split("-").map(Number);
-  return new Date(year, month || 1, 0);
-};
-
-const shiftMonth = (value: string, delta: number) => {
-  const [year, month] = value.split("-").map(Number);
-  const date = new Date(year, month - 1 + delta, 1);
-  return monthKey(date);
-};
-
-const actionLoadingLabel = (action: ActionType | null) => {
-  switch (action) {
-    case "confirmed":
-      return "Conferma prenotazione in corso...";
-    case "rejected":
-      return "Rifiuto prenotazione in corso...";
-    case "proposed":
-      return "Invio proposta in corso...";
-    case "delete":
-      return "Eliminazione prenotazione in corso...";
-    default:
-      return "Operazione in corso...";
-  }
-};
-
-const formatDateShort = (value: string) => {
-  const parsed = parseDateKey(value);
-  return parsed.toLocaleDateString("it-IT", {
-    weekday: "short",
-    day: "2-digit",
-    month: "2-digit",
-  });
-};
-
-const getOperationalDayLabel = (value: string) => {
-  if (value === dateKeyDaysAgo(1)) return "Ieri";
-  if (value === todayKey()) return "Oggi";
-  if (value === dateKeyDaysAhead(1)) return "Domani";
-
-  const parsed = parseDateKey(value);
-  return `${parsed.getDate()} ${parsed
-    .toLocaleDateString("it-IT", {
-      month: "short",
-    })
-    .replace(".", "")}`;
-};
-
-const buildMonthCells = (value: string): CalendarCell[] => {
-  const [year, month] = value.split("-").map(Number);
-  const first = new Date(year, month - 1, 1);
-  const last = new Date(year, month, 0);
-  const firstWeekday = (first.getDay() + 6) % 7;
-
-  const cells: CalendarCell[] = [];
-  for (let i = 0; i < firstWeekday; i += 1) {
-    cells.push({ kind: "empty" });
-  }
-
-  for (let day = 1; day <= last.getDate(); day += 1) {
-    const key = `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
-    cells.push({ kind: "day", dateKey: key, day });
-  }
-
-  return cells;
-};
-
-const mapSnapshot = (
-  snap: QueryDocumentSnapshot,
-): ReservationDoc & { id: string } => {
-  const data = snap.data() as ReservationDoc;
-  return {
-    ...data,
-    diningArea: data.diningArea === "outside" ? "outside" : "inside",
-    arrived: data.arrived === true,
-    id: snap.id,
-  };
-};
-
-const normalizeSettings = (
-  settings: ReservationSettings,
-): ReservationSettings => ({
-  ...settings,
-  openTime: isHalfHourTimeValue(settings.openTime)
-    ? settings.openTime
-    : defaultSettings.openTime,
-  closeTime: isHalfHourTimeValue(settings.closeTime)
-    ? settings.closeTime
-    : defaultSettings.closeTime,
-  slotMinutes:
-    typeof settings.slotMinutes === "number" &&
-    Number.isFinite(settings.slotMinutes) &&
-    settings.slotMinutes >= 5 &&
-    settings.slotMinutes <= 180
-      ? settings.slotMinutes
-      : 30,
-  capacityPerSlot:
-    typeof settings.capacityPerSlot === "number" &&
-    Number.isFinite(settings.capacityPerSlot) &&
-    settings.capacityPerSlot > 0
-      ? Math.round(settings.capacityPerSlot)
-      : 40,
-  insideActive: settings.insideActive !== false,
-  outsideActive: settings.outsideActive !== false,
-  insideCapacityPerSlot:
-    typeof settings.insideCapacityPerSlot === "number" &&
-    Number.isFinite(settings.insideCapacityPerSlot) &&
-    settings.insideCapacityPerSlot > 0
-      ? Math.round(settings.insideCapacityPerSlot)
-      : 40,
-  outsideCapacityPerSlot:
-    typeof settings.outsideCapacityPerSlot === "number" &&
-    Number.isFinite(settings.outsideCapacityPerSlot) &&
-    settings.outsideCapacityPerSlot > 0
-      ? Math.round(settings.outsideCapacityPerSlot)
-      : 24,
-  workingDays: [...new Set(settings.workingDays)].sort((a, b) => a - b),
-  holidays: [...new Set(settings.holidays)].sort(),
-  specialOpenings: [...new Set(settings.specialOpenings)].sort(),
-  weeklyDisabledSlots: Object.fromEntries(
-    Object.entries(settings.weeklyDisabledSlots ?? {}).map(([weekday, values]) => [
-      weekday,
-      [...new Set(Array.isArray(values) ? values : [])]
-        .filter((value) => /^([01]\d|2[0-3]):([0-5]\d)$/.test(value))
-        .sort(),
-    ]),
-  ),
-});
-
-const deriveTotalCapacity = (settings: ReservationSettings): number => {
-  const total =
-    (settings.insideActive ? settings.insideCapacityPerSlot : 0) +
-    (settings.outsideActive ? settings.outsideCapacityPerSlot : 0);
-  return total > 0 ? total : settings.capacityPerSlot;
-};
-
-const getSlotTimesForWeekday = (
-  _weekday: number,
-  settings: ReservationSettings,
-): string[] => {
-  const open = parseMinutes(settings.openTime);
-  const endMinutes = getServiceEndMinutes(
-    settings.openTime,
-    settings.closeTime,
-  );
-  const slotMinutes = settings.slotMinutes;
-
-  if (!Number.isFinite(open) || endMinutes === null) {
-    return ["20:00"];
-  }
-
-  const slots: string[] = [];
-  for (let minute = open; minute <= endMinutes; minute += slotMinutes) {
-    slots.push(minutesToTime(minute));
-  }
-
-  return slots.length > 0 ? slots : ["20:00"];
-};
-
-const getSlotMinutesForDateKey = (
-  _dateKey: string,
-  settings: ReservationSettings,
-): number => settings.slotMinutes;
-
-const isBookingOpenOnDateKey = (
-  dateKey: string,
-  settings: ReservationSettings,
-): boolean => {
-  const [year, month, day] = dateKey.split("-").map(Number);
-  const date = new Date(year, (month || 1) - 1, day || 1);
-  const weekday = date.getDay();
-  const isSpecialOpening = settings.specialOpenings.includes(dateKey);
-  const isHoliday = settings.holidays.includes(dateKey);
-  const isWorkingDay = settings.workingDays.includes(weekday);
-
-  if (isSpecialOpening) {
-    return true;
-  }
-
-  return isWorkingDay && !isHoliday;
-};
-
-const parseJsonResponse = async <T,>(response: Response): Promise<T> => {
-  const rawText = await response.text();
-
-  if (!rawText) {
-    return {} as T;
-  }
-
-  try {
-    return JSON.parse(rawText) as T;
-  } catch {
-    throw new Error(
-      `Il server ha restituito una risposta non valida${
-        response.status ? ` (HTTP ${response.status})` : ""
-      }.`,
-    );
-  }
-};
-
-const buildSettingsSnapshot = (
-  settings: ReservationSettings,
-  insideCapacityDraft: string,
-  outsideCapacityDraft: string,
-) =>
-  JSON.stringify({
-    settings: normalizeSettings(settings),
-    insideCapacityDraft,
-    outsideCapacityDraft,
-  });
+import type {
+  ActionType,
+  ProposalDraft,
+  DecisionDialogMode,
+  DecisionAvailability,
+  ManualReservationForm,
+  ApiErrorPayload,
+  SettingsLeaveGuard,
+  SettingsTab,
+} from "@/components/admin-reservations/types";
+import {
+  slotMinuteOptions,
+  weekdayOptions,
+  defaultSettings,
+  parseMinutes,
+  minutesToTime,
+  halfHourTimeOptions,
+  normalizeSettings,
+  deriveTotalCapacity,
+  getSlotTimesForWeekday,
+  getSlotMinutesForDateKey,
+  buildSettingsSnapshot,
+} from "@/components/admin-reservations/settings";
+import {
+  defaultRejectMessage,
+  defaultCancelConfirmedMessage,
+  defaultProposalMessage,
+  proposalDatesPageSize,
+  TOTAL_SEATS_FALLBACK,
+  HISTORY_RETENTION_DAYS,
+  actionLoadingLabel,
+  mapSnapshot,
+  parseJsonResponse,
+} from "@/components/admin-reservations/helpers";
+import {
+  todayKey,
+  dateKeyDaysAgo,
+  dateKeyDaysAhead,
+  monthKey,
+  parseDateKey,
+  monthLabel,
+  startOfMonthFromKey,
+  endOfMonthFromKey,
+  shiftMonth,
+  formatDateShort,
+  getOperationalDayLabel,
+  buildMonthCells,
+} from "@/components/admin-reservations/dates";
 
 export function AdminReservationsPanel({
   highlightedCode,

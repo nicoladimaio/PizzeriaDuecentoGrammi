@@ -4,12 +4,53 @@ import Link from "next/link";
 import Image from "next/image";
 import { usePathname } from "next/navigation";
 import clsx from "clsx";
+import { routing, type AppLocale } from "@/i18n/routing";
 
-const links = [
-  { href: "/", label: "Home" },
-  { href: "/menu", label: "Menu" },
-  { href: "/prenotazioni", label: "Prenota un tavolo" },
-];
+// L'header vive nel layout radice, fuori dal provider di next-intl (che copre
+// solo le pagine tradotte): per poche etichette basta un dizionario locale.
+const navLabels: Record<AppLocale, { home: string; menu: string; book: string; nav: string }> = {
+  it: {
+    home: "Home",
+    menu: "Menu",
+    book: "Prenota un tavolo",
+    nav: "Navigazione principale",
+  },
+  en: {
+    home: "Home",
+    menu: "Menu",
+    book: "Book a table",
+    nav: "Main navigation",
+  },
+  es: {
+    home: "Inicio",
+    menu: "Carta",
+    book: "Reservar mesa",
+    nav: "Navegación principal",
+  },
+  de: {
+    home: "Start",
+    menu: "Speisekarte",
+    book: "Tisch reservieren",
+    nav: "Hauptnavigation",
+  },
+};
+
+
+/** Separa "/en/menu" in { locale: "en", path: "/menu" }. */
+const splitLocale = (pathname: string): { locale: AppLocale; path: string } => {
+  const [, first, ...rest] = pathname.split("/");
+  const prefixed = routing.locales.find(
+    (locale) => locale !== routing.defaultLocale && locale === first,
+  );
+  if (prefixed) {
+    return { locale: prefixed, path: `/${rest.join("/")}` };
+  }
+  return { locale: routing.defaultLocale, path: pathname };
+};
+
+const withLocale = (path: string, locale: AppLocale) =>
+  locale === routing.defaultLocale ? path : `/${locale}${path}`;
+
 
 type SiteHeaderProps = {
   className?: string;
@@ -17,6 +58,14 @@ type SiteHeaderProps = {
 
 export function SiteHeader({ className }: SiteHeaderProps) {
   const pathname = usePathname();
+  const { locale, path } = splitLocale(pathname);
+  const labels = navLabels[locale];
+
+  const links = [
+    { href: "/", label: labels.home },
+    { href: withLocale("/menu", locale), label: labels.menu },
+    { href: withLocale("/prenotazioni", locale), label: labels.book },
+  ];
 
   return (
     <header
@@ -39,7 +88,7 @@ export function SiteHeader({ className }: SiteHeaderProps) {
           />
         </Link>
 
-        <nav className="main-nav" aria-label="Navigazione principale">
+        <nav className="main-nav" aria-label={labels.nav}>
           {links.map((link) => (
             <Link
               key={link.href}
@@ -47,9 +96,8 @@ export function SiteHeader({ className }: SiteHeaderProps) {
               className={clsx("nav-link", pathname === link.href && "active")}
               onClick={(event) => {
                 if (
-                  typeof window !== "undefined" &&
-                  pathname === "/prenotazioni" &&
-                  link.href === "/prenotazioni"
+                  path === "/prenotazioni" &&
+                  link.href === withLocale("/prenotazioni", locale)
                 ) {
                   event.preventDefault();
                   window.dispatchEvent(
@@ -63,6 +111,7 @@ export function SiteHeader({ className }: SiteHeaderProps) {
             </Link>
           ))}
         </nav>
+
       </div>
     </header>
   );

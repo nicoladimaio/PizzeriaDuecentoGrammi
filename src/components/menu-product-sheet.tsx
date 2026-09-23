@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { AllergenBadge } from "@/components/allergens/allergen-badge";
 import { SpiceLevelIndicator } from "@/components/spice-level-indicator";
+import { useSpiceLabels } from "@/hooks/use-spice-labels";
 import { getMenuImageSrc } from "@/lib/menu-image-cdn";
 import type { MenuProduct } from "@/types/menu-app";
 
@@ -35,6 +36,7 @@ export function MenuProductSheet({
   labels,
   onClose,
 }: MenuProductSheetProps) {
+  const spiceLabels = useSpiceLabels();
   const [imageMode, setImageMode] = useState<"contain" | "cover">("contain");
   const [imageNaturalSize, setImageNaturalSize] = useState<{
     width: number;
@@ -171,6 +173,7 @@ export function MenuProductSheet({
                     ) : null}
                     <SpiceLevelIndicator
                       level={product.spiceLevel}
+                      labels={spiceLabels}
                       className="qr-spice-row qr-spice-row-detail"
                       showLabel
                       hideWhenZero

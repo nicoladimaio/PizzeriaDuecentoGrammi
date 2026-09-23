@@ -2,8 +2,14 @@
 
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useLocale, useTranslations } from "next-intl";
 import { z } from "zod";
+import { LanguageSwitcher } from "@/components/language-switcher";
+import {
+  TURNSTILE_SITE_KEY,
+  TurnstileWidget,
+} from "@/components/turnstile-widget";
+import { useRouter } from "@/i18n/navigation";
 import {
   BOOKING_TERMS_PATH,
   BOOKING_TERMS_VERSION,
@@ -11,29 +17,22 @@ import {
   PRIVACY_POLICY_VERSION,
 } from "@/lib/reservation-policies";
 
-const reservationSchema = z.object({
-  customerName: z.string().min(2, "Inserisci nome e cognome."),
-  phone: z.string().optional(),
-  email: z.string().email("Inserisci una email valida."),
-  date: z.string().min(1, "Seleziona una data."),
-  time: z.string().min(1, "Seleziona un orario."),
-  guests: z.coerce.number().int().min(1).max(20),
-  notes: z.string().max(300).optional(),
-  privacyAcknowledged: z
-    .boolean()
-    .refine(
-      (value) => value,
-      "Devi accettare Privacy Policy e Termini di Prenotazione.",
-    ),
-  bookingTermsAccepted: z
-    .boolean()
-    .refine(
-      (value) => value,
-      "Devi accettare Privacy Policy e Termini di Prenotazione.",
-    ),
-  privacyPolicyVersion: z.literal(PRIVACY_POLICY_VERSION),
-  bookingTermsVersion: z.literal(BOOKING_TERMS_VERSION),
-});
+const buildReservationSchema = (errorText: (key: string) => string) =>
+  z.object({
+    customerName: z.string().min(2, errorText("name")),
+    phone: z.string().optional(),
+    email: z.string().email(errorText("email")),
+    date: z.string().min(1, errorText("date")),
+    time: z.string().min(1, errorText("time")),
+    guests: z.coerce.number().int().min(1).max(20),
+    notes: z.string().max(300).optional(),
+    privacyAcknowledged: z.boolean().refine((value) => value, errorText("legal")),
+    bookingTermsAccepted: z
+      .boolean()
+      .refine((value) => value, errorText("legal")),
+    privacyPolicyVersion: z.literal(PRIVACY_POLICY_VERSION),
+    bookingTermsVersion: z.literal(BOOKING_TERMS_VERSION),
+  });
 
 type AvailabilityResponse = {
   days: Array<{
@@ -59,8 +58,6 @@ type AvailabilityResponse = {
 type BookingStep = 1 | 2 | 3 | 4;
 type BookingStep3View = "date" | "time";
 
-const weekDayLabels = ["Lun", "Mar", "Mer", "Gio", "Ven", "Sab", "Dom"];
-
 const toDate = (dateKey: string): Date => {
   const [year, month, day] = dateKey.split("-").map(Number);
   return new Date(year, month - 1, day);
@@ -77,10 +74,10 @@ const getMonthKey = (date: Date): string => {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
 };
 
-const monthLabel = (monthKey: string): string => {
+const monthLabel = (monthKey: string, locale: string): string => {
   const [year, month] = monthKey.split("-").map(Number);
   const date = new Date(year, month - 1, 1);
-  return date.toLocaleDateString("it-IT", { month: "long", year: "numeric" });
+  return date.toLocaleDateString(locale, { month: "long", year: "numeric" });
 };
 
 const calendarCells = (monthKey: string) => {
@@ -115,18 +112,16 @@ const parseJsonResponse = async <T,>(response: Response): Promise<T> => {
   try {
     return JSON.parse(rawText) as T;
   } catch {
-    throw new Error(
-      `Il server ha restituito una risposta non valida${
-        response.status ? ` (HTTP ${response.status})` : ""
-      }.`,
-    );
+    throw new Error(`Invalid JSON response (HTTP ${response.status})`);
   }
 };
 
 export function ReservationForm() {
-  const STEP_1_TO_2_MESSAGE = "Sto caricando il calendario...";
-  const STEP_3_TO_4_MESSAGE =
-    "Sto aprendo il riepilogo della tua prenotazione...";
+  const t = useTranslations("Booking");
+  const locale = useLocale();
+  const STEP_1_TO_2_MESSAGE = t("loadingCalendar");
+  const STEP_3_TO_4_MESSAGE = t("openingSummary");
+  const weekDayLabels = t("weekdays").split(",");
 
   const router = useRouter();
   const [step, setStep] = useState<BookingStep>(1);
@@ -152,6 +147,11 @@ export function ReservationForm() {
   const [email, setEmail] = useState("");
   const [notes, setNotes] = useState("");
   const [legalAccepted, setLegalAccepted] = useState(false);
+  // Campo trappola anti-bot, invisibile alle persone.
+  const [website, setWebsite] = useState("");
+  const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
+  // Il token Turnstile vale una volta sola: dopo un errore si rigenera la casella.
+  const [turnstileKey, setTurnstileKey] = useState(0);
 
   const [availability, setAvailability] = useState<AvailabilityResponse | null>(
     null,
@@ -199,13 +199,13 @@ export function ReservationForm() {
 
   const selectedDateLabel = useMemo(() => {
     if (!selectedDate) return "";
-    return toDate(selectedDate).toLocaleDateString("it-IT", {
+    return toDate(selectedDate).toLocaleDateString(locale, {
       weekday: "long",
       day: "2-digit",
       month: "2-digit",
       year: "numeric",
     });
-  }, [selectedDate]);
+  }, [selectedDate, locale]);
 
   const canProceedStep1 = guests !== null && !customGuestsError;
   const canProceedStep3 = Boolean(selectedDate && selectedTime);
@@ -216,6 +216,7 @@ export function ReservationForm() {
     Boolean(selectedDate) &&
     Boolean(selectedTime) &&
     legalAccepted &&
+    (!TURNSTILE_SITE_KEY || Boolean(turnstileToken)) &&
     !pending;
   const visualStep = step === 1 ? 1 : step === 3 ? 2 : 3;
 
@@ -239,6 +240,9 @@ export function ReservationForm() {
       setEmail("");
       setNotes("");
       setLegalAccepted(false);
+      setWebsite("");
+      setTurnstileToken(null);
+      setTurnstileKey((key) => key + 1);
       setAvailability(null);
       setSelectedMonth("");
       setLoadingAvailability(false);
@@ -270,7 +274,9 @@ export function ReservationForm() {
         if (ignore) return;
 
         if (!response.ok) {
-          setError(data.error ?? "Impossibile caricare disponibilita.");
+          setError(
+            locale === "it" && data.error ? data.error : t("errors.availability"),
+          );
           setAvailability(null);
           return;
         }
@@ -283,7 +289,7 @@ export function ReservationForm() {
         }
       } catch {
         if (!ignore) {
-          setError("Impossibile caricare disponibilita.");
+          setError(t("errors.availability"));
           setAvailability(null);
         }
       } finally {
@@ -301,6 +307,8 @@ export function ReservationForm() {
     return () => {
       ignore = true;
     };
+    // STEP_1_TO_2_MESSAGE e t dipendono solo dalla lingua, fissa per la pagina.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [guests, step]);
 
   useEffect(() => {
@@ -351,7 +359,11 @@ export function ReservationForm() {
 
   const submitReservation = async () => {
     if (!selectedDate || !selectedTime || !canOpenReview) {
-      setError("Completa tutti i campi prima di inviare.");
+      setError(
+        TURNSTILE_SITE_KEY && !turnstileToken
+          ? t("errors.captcha")
+          : t("errors.completeAll"),
+      );
       return;
     }
 
@@ -372,12 +384,12 @@ export function ReservationForm() {
       bookingTermsVersion: BOOKING_TERMS_VERSION,
     };
 
-    const parsed = reservationSchema.safeParse(payload);
+    const parsed = buildReservationSchema((key) => t(`errors.${key}`)).safeParse(
+      payload,
+    );
     if (!parsed.success) {
       setPending(false);
-      setError(
-        parsed.error.issues[0]?.message ?? "Controlla i campi e riprova.",
-      );
+      setError(parsed.error.issues[0]?.message ?? t("errors.checkFields"));
       return;
     }
 
@@ -387,21 +399,31 @@ export function ReservationForm() {
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify(parsed.data),
+        body: JSON.stringify({
+          ...parsed.data,
+          locale,
+          website,
+          turnstileToken: turnstileToken ?? undefined,
+        }),
       });
 
       const data = await parseJsonResponse<{
         ok?: boolean;
         error?: string;
+        code?: string;
       }>(response);
 
-      if (!data.ok) {
-        setError(data.error ?? "Errore durante l'invio. Riprova tra poco.");
-        return;
-      }
-
-      if (!response.ok) {
-        setError(data.error ?? "Errore durante l'invio. Riprova tra poco.");
+      if (!response.ok || !data.ok) {
+        // Gli errori del server sono in italiano: nelle altre lingue si usa il messaggio tradotto.
+        setError(
+          data.code === "captcha_failed"
+            ? t("errors.captcha")
+            : locale === "it" && data.error
+              ? data.error
+              : t("errors.send"),
+        );
+        setTurnstileToken(null);
+        setTurnstileKey((key) => key + 1);
         return;
       }
 
@@ -410,9 +432,9 @@ export function ReservationForm() {
       router.push("/prenotazioni/confermata");
       return;
     } catch {
-      setError(
-        "Invio non confermato dal server. Se hai dubbi, riprova tra poco o contatta la pizzeria.",
-      );
+      setError(t("errors.notConfirmed"));
+      setTurnstileToken(null);
+      setTurnstileKey((key) => key + 1);
     } finally {
       setPending(false);
     }
@@ -421,7 +443,11 @@ export function ReservationForm() {
   const onSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!canOpenReview) {
-      setError("Completa tutti i campi obbligatori.");
+      setError(
+        TURNSTILE_SITE_KEY && !turnstileToken
+          ? t("errors.captcha")
+          : t("errors.completeRequired"),
+      );
       return;
     }
     setError(null);
@@ -432,17 +458,18 @@ export function ReservationForm() {
     <section className="card-block" aria-labelledby="prenota-title">
       <div className="reservation-card-head">
         <h2 id="prenota-title" className="section-title">
-          Prenota Un Tavolo
+          {t("title")}
         </h2>
+        <LanguageSwitcher variant="inline" />
       </div>
-      <p className="section-subtitle">Procedi in 3 passaggi rapidi.</p>
+      <p className="section-subtitle">{t("subtitle")}</p>
 
       <form className="booking-form" onSubmit={onSubmit}>
         <div
           className="booking-wizard-head"
           role="status"
           aria-live="polite"
-          aria-label={`Step ${visualStep} di 3`}
+          aria-label={t("stepAria", { step: visualStep })}
         >
           <span
             className={visualStep >= 1 ? "wizard-line active" : "wizard-line"}
@@ -460,11 +487,11 @@ export function ReservationForm() {
 
         {step === 1 ? (
           <div className="booking-step booking-step-screen booking-step-screen-1">
-            <p className="booking-step-title">Quante persone siete?</p>
+            <p className="booking-step-title">{t("guestsQuestion")}</p>
             <div
               className="booking-guests-grid"
               role="group"
-              aria-label="Numero persone"
+              aria-label={t("guestsAria")}
             >
               {guestOptions.map((option) => (
                 <button
@@ -505,14 +532,14 @@ export function ReservationForm() {
                   });
                 }}
               >
-                Altro
+                {t("other")}
               </button>
             </div>
 
             {customGuestsOpen ? (
               <div className="booking-custom-input-pop">
                 <label>
-                  Numero persone (1-20)
+                  {t("customGuestsLabel")}
                   <input
                     type="number"
                     min={1}
@@ -531,15 +558,13 @@ export function ReservationForm() {
                       const value = Number(nextValue);
                       if (!Number.isFinite(value) || value < 1) {
                         setGuests(null);
-                        setCustomGuestsError("Inserisci un numero tra 1 e 20.");
+                        setCustomGuestsError(t("customGuestsInvalid"));
                         return;
                       }
 
                       if (value > 20) {
                         setGuests(null);
-                        setCustomGuestsError(
-                          "Non puoi inserire piu di 20 persone in questo campo.",
-                        );
+                        setCustomGuestsError(t("customGuestsTooMany"));
                         return;
                       }
 
@@ -566,7 +591,7 @@ export function ReservationForm() {
                   setStep(3);
                 }}
               >
-                Avanti
+                {t("next")}
               </button>
             </div>
           </div>
@@ -574,7 +599,7 @@ export function ReservationForm() {
 
         {step === 3 ? (
           <div className="booking-step booking-step-screen booking-step-screen-2">
-            <p className="booking-step-title">Scegli giorno e orario</p>
+            <p className="booking-step-title">{t("chooseDateTime")}</p>
 
             {step3View === "date" ? (
               <>
@@ -582,7 +607,7 @@ export function ReservationForm() {
                   <div
                     className="booking-month-switch"
                     role="tablist"
-                    aria-label="Mesi disponibili"
+                    aria-label={t("monthsAria")}
                   >
                     {availableMonthKeys.map((monthKey) => (
                       <button
@@ -595,7 +620,7 @@ export function ReservationForm() {
                         }
                         onClick={() => setSelectedMonth(monthKey)}
                       >
-                        {monthLabel(monthKey)}
+                        {monthLabel(monthKey, locale)}
                       </button>
                     ))}
                   </div>
@@ -604,7 +629,7 @@ export function ReservationForm() {
                 <div
                   className="booking-calendar"
                   role="grid"
-                  aria-label="Calendario prenotazioni"
+                  aria-label={t("calendarAria")}
                 >
                   {weekDayLabels.map((label) => (
                     <div key={label} className="booking-calendar-weekday">
@@ -654,7 +679,7 @@ export function ReservationForm() {
                     className="btn-secondary"
                     onClick={() => setStep(1)}
                   >
-                    Indietro
+                    {t("back")}
                   </button>
                   <button
                     type="button"
@@ -662,19 +687,19 @@ export function ReservationForm() {
                     disabled={!selectedDate}
                     onClick={() => setStep3View("time")}
                   >
-                    Vai agli orari
+                    {t("goToTimes")}
                   </button>
                 </div>
               </>
             ) : selectedDate ? (
               <div className="booking-time-section">
                 <p className="booking-step-title booking-time-title">
-                  Orari disponibili per {selectedDate}
+                  {t("timesFor", { date: selectedDateLabel || selectedDate })}
                 </p>
                 <div
                   className="booking-time-grid"
                   role="listbox"
-                  aria-label="Orari disponibili"
+                  aria-label={t("timesAria")}
                 >
                   {availableTimeOptions.map((time) => (
                     <button
@@ -693,7 +718,7 @@ export function ReservationForm() {
                 </div>
                 {availableTimeOptions.length === 0 ? (
                   <p className="section-subtitle">
-                    Nessun orario disponibile per il giorno selezionato.
+                    {t("noTimes")}
                   </p>
                 ) : null}
 
@@ -706,7 +731,7 @@ export function ReservationForm() {
                       setSelectedTime("");
                     }}
                   >
-                    Cambia giorno
+                    {t("changeDay")}
                   </button>
                   <button
                     type="button"
@@ -714,13 +739,13 @@ export function ReservationForm() {
                     disabled={!canProceedStep3}
                     onClick={goToStep4}
                   >
-                    Avanti
+                    {t("next")}
                   </button>
                 </div>
               </div>
             ) : (
               <p className="section-subtitle">
-                Seleziona prima un giorno dal calendario.
+                {t("selectDayFirst")}
               </p>
             )}
           </div>
@@ -728,12 +753,12 @@ export function ReservationForm() {
 
         {step === 4 ? (
           <div className="booking-step booking-step-screen booking-step-screen-3 booking-step-final">
-            <p className="booking-step-title">Inserisci i tuoi dati</p>
+            <p className="booking-step-title">{t("yourDetails")}</p>
             <p className="booking-required-note">
-              I campi con * sono obbligatori.
+              {t("requiredNote")}
             </p>
             <label>
-              Nome e cognome <span className="required-mark">*</span>
+              {t("name")} <span className="required-mark">*</span>
               <input
                 name="customerName"
                 type="text"
@@ -744,7 +769,7 @@ export function ReservationForm() {
             </label>
 
             <label>
-              Telefono
+              {t("phone")}
               <input
                 name="phone"
                 type="tel"
@@ -754,7 +779,7 @@ export function ReservationForm() {
             </label>
 
             <label>
-              Email <span className="required-mark">*</span>
+              {t("email")} <span className="required-mark">*</span>
               <input
                 name="email"
                 type="email"
@@ -765,7 +790,7 @@ export function ReservationForm() {
             </label>
 
             <label>
-              Note (opzionale)
+              {t("notes")}
               <textarea
                 name="notes"
                 rows={3}
@@ -784,24 +809,46 @@ export function ReservationForm() {
                   onChange={(event) => setLegalAccepted(event.target.checked)}
                 />
                 <span>
-                  Ho letto e accetto la{" "}
-                  <Link href={PRIVACY_POLICY_PATH} target="_blank">
-                    Privacy Policy
-                  </Link>
-                  {" "}e i{" "}
-                  <Link href={BOOKING_TERMS_PATH} target="_blank">
-                    Termini di Prenotazione
-                  </Link>
-                  .
+                  {t.rich("legalAccept", {
+                    privacy: (chunks) => (
+                      <Link href={PRIVACY_POLICY_PATH} target="_blank">
+                        {chunks}
+                      </Link>
+                    ),
+                    terms: (chunks) => (
+                      <Link href={BOOKING_TERMS_PATH} target="_blank">
+                        {chunks}
+                      </Link>
+                    ),
+                  })}
                 </span>
               </label>
 
               <p className="booking-legal-note">
-                Useremo i tuoi dati solo per gestire la prenotazione. Versioni
-                documenti: privacy {PRIVACY_POLICY_VERSION}, termini{" "}
-                {BOOKING_TERMS_VERSION}.
+                {t("legalNote", {
+                  privacyVersion: PRIVACY_POLICY_VERSION,
+                  termsVersion: BOOKING_TERMS_VERSION,
+                })}
+                {t("legalDocsItalianOnly") ? ` ${t("legalDocsItalianOnly")}` : null}
               </p>
             </div>
+
+            <input
+              type="text"
+              name="website"
+              className="booking-honeypot"
+              tabIndex={-1}
+              autoComplete="off"
+              aria-hidden="true"
+              value={website}
+              onChange={(event) => setWebsite(event.target.value)}
+            />
+
+            <TurnstileWidget
+              key={turnstileKey}
+              language={locale}
+              onToken={setTurnstileToken}
+            />
 
             <div className="booking-step-actions two-buttons">
               <button
@@ -809,14 +856,14 @@ export function ReservationForm() {
                 className="btn-secondary"
                 onClick={() => setStep(3)}
               >
-                Indietro
+                {t("back")}
               </button>
               <button
                 className="btn-primary"
                 type="submit"
                 disabled={!canOpenReview}
               >
-                {pending ? "Invio in corso..." : "Riepilogo"}
+                {pending ? t("sending") : t("summary")}
               </button>
             </div>
           </div>
@@ -827,29 +874,29 @@ export function ReservationForm() {
         <div className="admin-modal-backdrop" role="dialog" aria-modal="true">
           <div className="admin-modal status-popup-modal">
             <div className="admin-modal-head">
-              <h3>Riepilogo prenotazione</h3>
+              <h3>{t("summaryTitle")}</h3>
             </div>
             <div className="status-popup-body">
               <p className="booking-selection-summary">
-                Persone: <strong>{guests}</strong>
+                {t("summaryGuests")}: <strong>{guests}</strong>
               </p>
               <p className="booking-selection-summary">
-                Giorno: <strong>{selectedDateLabel || selectedDate}</strong>
+                {t("summaryDay")}: <strong>{selectedDateLabel || selectedDate}</strong>
               </p>
               <p className="booking-selection-summary">
-                Orario: <strong>{selectedTime}</strong>
+                {t("summaryTime")}: <strong>{selectedTime}</strong>
               </p>
               <p className="booking-selection-summary">
-                Cliente: <strong>{customerName}</strong>
+                {t("summaryCustomer")}: <strong>{customerName}</strong>
               </p>
               <p className="booking-selection-summary">
-                Telefono: <strong>{phone || "-"}</strong>
+                {t("summaryPhone")}: <strong>{phone || "-"}</strong>
               </p>
               <p className="booking-selection-summary">
-                Email: <strong>{email}</strong>
+                {t("summaryEmail")}: <strong>{email}</strong>
               </p>
               <p className="booking-selection-summary">
-                Documenti accettati: <strong>privacy e termini prenotazione</strong>
+                {t("summaryDocs")}: <strong>{t("summaryDocsValue")}</strong>
               </p>
             </div>
             <div className="booking-step-actions two-buttons booking-review-actions">
@@ -859,7 +906,7 @@ export function ReservationForm() {
                 onClick={() => setReviewOpen(false)}
                 disabled={pending}
               >
-                Indietro
+                {t("back")}
               </button>
               <button
                 type="button"
@@ -867,7 +914,7 @@ export function ReservationForm() {
                 onClick={() => void submitReservation()}
                 disabled={!canOpenReview}
               >
-                {pending ? "Invio in corso..." : "Conferma e invia"}
+                {pending ? t("sending") : t("confirmAndSend")}
               </button>
             </div>
           </div>
@@ -885,12 +932,12 @@ export function ReservationForm() {
           <div className="booking-loader-card">
             <img
               src="/assets/loader.gif"
-              alt="Caricamento prenotazione"
+              alt={t("loaderAlt")}
               className="app-loader-gif"
             />
             <p>
               {transitionMessage ??
-                (loadingAvailability ? STEP_1_TO_2_MESSAGE : "Caricamento...")}
+                (loadingAvailability ? STEP_1_TO_2_MESSAGE : t("loading"))}
             </p>
           </div>
         </div>
@@ -901,10 +948,10 @@ export function ReservationForm() {
           <div className="app-loader-card">
             <img
               src="/assets/loader.gif"
-              alt="Caricamento"
+              alt={t("loading")}
               className="app-loader-gif"
             />
-            <p>Conferma prenotazione in corso...</p>
+            <p>{t("redirecting")}</p>
           </div>
         </div>
       ) : null}

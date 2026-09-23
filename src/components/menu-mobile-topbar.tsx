@@ -1,3 +1,5 @@
+import { LanguageSwitcher } from "@/components/language-switcher";
+
 type MenuMobileTopbarProps = {
   searchValue: string;
   showSearch: boolean;
@@ -5,6 +7,7 @@ type MenuMobileTopbarProps = {
   searchAriaLabel: string;
   searchPlaceholder: string;
   titleLabel: string;
+  sectionAriaLabel: string;
   openSearchLabel: string;
   openFiltersLabel: string;
   onToggleSearch: () => void;
@@ -19,6 +22,7 @@ export function MenuMobileTopbar({
   searchAriaLabel,
   searchPlaceholder,
   titleLabel,
+  sectionAriaLabel,
   openSearchLabel,
   openFiltersLabel,
   onToggleSearch,
@@ -28,11 +32,13 @@ export function MenuMobileTopbar({
   return (
     <header className="qr-topbar-wrap">
       <div className="qr-topbar">
-        <div className="qr-brand" aria-label="Sezione menu">
+        <div className="qr-brand" aria-label={sectionAriaLabel}>
           <span className="qr-brand-title">{titleLabel}</span>
         </div>
 
         <div className="qr-topbar-actions">
+          <LanguageSwitcher variant="menu" />
+
           <button
             type="button"
             className="qr-icon-btn"

@@ -7,10 +7,8 @@ import { collection, onSnapshot } from "firebase/firestore";
 import { getClientAuth, getClientDb } from "@/lib/firebase";
 import { isAllowedAdminEmail } from "@/lib/auth";
 import { AdminMenuPanel } from "@/components/admin-menu-panel";
-import {
-  AdminReservationsPanel,
-  type SettingsLeaveGuard,
-} from "@/components/admin-reservations-panel";
+import { AdminReservationsPanel } from "@/components/admin-reservations-panel";
+import type { SettingsLeaveGuard } from "@/components/admin-reservations/types";
 import type { ReservationSettings, ReservationStatus } from "@/types/reservation";
 
 type AdminSection = "home" | "reservations" | "menu" | "settings";
