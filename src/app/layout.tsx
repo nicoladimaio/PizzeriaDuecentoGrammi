@@ -4,7 +4,6 @@ import {
   Manrope,
   Playfair_Display,
 } from "next/font/google";
-import Script from "next/script";
 import "./globals.css";
 import { AppShell } from "@/components/app-shell";
 import { DEFAULT_OG_IMAGE, SITE_URL } from "@/lib/seo";
@@ -76,40 +75,6 @@ export const metadata: Metadata = {
   },
 };
 
-const restaurantJsonLd = {
-  "@context": "https://schema.org",
-  "@type": "Restaurant",
-  name: "Duecento Grammi",
-  address: {
-    "@type": "PostalAddress",
-    streetAddress: "Viale Europa 30",
-    postalCode: "81025",
-    addressLocality: "Marcianise",
-    addressRegion: "CE",
-    addressCountry: "IT",
-  },
-  telephone: "0823 833221",
-  url: SITE_URL,
-  servesCuisine: ["Pizza", "Cucina italiana", "Pizzeria gourmet"],
-  openingHoursSpecification: [
-    {
-      "@type": "OpeningHoursSpecification",
-      dayOfWeek: [
-        "https://schema.org/Monday",
-        "https://schema.org/Tuesday",
-        "https://schema.org/Wednesday",
-        "https://schema.org/Thursday",
-        "https://schema.org/Friday",
-        "https://schema.org/Saturday",
-        "https://schema.org/Sunday",
-      ],
-      opens: "19:00",
-      closes: "00:00",
-    },
-  ],
-  priceRange: "EUR 20-40",
-};
-
 export default function RootLayout({
   children,
 }: {
@@ -117,15 +82,6 @@ export default function RootLayout({
 }) {
   return (
     <html lang="it">
-      <head>
-        <Script
-          id="restaurant-jsonld"
-          type="application/ld+json"
-          dangerouslySetInnerHTML={{
-            __html: JSON.stringify(restaurantJsonLd),
-          }}
-        />
-      </head>
       <body
         className={`${headingFont.variable} ${displayFont.variable} ${bodyFont.variable}`}
       >

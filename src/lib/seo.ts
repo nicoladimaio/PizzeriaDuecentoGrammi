@@ -4,7 +4,11 @@ export const SITE_URL =
   process.env.NEXT_PUBLIC_SITE_URL?.replace(/\/+$/, "") ||
   "https://pizzeriaduecentogrammi.it";
 
-export const DEFAULT_OG_IMAGE = `${SITE_URL}/assets/Centro.png`;
+export const LOGO_URL = `${SITE_URL}/assets/Centro.png`;
+/** Anteprima per WhatsApp, Facebook, Google: 1200×630 (foto di una pizza + logo). */
+export const DEFAULT_OG_IMAGE = `${SITE_URL}/assets/og-image.jpg`;
+/** Link alle prenotazioni nell'area riservata (email al proprietario). */
+export const ADMIN_RESERVATIONS_URL = `${SITE_URL}/riservato/dashboard?tab=reservations`;
 
 type PageSeoInput = {
   description: string;

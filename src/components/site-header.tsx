@@ -69,7 +69,14 @@ export function SiteHeader({ className }: SiteHeaderProps) {
 
   return (
     <header
-      className={clsx("topbar", pathname === "/" && "topbar-fixed", className)}
+      className={clsx(
+        "topbar",
+        pathname === "/" && "topbar-fixed",
+        // Nel menu la barra del sito scorre via: in alto restano le barre del
+        // menu (ricerca, filtri, categorie), che altrimenti finirebbero sotto.
+        path === "/menu" && "topbar-scrolls",
+        className,
+      )}
     >
       <div className="topbar-inner">
         <Link
