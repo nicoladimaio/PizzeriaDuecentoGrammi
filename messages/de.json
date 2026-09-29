@@ -8,7 +8,6 @@
   },
   "Menu": {
     "menu": "Speisekarte",
-    "loading": "Speisekarte wird geladen...",
     "searchPlaceholder": "In der Speisekarte suchen...",
     "searchAria": "Gerichte suchen",
     "openSearch": "Suche öffnen",
@@ -25,7 +24,8 @@
     "closeAria": "Details schließen",
     "ingredients": "Zutaten",
     "allergensAria": "Allergene des Gerichts",
-    "cardInfoAria": "Schärfe und Allergene"
+    "cardInfoAria": "Schärfe und Allergene",
+    "unavailable": "Die Speisekarte ist im Moment nicht verfügbar. Bitte versuchen Sie es in ein paar Minuten erneut."
   },
   "Spice": {
     "aria": "Schärfe: {label}",
@@ -77,10 +77,11 @@
     "subtitle": "In drei schnellen Schritten.",
     "stepAria": "Schritt {step} von 3",
     "loadingCalendar": "Kalender wird geladen...",
-    "openingSummary": "Ihre Reservierungsübersicht wird geöffnet...",
+    "openingDetails": "Letzter Schritt: Ihre Daten...",
+    "refreshingTimes": "Verfügbare Uhrzeiten werden aktualisiert...",
     "loading": "Wird geladen...",
     "loaderAlt": "Reservierung wird geladen",
-    "redirecting": "Ihre Reservierung wird gesendet...",
+    "redirecting": "Ihre Reservierungsanfrage wird gesendet...",
     "guestsQuestion": "Wie viele Personen sind Sie?",
     "guestsAria": "Anzahl der Personen",
     "other": "Andere",
@@ -133,7 +134,8 @@
       "captcha": "Bitte bestätigen Sie, dass Sie kein Roboter sind.",
       "send": "Beim Senden ist ein Fehler aufgetreten. Bitte versuchen Sie es in Kürze erneut.",
       "notConfirmed": "Der Server hat die Reservierung nicht bestätigt. Bitte versuchen Sie es in Kürze erneut oder kontaktieren Sie die Pizzeria.",
-      "invalidResponse": "Der Server hat eine ungültige Antwort gesendet."
+      "invalidResponse": "Der Server hat eine ungültige Antwort gesendet.",
+      "slotUnavailable": "Die gewählte Uhrzeit ist gerade vergeben worden. Bitte wählen Sie eine andere Uhrzeit."
     },
     "legalLinksAria": "Rechtliche Hinweise",
     "privacy": "Datenschutz",
@@ -146,5 +148,83 @@
     "home": "ZUR STARTSEITE",
     "newBooking": "NEUE RESERVIERUNG",
     "legal": "Rechtliche Hinweise: <privacy>Datenschutz</privacy> und <terms>Reservierungsbedingungen</terms>."
+  },
+  "Reservation": {
+    "dateAtTime": "{date} um {time} Uhr",
+    "contact": "Bei Fragen erreichen Sie uns telefonisch unter {phone}.",
+    "email": {
+      "greeting": "Hallo {name},",
+      "whenLabel": "Datum und Uhrzeit",
+      "requestedLabel": "Gewünschtes Datum und Uhrzeit",
+      "proposedLabel": "Vorgeschlagene Uhrzeit",
+      "guestsLabel": "Personen",
+      "notesLabel": "Anmerkungen",
+      "ownerNoteLabel": "Nachricht der Pizzeria",
+      "cancelIntro": "Sie können doch nicht kommen? Bitte stornieren Sie die Reservierung, damit wir den Tisch freigeben können.",
+      "cancelButton": "Reservierung stornieren",
+      "recap": {
+        "subject": "Reservierungsanfrage erhalten - Duecento Grammi",
+        "title": "Anfrage erhalten",
+        "intro": "wir haben Ihre Reservierungsanfrage erhalten. Wir melden uns, sobald unser Team sie bearbeitet hat."
+      },
+      "confirmed": {
+        "subject": "Reservierung bestätigt - Duecento Grammi",
+        "title": "Reservierung bestätigt",
+        "intro": "vielen Dank, dass Sie sich für Duecento Grammi entschieden haben: Ihre Reservierung ist bestätigt. Wir freuen uns auf Sie!"
+      },
+      "rejected": {
+        "subject": "Reservierung nicht bestätigt - Duecento Grammi",
+        "title": "Reservierung nicht bestätigt",
+        "intro": "vielen Dank für Ihre Anfrage. Leider können wir sie für die gewünschte Uhrzeit nicht bestätigen. Sie können über unsere Website eine neue Anfrage senden."
+      },
+      "cancelled": {
+        "subject": "Reservierung storniert - Duecento Grammi",
+        "title": "Reservierung storniert",
+        "intro": "leider mussten wir Ihre Reservierung stornieren. Wir bitten um Entschuldigung."
+      },
+      "proposed": {
+        "subject": "Neuer Terminvorschlag - Duecento Grammi",
+        "title": "Neuer Terminvorschlag",
+        "intro": "zur gewünschten Uhrzeit ist leider kein Tisch frei, wir können Ihnen aber eine Alternative anbieten. Wenn sie Ihnen passt, bestätigen Sie sie bitte über die Schaltfläche unten.",
+        "acceptButton": "Neue Uhrzeit annehmen",
+        "rejectButton": "Vorschlag ablehnen"
+      },
+      "reminder": {
+        "subject": "Wir erwarten Sie heute - Duecento Grammi",
+        "title": "Wir erwarten Sie heute",
+        "intro": "wir möchten Sie an Ihre heutige Reservierung bei Duecento Grammi erinnern."
+      }
+    },
+    "page": {
+      "invalidLinkTitle": "Link abgelaufen oder ungültig",
+      "invalidLinkText": "Dieser Link ist ungültig oder abgelaufen.",
+      "notFoundTitle": "Reservierung nicht gefunden",
+      "notFoundText": "Zu diesem Link haben wir keine Reservierung gefunden.",
+      "errorTitle": "Fehler",
+      "errorText": "Die Anfrage konnte nicht abgeschlossen werden. Bitte versuchen Sie es in Kürze erneut.",
+      "proposal": {
+        "alreadyAnsweredTitle": "Antwort bereits erhalten",
+        "alreadyAnsweredText": "Wir haben bereits eine Antwort auf diesen Vorschlag erhalten.",
+        "acceptQuestion": "Nehmen Sie die neue Uhrzeit an?",
+        "rejectQuestion": "Lehnen Sie die neue Uhrzeit ab?",
+        "requested": "Ihre Anfrage: {when}.",
+        "proposed": "Die Pizzeria schlägt Ihnen vor:",
+        "acceptButton": "Ja, neue Uhrzeit annehmen",
+        "rejectButton": "Vorschlag ablehnen",
+        "acceptedTitle": "Reservierung bestätigt",
+        "acceptedText": "Vielen Dank! Wir freuen uns auf Ihren Besuch am {when}.",
+        "rejectedTitle": "Vorschlag abgelehnt",
+        "rejectedText": "Sie haben die neue Uhrzeit abgelehnt, die Reservierung ist daher nicht bestätigt. Sie können jederzeit über unsere Website eine neue Anfrage senden."
+      },
+      "cancel": {
+        "question": "Möchten Sie die Reservierung stornieren?",
+        "details": "Reservierung für {guests, plural, one {# Person} other {# Personen}}:",
+        "button": "Ja, Reservierung stornieren",
+        "doneTitle": "Reservierung storniert",
+        "doneText": "Ihre Reservierung wurde storniert. Vielen Dank für Ihre Nachricht!",
+        "notPossibleTitle": "Stornierung nicht möglich",
+        "notPossibleText": "Diese Reservierung ist bereits storniert, wurde nicht bestätigt oder liegt in der Vergangenheit."
+      }
+    }
   }
 }

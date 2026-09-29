@@ -4,18 +4,22 @@ import { z } from "zod";
 import { requireAdmin } from "@/lib/admin-auth";
 import { getAdminDb } from "@/lib/firebase-admin";
 import { buildReservationCode } from "@/lib/reservation-code";
+import {
+  DATE_KEY_REGEX,
+  TIME_REGEX,
+  countReservedSeats,
+  resolveReservationSettings,
+} from "@/lib/reservation-availability";
 
 const manualReservationSchema = z.object({
   customerName: z.string().min(2),
   phone: z.string().trim().optional().or(z.literal("")),
   email: z.string().trim().email().optional().or(z.literal("")),
-  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
-  time: z.string().regex(/^([01]\d|2[0-3]):([0-5]\d)$/),
+  date: z.string().regex(DATE_KEY_REGEX),
+  time: z.string().regex(TIME_REGEX),
   guests: z.number().int().min(1).max(20),
   notes: z.string().max(300).optional(),
 });
-
-const ACTIVE_STATUSES = new Set(["pending", "confirmed", "proposed"]);
 
 export async function POST(request: Request) {
   try {
@@ -38,49 +42,10 @@ export async function POST(request: Request) {
     const reservationId = db.collection("reservations").doc().id;
     const normalizedEmail = (parsed.data.email ?? "").trim();
     const normalizedPhone = (parsed.data.phone ?? "").trim();
-    const diningArea = "inside" as const;
 
-    const settingsSnap = await db
-      .collection("reservation_settings")
-      .doc("default")
-      .get();
-    const settings = settingsSnap.data() as
-      | {
-          capacityPerSlot?: unknown;
-          insideActive?: unknown;
-          outsideActive?: unknown;
-          insideCapacityPerSlot?: unknown;
-          outsideCapacityPerSlot?: unknown;
-        }
-      | undefined;
-    const insideActive =
-      typeof settings?.insideActive === "boolean" ? settings.insideActive : true;
-    const outsideActive =
-      typeof settings?.outsideActive === "boolean"
-        ? settings.outsideActive
-        : true;
-    const insideCapacityPerSlot =
-      typeof settings?.insideCapacityPerSlot === "number" &&
-      Number.isFinite(settings.insideCapacityPerSlot) &&
-      settings.insideCapacityPerSlot > 0
-        ? Math.round(settings.insideCapacityPerSlot)
-        : Number(process.env.RESERVATION_CAPACITY_INSIDE_PER_SLOT ?? 40);
-    const outsideCapacityPerSlot =
-      typeof settings?.outsideCapacityPerSlot === "number" &&
-      Number.isFinite(settings.outsideCapacityPerSlot) &&
-      settings.outsideCapacityPerSlot > 0
-        ? Math.round(settings.outsideCapacityPerSlot)
-        : Number(process.env.RESERVATION_CAPACITY_OUTSIDE_PER_SLOT ?? 24);
-    const capacityPerSlot =
-      typeof settings?.capacityPerSlot === "number" &&
-      Number.isFinite(settings.capacityPerSlot) &&
-      settings.capacityPerSlot > 0
-        ? Math.round(settings.capacityPerSlot)
-        : Number(process.env.RESERVATION_CAPACITY_PER_SLOT ?? 40);
-    const totalCapacity =
-      (insideActive ? insideCapacityPerSlot : 0) +
-      (outsideActive ? outsideCapacityPerSlot : 0) ||
-      capacityPerSlot;
+    // Dall'area riservata si può prenotare anche fuori orario o in un giorno
+    // chiuso: si controlla solo la capienza.
+    const { capacityPerSlot: totalCapacity } = await resolveReservationSettings(db);
 
     const occupancySnap = await db
       .collection("reservations")
@@ -88,16 +53,7 @@ export async function POST(request: Request) {
       .where("time", "==", parsed.data.time)
       .get();
 
-    const reservedSeats = occupancySnap.docs.reduce((sum, doc) => {
-      const data = doc.data() as {
-        guests?: number;
-        status?: string;
-      };
-
-      if (!ACTIVE_STATUSES.has(data.status ?? "")) return sum;
-
-      return sum + (typeof data.guests === "number" ? data.guests : 0);
-    }, 0);
+    const reservedSeats = countReservedSeats(occupancySnap.docs);
 
     if (reservedSeats + parsed.data.guests > totalCapacity) {
       return NextResponse.json(
@@ -112,7 +68,6 @@ export async function POST(request: Request) {
       customerName: parsed.data.customerName,
       phone: normalizedPhone,
       email: normalizedEmail,
-      diningArea,
       date: parsed.data.date,
       time: parsed.data.time,
       guests: parsed.data.guests,
@@ -138,7 +93,6 @@ export async function POST(request: Request) {
       customerName: parsed.data.customerName,
       phone: normalizedPhone,
       email: normalizedEmail,
-      diningArea,
       date: parsed.data.date,
       time: parsed.data.time,
       guests: parsed.data.guests,

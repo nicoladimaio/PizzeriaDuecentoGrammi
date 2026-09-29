@@ -4,7 +4,11 @@ import { z } from "zod";
 import { requireAdmin } from "@/lib/admin-auth";
 import { getAdminDb } from "@/lib/firebase-admin";
 import { sendCustomerDecisionEmail } from "@/lib/email";
-import { createProposalActionToken } from "@/lib/reservation-proposal-token";
+import { toAppLocale } from "@/lib/reservation-i18n";
+import {
+  buildCancelUrl,
+  buildProposalResponseUrls,
+} from "@/lib/reservation-links";
 
 const decisionSchema = z
   .object({
@@ -70,7 +74,7 @@ export async function POST(
       date: string;
       time: string;
       guests: number;
-      status?: "pending" | "confirmed" | "rejected" | "proposed";
+      status?: "pending" | "confirmed" | "rejected" | "proposed" | "cancelled";
     };
 
     const nowIso = new Date().toISOString();
@@ -127,8 +131,10 @@ export async function POST(
         | {
             customerName?: string;
             email?: string;
+            locale?: string;
           }
         | undefined;
+      const locale = toAppLocale(reservationDoc?.locale);
 
       const customerEmail =
         typeof reservationDoc?.email === "string"
@@ -143,26 +149,10 @@ export async function POST(
             ? "cancelled"
             : parsed.data.action;
 
-        const siteUrl =
-          process.env.NEXT_PUBLIC_SITE_URL ??
-          process.env.SITE_URL ??
-          "http://localhost:3000";
-
-        const expiresAt = Date.now() + 1000 * 60 * 60 * 48;
-        const acceptToken = createProposalActionToken({
-          code,
-          decision: "accept",
-          expiresAt,
-        });
-        const rejectToken = createProposalActionToken({
-          code,
-          decision: "reject",
-          expiresAt,
-        });
-
-        const proposalAcceptUrl = `${siteUrl}/api/reservations/${encodeURIComponent(code)}/proposal-response?decision=accept&token=${encodeURIComponent(acceptToken)}`;
-        const proposalRejectUrl = `${siteUrl}/api/reservations/${encodeURIComponent(code)}/proposal-response?decision=reject&token=${encodeURIComponent(rejectToken)}`;
-        const logoUrl = `${siteUrl}/assets/Centro.png`;
+        const proposalUrls =
+          parsed.data.action === "proposed"
+            ? buildProposalResponseUrls(code, locale)
+            : undefined;
 
         await sendCustomerDecisionEmail({
           toEmail: customerEmail,
@@ -171,14 +161,17 @@ export async function POST(
           action: customerEmailAction,
           date: statusDoc.date,
           time: statusDoc.time,
+          guests: statusDoc.guests,
           proposedDate: parsed.data.proposedDate,
           proposedTime: parsed.data.proposedTime,
           ownerResponse: parsed.data.ownerResponse,
-          logoUrl,
-          proposalAcceptUrl:
-            parsed.data.action === "proposed" ? proposalAcceptUrl : undefined,
-          proposalRejectUrl:
-            parsed.data.action === "proposed" ? proposalRejectUrl : undefined,
+          proposalAcceptUrl: proposalUrls?.acceptUrl,
+          proposalRejectUrl: proposalUrls?.rejectUrl,
+          cancelUrl:
+            customerEmailAction === "confirmed"
+              ? buildCancelUrl(code, statusDoc.date, locale)
+              : undefined,
+          locale,
         });
         customerNotificationSent = true;
       } else {

@@ -17,10 +17,6 @@ export const defaultSettings: ReservationSettings = {
   closeTime: "23:00",
   slotMinutes: 30,
   capacityPerSlot: 40,
-  insideActive: true,
-  outsideActive: true,
-  insideCapacityPerSlot: 40,
-  outsideCapacityPerSlot: 24,
   workingDays: [1, 2, 3, 4, 5, 6, 0],
   holidays: [],
   specialOpenings: [],
@@ -86,20 +82,6 @@ export const normalizeSettings = (
     settings.capacityPerSlot > 0
       ? Math.round(settings.capacityPerSlot)
       : 40,
-  insideActive: settings.insideActive !== false,
-  outsideActive: settings.outsideActive !== false,
-  insideCapacityPerSlot:
-    typeof settings.insideCapacityPerSlot === "number" &&
-    Number.isFinite(settings.insideCapacityPerSlot) &&
-    settings.insideCapacityPerSlot > 0
-      ? Math.round(settings.insideCapacityPerSlot)
-      : 40,
-  outsideCapacityPerSlot:
-    typeof settings.outsideCapacityPerSlot === "number" &&
-    Number.isFinite(settings.outsideCapacityPerSlot) &&
-    settings.outsideCapacityPerSlot > 0
-      ? Math.round(settings.outsideCapacityPerSlot)
-      : 24,
   workingDays: [...new Set(settings.workingDays)].sort((a, b) => a - b),
   holidays: [...new Set(settings.holidays)].sort(),
   specialOpenings: [...new Set(settings.specialOpenings)].sort(),
@@ -114,13 +96,6 @@ export const normalizeSettings = (
     ),
   ),
 });
-
-export const deriveTotalCapacity = (settings: ReservationSettings): number => {
-  const total =
-    (settings.insideActive ? settings.insideCapacityPerSlot : 0) +
-    (settings.outsideActive ? settings.outsideCapacityPerSlot : 0);
-  return total > 0 ? total : settings.capacityPerSlot;
-};
 
 export const getSlotTimesForWeekday = (
   _weekday: number,
@@ -168,13 +143,5 @@ export const isBookingOpenOnDateKey = (
   return isWorkingDay && !isHoliday;
 };
 
-export const buildSettingsSnapshot = (
-  settings: ReservationSettings,
-  insideCapacityDraft: string,
-  outsideCapacityDraft: string,
-) =>
-  JSON.stringify({
-    settings: normalizeSettings(settings),
-    insideCapacityDraft,
-    outsideCapacityDraft,
-  });
+export const buildSettingsSnapshot = (settings: ReservationSettings) =>
+  JSON.stringify(normalizeSettings(settings));

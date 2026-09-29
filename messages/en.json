@@ -8,7 +8,6 @@
   },
   "Menu": {
     "menu": "Menu",
-    "loading": "Loading menu...",
     "searchPlaceholder": "Search the menu...",
     "searchAria": "Search dishes",
     "openSearch": "Open search",
@@ -25,7 +24,8 @@
     "closeAria": "Close details",
     "ingredients": "Ingredients",
     "allergensAria": "Dish allergens",
-    "cardInfoAria": "Spiciness and allergens"
+    "cardInfoAria": "Spiciness and allergens",
+    "unavailable": "The menu is not available right now. Please try again in a few minutes."
   },
   "Spice": {
     "aria": "Spiciness: {label}",
@@ -77,10 +77,11 @@
     "subtitle": "Three quick steps.",
     "stepAria": "Step {step} of 3",
     "loadingCalendar": "Loading the calendar...",
-    "openingSummary": "Opening your booking summary...",
+    "openingDetails": "Last step: your details...",
+    "refreshingTimes": "Updating available times...",
     "loading": "Loading...",
     "loaderAlt": "Loading booking",
-    "redirecting": "Sending your booking...",
+    "redirecting": "Sending your booking request...",
     "guestsQuestion": "How many people?",
     "guestsAria": "Number of guests",
     "other": "Other",
@@ -133,7 +134,8 @@
       "captcha": "Please confirm you are not a robot.",
       "send": "Something went wrong while sending. Please try again shortly.",
       "notConfirmed": "The server did not confirm your booking. Please try again shortly or contact the restaurant.",
-      "invalidResponse": "The server returned an invalid response."
+      "invalidResponse": "The server returned an invalid response.",
+      "slotUnavailable": "The time you chose has just been taken. Please choose another time."
     },
     "legalLinksAria": "Legal information",
     "privacy": "Privacy",
@@ -146,5 +148,83 @@
     "home": "BACK TO HOME",
     "newBooking": "NEW BOOKING",
     "legal": "Legal information: <privacy>Privacy</privacy> and <terms>Booking terms</terms>."
+  },
+  "Reservation": {
+    "dateAtTime": "{date} at {time}",
+    "contact": "If you need anything, call us on {phone}.",
+    "email": {
+      "greeting": "Hi {name},",
+      "whenLabel": "Date and time",
+      "requestedLabel": "Requested date and time",
+      "proposedLabel": "Proposed time",
+      "guestsLabel": "Guests",
+      "notesLabel": "Notes",
+      "ownerNoteLabel": "Message from the restaurant",
+      "cancelIntro": "Can't make it any more? Let us know by cancelling your booking, so we can free up the table.",
+      "cancelButton": "Cancel booking",
+      "recap": {
+        "subject": "Booking request received - Duecento Grammi",
+        "title": "Request received",
+        "intro": "we have received your booking request. We will write to you as soon as our staff has reviewed it."
+      },
+      "confirmed": {
+        "subject": "Booking confirmed - Duecento Grammi",
+        "title": "Booking confirmed",
+        "intro": "thank you for choosing Duecento Grammi: your booking is confirmed. We look forward to seeing you!"
+      },
+      "rejected": {
+        "subject": "Booking not confirmed - Duecento Grammi",
+        "title": "Booking not confirmed",
+        "intro": "thank you for your request. Unfortunately we cannot confirm it for the time you chose. You can send a new request from our website."
+      },
+      "cancelled": {
+        "subject": "Booking cancelled - Duecento Grammi",
+        "title": "Booking cancelled",
+        "intro": "unfortunately we have had to cancel your booking. We apologise for the inconvenience."
+      },
+      "proposed": {
+        "subject": "A new time for your booking - Duecento Grammi",
+        "title": "A new time for your booking",
+        "intro": "we have no table available at the time you asked for, but we can offer you an alternative. If it suits you, confirm it with the button below.",
+        "acceptButton": "I accept the new time",
+        "rejectButton": "I decline the offer"
+      },
+      "reminder": {
+        "subject": "See you today - Duecento Grammi",
+        "title": "See you today",
+        "intro": "this is a reminder of your booking today at Duecento Grammi."
+      }
+    },
+    "page": {
+      "invalidLinkTitle": "Link expired or not valid",
+      "invalidLinkText": "This link is not valid or has expired.",
+      "notFoundTitle": "Booking not found",
+      "notFoundText": "We could not find the booking linked to this link.",
+      "errorTitle": "Error",
+      "errorText": "We could not complete your request. Please try again shortly.",
+      "proposal": {
+        "alreadyAnsweredTitle": "Answer already received",
+        "alreadyAnsweredText": "We have already received an answer to this offer.",
+        "acceptQuestion": "Do you accept the new time?",
+        "rejectQuestion": "Do you decline the new time?",
+        "requested": "You asked for: {when}.",
+        "proposed": "The restaurant offers you:",
+        "acceptButton": "Yes, I accept the new time",
+        "rejectButton": "I decline the offer",
+        "acceptedTitle": "Booking confirmed",
+        "acceptedText": "Thank you! We look forward to seeing you on {when}.",
+        "rejectedTitle": "Offer declined",
+        "rejectedText": "You declined the new time, so the booking is not confirmed. You can send a new request from our website whenever you like."
+      },
+      "cancel": {
+        "question": "Do you want to cancel your booking?",
+        "details": "Booking for {guests, plural, one {# guest} other {# guests}}:",
+        "button": "Yes, cancel the booking",
+        "doneTitle": "Booking cancelled",
+        "doneText": "Your booking has been cancelled. Thank you for letting us know!",
+        "notPossibleTitle": "This booking cannot be cancelled",
+        "notPossibleText": "This booking has already been cancelled, was not confirmed or is in the past."
+      }
+    }
   }
 }

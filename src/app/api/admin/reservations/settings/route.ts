@@ -1,8 +1,10 @@
 import { NextResponse } from "next/server";
+import { revalidateTag } from "next/cache";
 import { FieldValue } from "firebase-admin/firestore";
 import { z } from "zod";
 import { requireAdmin } from "@/lib/admin-auth";
 import { getAdminDb } from "@/lib/firebase-admin";
+import { SETTINGS_CACHE_TAG } from "@/lib/restaurant-info";
 
 const slotMinutesSchema = z.number().int().min(5).max(180);
 const timeValueSchema = z.string().regex(/^([01]\d|2[0-3]):([0-5]\d)$/);
@@ -12,10 +14,6 @@ const settingsSchema = z.object({
   closeTime: z.string().regex(/^([01]\d|2[0-3]):([0-5]\d)$/),
   slotMinutes: slotMinutesSchema,
   capacityPerSlot: z.number().int().min(1).max(500),
-  insideActive: z.boolean(),
-  outsideActive: z.boolean(),
-  insideCapacityPerSlot: z.number().int().min(1).max(500),
-  outsideCapacityPerSlot: z.number().int().min(1).max(500),
   workingDays: z.array(z.number().int().min(0).max(6)).max(7),
   holidays: z.array(z.string().regex(/^\d{4}-\d{2}-\d{2}$/)).max(80),
   specialOpenings: z.array(z.string().regex(/^\d{4}-\d{2}-\d{2}$/)).max(80),
@@ -46,14 +44,6 @@ const defaultSettings = () => ({
   closeTime: process.env.RESERVATION_CLOSE_TIME ?? "23:00",
   slotMinutes: 30,
   capacityPerSlot: Number(process.env.RESERVATION_CAPACITY_PER_SLOT ?? 40),
-  insideActive: true,
-  outsideActive: true,
-  insideCapacityPerSlot: Number(
-    process.env.RESERVATION_CAPACITY_INSIDE_PER_SLOT ?? 40,
-  ),
-  outsideCapacityPerSlot: Number(
-    process.env.RESERVATION_CAPACITY_OUTSIDE_PER_SLOT ?? 24,
-  ),
   workingDays: [1, 2, 3, 4, 5, 6, 0],
   holidays: [] as string[],
   specialOpenings: [] as string[],
@@ -135,13 +125,6 @@ export async function POST(request: Request) {
       );
     }
 
-    if (!parsed.data.insideActive && !parsed.data.outsideActive) {
-      return NextResponse.json(
-        { error: "Attiva almeno una sala tra interno ed esterno." },
-        { status: 400 },
-      );
-    }
-
     const db = getAdminDb();
     await db
       .collection("reservation_settings")
@@ -149,11 +132,19 @@ export async function POST(request: Request) {
       .set(
         {
           ...parsed.data,
+          // Campi della vecchia divisione sala interna/esterna, non più usati.
+          insideActive: FieldValue.delete(),
+          outsideActive: FieldValue.delete(),
+          insideCapacityPerSlot: FieldValue.delete(),
+          outsideCapacityPerSlot: FieldValue.delete(),
           updatedAt: new Date().toISOString(),
           updatedAtServer: FieldValue.serverTimestamp(),
         },
         { merge: true },
       );
+
+    // Orari nel footer della home e dati per Google: subito aggiornati.
+    revalidateTag(SETTINGS_CACHE_TAG, { expire: 0 });
 
     return NextResponse.json({ ok: true, settings: parsed.data });
   } catch (error) {
