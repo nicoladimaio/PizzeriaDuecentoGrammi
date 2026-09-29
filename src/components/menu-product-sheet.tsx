@@ -37,11 +37,25 @@ export function MenuProductSheet({
   onClose,
 }: MenuProductSheetProps) {
   const spiceLabels = useSpiceLabels();
-  const [imageMode, setImageMode] = useState<"contain" | "cover">("contain");
-  const [imageNaturalSize, setImageNaturalSize] = useState<{
+  // Misure reali della foto, legate al suo indirizzo: aprendo un altro piatto
+  // non si riusano per sbaglio quelle della foto precedente.
+  const [measured, setMeasured] = useState<{
+    src: string;
     width: number;
     height: number;
   } | null>(null);
+  const probeSrc = product
+    ? product.image || product.imageThumb || "/assets/logo.jpg"
+    : null;
+  const imageNaturalSize =
+    measured && measured.src === probeSrc ? measured : null;
+  // Formato scelto nel pannello, altrimenti dedotto dalle proporzioni.
+  const imageMode: "contain" | "cover" =
+    product?.imageFit === "contain" || product?.imageFit === "cover"
+      ? product.imageFit
+      : imageNaturalSize && imageNaturalSize.width / imageNaturalSize.height < 1.2
+        ? "cover"
+        : "contain";
 
   useEffect(() => {
     if (!product) return;
@@ -59,32 +73,19 @@ export function MenuProductSheet({
   }, [product]);
 
   useEffect(() => {
-    if (!product) {
-      setImageNaturalSize(null);
-      return;
-    }
-    if (!product?.image) return;
-    if (product.imageFit === "contain" || product.imageFit === "cover") {
-      setImageMode(product.imageFit);
-    }
+    if (!probeSrc || !product?.image) return;
 
     const probe = new window.Image();
     probe.decoding = "async";
     probe.onload = () => {
-      const width = Math.max(1, probe.naturalWidth || 1);
-      const height = Math.max(1, probe.naturalHeight || 1);
-      setImageNaturalSize({ width, height });
-      const ratio =
-        height > 0
-          ? width / height
-          : 1;
-      if (product.imageFit !== "contain" && product.imageFit !== "cover") {
-        setImageMode(ratio < 1.2 ? "cover" : "contain");
-      }
+      setMeasured({
+        src: probeSrc,
+        width: Math.max(1, probe.naturalWidth || 1),
+        height: Math.max(1, probe.naturalHeight || 1),
+      });
     };
-    probe.onerror = () => setImageNaturalSize(null);
-    probe.src = product.image || product.imageThumb || "/assets/logo.jpg";
-  }, [product]);
+    probe.src = probeSrc;
+  }, [probeSrc, product?.image]);
 
   const preserveNaturalDetail =
     imageNaturalSize !== null &&

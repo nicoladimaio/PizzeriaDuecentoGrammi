@@ -2,49 +2,17 @@
 
 import Image from "next/image";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { collection, onSnapshot } from "firebase/firestore";
-import { getClientDb } from "@/lib/firebase";
 import { getMenuImageSrc } from "@/lib/menu-image-cdn";
-
-type FeaturedItem = {
-  id: string;
-  name: string;
-  ingredients: string;
-  image: string;
-  order: number;
-};
+import type { FeaturedDish } from "@/lib/menu-mapping";
 
 type FeaturedSlide = {
   key: string;
-  item: FeaturedItem;
+  item: FeaturedDish;
   originIndex: number;
 };
 
-type RawMenuItem = {
-  nome?: unknown;
-  Nome?: unknown;
-  ingredienti?: unknown;
-  Ingredienti?: unknown;
-  immagine?: unknown;
-  Immagine?: unknown;
-  ordine?: unknown;
-  order?: unknown;
-  specialita?: unknown;
-  special?: unknown;
-  visible?: unknown;
-  visibile?: unknown;
-};
-
-const asText = (value: unknown): string => String(value ?? "").trim();
-
-const imagePath = (value: string): string => {
-  if (!value) return "/assets/logo.jpg";
-  if (value.startsWith("http")) return value;
-  return `/${value.replace(/^\/+/, "")}`;
-};
-
-export function HomeFeaturedStrip() {
-  const [items, setItems] = useState<FeaturedItem[]>([]);
+/** Piatti "firma" della home: arrivano già pronti dal server (lib/public-menu.ts). */
+export function HomeFeaturedStrip({ items }: { items: FeaturedDish[] }) {
   const [activeSlideIndex, setActiveSlideIndex] = useState(0);
   const stripRef = useRef<HTMLDivElement | null>(null);
   const slideRefs = useRef<Array<HTMLElement | null>>([]);
@@ -54,7 +22,12 @@ export function HomeFeaturedStrip() {
   const initDoneRef = useRef(false);
 
   const canLoop = items.length > 1;
-  const loopCycles = canLoop ? (items.length <= 3 ? 21 : 13) : 1;
+  // Giro infinito: copie dei piatti ai lati di quella centrale; arrivati alla
+  // prima o all'ultima copia si salta, senza che si veda, a quella centrale.
+  // Bastano 5 copie (e almeno ~24 schede) per coprire anche uno scorrimento veloce.
+  const loopCycles = canLoop
+    ? Math.max(5, Math.ceil(24 / items.length))
+    : 1;
   const middleCycle = Math.floor(loopCycles / 2);
 
   const slides = useMemo<FeaturedSlide[]>(() => {
@@ -79,57 +52,6 @@ export function HomeFeaturedStrip() {
       };
     });
   }, [items, canLoop, loopCycles]);
-
-  useEffect(() => {
-    const db = getClientDb();
-    const unsubscribe = onSnapshot(
-      collection(db, "menu_items"),
-      (snapshot) => {
-        const next = snapshot.docs
-          .map((doc) => {
-            const data = doc.data() as RawMenuItem;
-            const name = asText(data.nome ?? data.Nome);
-            if (!name) return null;
-
-            const isVisible =
-              typeof data.visible === "boolean"
-                ? data.visible
-                : typeof data.visibile === "boolean"
-                  ? data.visibile
-                  : true;
-            if (!isVisible) return null;
-
-            const isStarred = Boolean(data.specialita ?? data.special);
-            if (!isStarred) return null;
-
-            return {
-              id: doc.id,
-              name,
-              ingredients: asText(data.ingredienti ?? data.Ingredienti),
-              image: imagePath(asText(data.immagine ?? data.Immagine)),
-              order: Number.isFinite(Number(data.ordine))
-                ? Number(data.ordine)
-                : Number.isFinite(Number(data.order))
-                  ? Number(data.order)
-                  : 9999,
-            } as FeaturedItem;
-          })
-          .filter((entry): entry is FeaturedItem => Boolean(entry))
-          .sort((a, b) => {
-            const orderDiff = a.order - b.order;
-            if (orderDiff !== 0) return orderDiff;
-            return a.name.localeCompare(b.name, "it");
-          });
-
-        setItems(next);
-      },
-      () => {
-        setItems([]);
-      },
-    );
-
-    return () => unsubscribe();
-  }, []);
 
   useEffect(() => {
     initDoneRef.current = false;
