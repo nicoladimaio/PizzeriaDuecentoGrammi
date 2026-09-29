@@ -3,7 +3,8 @@ command = "npm run build"
 publish = ".next"
 
 [build.environment]
-# firebase-admin 14 richiede Node 22 o superiore.
+# firebase-admin resta alla 13: la 14 manda in crash le funzioni di Netlify
+# appena viene caricata (errore 500 su tutte le API che usano Firestore).
 NODE_VERSION = "22"
 
 [[plugins]]
