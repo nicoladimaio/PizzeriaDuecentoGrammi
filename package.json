@@ -7,7 +7,7 @@
     "dev": "next dev -H 0.0.0.0",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint",
+    "lint": "eslint .",
     "images:migrate:webp": "node scripts/migrate-menu-images-webp.mjs",
     "images:migrate:webp:dry": "node scripts/migrate-menu-images-webp.mjs --dry",
     "menu:i18n:export": "node --experimental-strip-types --no-warnings scripts/menu-i18n-export.mjs",
@@ -23,15 +23,14 @@
   "dependencies": {
     "@anthropic-ai/sdk": "^0.128.0",
     "clsx": "^2.1.1",
-    "date-fns": "^4.1.0",
     "firebase": "^12.13.0",
-    "firebase-admin": "^13.10.0",
-    "next": "^16.2.6",
+    "firebase-admin": "^14.5.0",
+    "next": "^16.3.6",
     "next-intl": "^4.14.6",
     "react": "^19.2.6",
     "react-dom": "^19.2.6",
     "resend": "^6.12.4",
-    "sharp": "^0.34.5",
+    "sharp": "^0.35.5",
     "zod": "^4.4.3"
   },
   "devDependencies": {
@@ -39,7 +38,7 @@
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
     "eslint": "^9.39.4",
-    "eslint-config-next": "^16.2.6",
+    "eslint-config-next": "^16.3.6",
     "typescript": "^6.0.3"
   }
 }

@@ -7,8 +7,8 @@ Stack: Next.js 16 (App Router), React 19, TypeScript, Firebase (Auth, Firestore,
 ## Funzionalità
 
 - **Home** con video e piatti in evidenza.
-- **Menu** (`/menu`; `/en/menu`, `/es/menu`, `/de/menu`): letto in tempo reale da Firestore, con ricerca, filtro allergeni e piccantezza.
-- **Prenotazioni** (`/prenotazioni` e le versioni `/en`, `/es`, `/de`): wizard in 3 passaggi con disponibilità reale per giorno e orario, protezione anti-spam (Cloudflare Turnstile + campo trappola). Il cliente riceve un'email di riepilogo e poi l'esito (conferma, rifiuto o proposta di un altro orario, accettabile via link firmato).
+- **Menu** (`/menu`; `/en/menu`, `/es/menu`, `/de/menu`): preparato sul server da Firestore e tenuto in cache ([src/lib/public-menu.ts](src/lib/public-menu.ts)), con ricerca, filtro allergeni e piccantezza e dati strutturati schema.org per Google. Si aggiorna subito a ogni salvataggio dal pannello admin e comunque ogni 10 minuti; lo stesso vale per i piatti in evidenza della home.
+- **Prenotazioni** (`/prenotazioni` e le versioni `/en`, `/es`, `/de`): wizard in 3 passaggi con disponibilità reale per giorno e orario, protezione anti-spam (Cloudflare Turnstile + campo trappola). Il cliente riceve le email nella lingua in cui ha prenotato: riepilogo, esito (conferma, rifiuto o proposta di un altro orario, accettabile via link firmato) e, se attivo, un promemoria la mattina del giorno prenotato. Dalle email può annullare la prenotazione (link firmato, con pagina di conferma): in area riservata risulta "Annullata dal cliente" e il posto torna libero.
 - **Area riservata** (`/riservato/accesso-200g` → `/riservato/dashboard`): gestione prenotazioni, impostazioni del servizio (orari, capienza, giorni di chiusura), gestione menu (piatti, categorie, ingredienti, foto) e traduzioni del menu.
 
 ## Avvio locale
@@ -31,7 +31,8 @@ Tutte elencate con commenti in [.env.example](.env.example). In sintesi:
 | Firebase Admin | `FIREBASE_PROJECT_ID`, `FIREBASE_CLIENT_EMAIL`, `FIREBASE_PRIVATE_KEY` | Service account, usato dalle API. |
 | Admin | `NEXT_PUBLIC_ADMIN_EMAILS` | Deve coincidere con la lista in `firestore.rules` e `storage.rules`. |
 | Email | `RESEND_API_KEY`, `RESEND_FROM_EMAIL`, `OWNER_EMAIL` | |
-| Link email | `RESERVATION_ACTION_SECRET` | Firma HMAC dei link accetta/rifiuta proposta. Obbligatoria in produzione. |
+| Link email | `RESERVATION_ACTION_SECRET` | Firma HMAC dei link nelle email (accetta/rifiuta proposta, annulla prenotazione). Obbligatoria in produzione. |
+| Promemoria | `CRON_SECRET` | Attiva l'email di promemoria del giorno, inviata ogni mattina da [netlify/functions/reservation-reminders.mts](netlify/functions/reservation-reminders.mts). Se vuota i promemoria sono spenti. |
 | Anti-spam | `NEXT_PUBLIC_TURNSTILE_SITE_KEY`, `TURNSTILE_SECRET_KEY` | Da [Cloudflare Turnstile](https://dash.cloudflare.com/?to=/:account/turnstile) (gratuito). Se vuote la protezione è disattivata. |
 | Traduzioni | `ANTHROPIC_API_KEY` | Serve solo al pulsante "Traduci automaticamente" in area riservata. |
 
@@ -47,6 +48,7 @@ Tutte elencate con commenti in [.env.example](.env.example). In sintesi:
   # tradurre il file (un JSON per lingua: { "items": { id: {nome, descrizione, ingredienti} }, "cats": { id: nome } })
   npm run menu:i18n:import -- es traduzioni-es.json --dry   # controlla senza scrivere
   npm run menu:i18n:import -- es traduzioni-es.json         # scrive su Firestore (produzione)
+  # il sito mostra le nuove traduzioni entro 10 minuti (cache del menu pubblico)
   ```
   L'import rifiuta il file se un campo vuoto in italiano non lo è nella traduzione (o viceversa) o se il numero di ingredienti non coincide.
 - In alternativa, area riservata → Menu → Traduzioni: modifica manuale voce per voce, e il pulsante "Traduci automaticamente" (richiede `ANTHROPIC_API_KEY`, servizio a pagamento).
