@@ -3,7 +3,22 @@ import Link from "next/link";
 import Image from "next/image";
 import { HomeHeroVideo } from "@/components/home-hero-video";
 import { HomeFeaturedStrip } from "@/components/home-featured-strip";
+import { OpeningStatus } from "@/components/opening-status";
+import { serializeJsonLd } from "@/lib/menu-structured-data";
+import {
+  describeClosedDays,
+  describeUpcomingExceptions,
+  describeWorkingDays,
+  formatMinutes,
+} from "@/lib/opening-hours";
+import { getFeaturedDishes } from "@/lib/public-menu";
+import { buildRestaurantJsonLd, getOpeningHours } from "@/lib/restaurant-info";
+import { getRomeNow } from "@/lib/rome-time";
 import { buildPageMetadata } from "@/lib/seo";
+
+// Piatti in evidenza e orari: aggiornati subito dal pannello admin, e
+// comunque ogni 10 minuti (vedi lib/public-menu.ts e lib/restaurant-info.ts).
+export const revalidate = 600;
 
 export const metadata: Metadata = buildPageMetadata({
   title: "Duecento Grammi | Pizzeria Gourmet a Marcianise",
@@ -12,13 +27,29 @@ export const metadata: Metadata = buildPageMetadata({
   path: "/",
 });
 
-export default function HomePage() {
+export default async function HomePage() {
+  const [featured, hours] = await Promise.all([
+    getFeaturedDishes(),
+    getOpeningHours(),
+  ]);
+  const featuredDishes = featured ?? [];
+  const closedDays = hours ? describeClosedDays(hours.workingDays) : "";
+  const exceptions = hours
+    ? describeUpcomingExceptions(hours, getRomeNow().dateKey)
+    : [];
+
   return (
     <main className="home-immersive">
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{
+          __html: serializeJsonLd(buildRestaurantJsonLd(hours)),
+        }}
+      />
       <section className="hero hero-home-minimal">
         <HomeHeroVideo
           src="/assets/video_homepage.mp4"
-          loopDurationSeconds={10}
+          poster="/assets/video_homepage_poster.jpg"
         />
         <div className="hero-overlay" />
         <div className="container hero-content hero-content-home">
@@ -54,7 +85,7 @@ export default function HomePage() {
           <div className="home-section-head">
             <h2>Le nostre firme</h2>
           </div>
-          <HomeFeaturedStrip />
+          <HomeFeaturedStrip items={featuredDishes} />
           <div className="home-signature-cta-wrap">
             <Link href="/menu" className="btn-primary home-cta home-cta-menu">
               SCOPRI IL MENU
@@ -98,7 +129,7 @@ export default function HomePage() {
                   <path d="M4.5 7l7.5 6 7.5-6" />
                 </svg>
               </span>
-              <a href="mailto:info@duecentogrammi.it">info@duecentogrammi.it</a>
+              <a href="mailto:info@pizzeriaduecentogrammi.it">info@pizzeriaduecentogrammi.it</a>
             </p>
           </article>
 
@@ -111,7 +142,26 @@ export default function HomePage() {
                   <path d="M12 7v5l3.2 2" />
                 </svg>
               </span>
-              Lun - Dom 19:00 - 00:00
+              {hours ? (
+                <span className="home-footer-hours">
+                  <OpeningStatus hours={hours} />
+                  <span>
+                    {describeWorkingDays(hours.workingDays)} ·{" "}
+                    {formatMinutes(hours.openMinutes)} -{" "}
+                    {formatMinutes(hours.closeMinutes)}
+                  </span>
+                  {closedDays ? (
+                    <span className="home-footer-closed">{closedDays}</span>
+                  ) : null}
+                  {exceptions.map((text) => (
+                    <span key={text} className="home-footer-exception">
+                      {text}
+                    </span>
+                  ))}
+                </span>
+              ) : (
+                <a href="tel:+390823833221">Chiamaci per gli orari</a>
+              )}
             </p>
           </article>
 

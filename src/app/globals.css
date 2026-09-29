@@ -63,6 +63,10 @@ a {
   right: 0;
 }
 
+.topbar-scrolls {
+  position: relative;
+}
+
 .topbar-home-reveal {
   opacity: 0;
   pointer-events: none;
@@ -2058,6 +2062,11 @@ p {
 .badge.proposed {
   background: rgba(16, 99, 151, 0.16);
   color: #0f4f76;
+}
+
+.badge.cancelled {
+  background: rgba(90, 104, 112, 0.16);
+  color: #45535b;
 }
 
 .narrow {
@@ -6275,6 +6284,49 @@ p {
   display: flex;
   align-items: center;
   gap: 0.42rem;
+}
+
+/* Orari dal pannello: stato del momento, giorni, chiusure e ferie. */
+.home-footer-minimal-block-hours .home-footer-line {
+  align-items: flex-start;
+}
+
+.home-footer-hours {
+  display: grid;
+  gap: 0.2rem;
+}
+
+.home-footer-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-weight: 700;
+}
+
+.home-footer-status::before {
+  content: "";
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.home-footer-status-open,
+.home-footer-status-opens-later {
+  color: #9be3b0;
+}
+
+.home-footer-status-closed-today,
+.home-footer-closed {
+  color: #f0b8a8;
+}
+
+.home-footer-exception {
+  justify-self: start;
+  padding: 0.15rem 0.45rem;
+  border-radius: 6px;
+  background: rgba(240, 184, 168, 0.14);
+  color: #ffd9cd;
 }
 
 .home-footer-line-icon {
