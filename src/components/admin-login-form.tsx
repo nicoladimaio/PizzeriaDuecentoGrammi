@@ -3,8 +3,13 @@
 import { FormEvent, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { onAuthStateChanged, signInWithEmailAndPassword } from "firebase/auth";
-import { getClientAuth } from "@/lib/firebase";
+import { getClientAuth } from "@/lib/firebase-auth";
 import { isAllowedAdminEmail } from "@/lib/auth";
+import {
+  isAdminSessionExpired,
+  markAdminActivity,
+  signOutAdmin,
+} from "@/lib/admin-session";
 
 export function AdminLoginForm() {
   const router = useRouter();
@@ -27,8 +32,13 @@ export function AdminLoginForm() {
 
         const user = auth.currentUser;
         if (user && isAllowedAdminEmail(user.email)) {
-          router.replace("/riservato/dashboard");
-          return;
+          if (isAdminSessionExpired()) {
+            // Sessione rimasta nel browser ma inattiva da troppo: password.
+            await signOutAdmin(auth);
+          } else {
+            router.replace("/riservato/dashboard");
+            return;
+          }
         }
       } finally {
         if (active) {
@@ -40,7 +50,7 @@ export function AdminLoginForm() {
     void checkExistingSession();
 
     const unsubscribe = onAuthStateChanged(auth, (user) => {
-      if (user && isAllowedAdminEmail(user.email)) {
+      if (user && isAllowedAdminEmail(user.email) && !isAdminSessionExpired()) {
         router.replace("/riservato/dashboard");
         return;
       }
@@ -69,6 +79,8 @@ export function AdminLoginForm() {
 
     try {
       const auth = getClientAuth();
+      // Prima del login, così il listener qui sopra non vede la sessione come scaduta.
+      markAdminActivity(true);
       const credentials = await signInWithEmailAndPassword(
         auth,
         email,
@@ -77,7 +89,7 @@ export function AdminLoginForm() {
       const currentEmail = credentials.user.email;
 
       if (!isAllowedAdminEmail(currentEmail)) {
-        await auth.signOut();
+        await signOutAdmin(auth);
         setError("Accesso negato.");
         setLoading(false);
         return;
