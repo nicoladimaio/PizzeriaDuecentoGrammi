@@ -2,7 +2,9 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { collection, doc, onSnapshot, updateDoc } from "firebase/firestore";
-import { getClientAuth, getClientDb } from "@/lib/firebase";
+import { getClientDb } from "@/lib/firebase";
+import { getClientAuth } from "@/lib/firebase-auth";
+import { createMenuChangeWatcher } from "@/components/admin-menu/menu-cache";
 import {
   CONTENT_LOCALES,
   hashCategorySource,
@@ -110,8 +112,11 @@ export function AdminMenuTranslationsPanel() {
 
   useEffect(() => {
     const db = getClientDb();
+    const watchItemChanges = createMenuChangeWatcher(db);
+    const watchCategoryChanges = createMenuChangeWatcher(db);
 
     const unsubscribeItems = onSnapshot(collection(db, "menu_items"), (snap) => {
+      watchItemChanges(snap);
       setItems(
         snap.docs
           .map((entry) => {
@@ -144,6 +149,7 @@ export function AdminMenuTranslationsPanel() {
     const unsubscribeCategories = onSnapshot(
       collection(db, "menu_categories"),
       (snap) => {
+        watchCategoryChanges(snap);
         setCategories(
           snap.docs
             .map((entry) => {

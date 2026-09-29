@@ -20,8 +20,8 @@ import {
   onSnapshot,
   updateDoc,
 } from "firebase/firestore";
-import { getDownloadURL, ref, uploadBytes } from "firebase/storage";
-import { getClientDb, getClientStorage } from "@/lib/firebase";
+import { getClientDb } from "@/lib/firebase";
+import { createMenuChangeWatcher } from "@/components/admin-menu/menu-cache";
 import type { MenuImageFit, MenuImageMeta } from "@/types/menu-app";
 import type {
   AdminMenuItem,
@@ -44,7 +44,7 @@ import {
   formatBytes,
   sanitizeFileName,
   analyzeImageFile,
-  optimizeImageForUpload,
+  uploadMenuImage,
 } from "@/components/admin-menu/images";
 import { AllergenIcon, VisibilityIcon } from "@/components/admin-menu/icons";
 import {
@@ -241,7 +241,9 @@ export function AdminMenuPanel() {
 
   useEffect(() => {
     const db = getClientDb();
+    const watchMenuChanges = createMenuChangeWatcher(db);
     const unsubscribe = onSnapshot(collection(db, "menu_items"), (snapshot) => {
+      watchMenuChanges(snapshot);
       const next = snapshot.docs
         .map((entry) => {
           const data = entry.data();
@@ -308,9 +310,11 @@ export function AdminMenuPanel() {
 
   useEffect(() => {
     const db = getClientDb();
+    const watchMenuChanges = createMenuChangeWatcher(db);
     const unsubscribe = onSnapshot(
       collection(db, "menu_categories"),
       (snapshot) => {
+        watchMenuChanges(snapshot);
         const next = snapshot.docs
           .map((item) => {
             const data = item.data();
@@ -353,9 +357,11 @@ export function AdminMenuPanel() {
 
   useEffect(() => {
     const db = getClientDb();
+    const watchMenuChanges = createMenuChangeWatcher(db);
     const unsubscribe = onSnapshot(
       collection(db, "menu_ingredients"),
       (snapshot) => {
+        watchMenuChanges(snapshot);
         const next = snapshot.docs
           .map((entry) => {
             const data = entry.data();
@@ -708,33 +714,6 @@ export function AdminMenuPanel() {
     setEditDishImageOpen(editDishActiveTab === "image");
   }, [editDishActiveTab]);
 
-  const uploadImage = async (
-    file: File,
-  ): Promise<{ imageUrl: string; thumbUrl: string; meta: MenuImageMeta }> => {
-    const analysis = await analyzeImageFile(file);
-    const optimized = await optimizeImageForUpload(file, analysis);
-    const storage = getClientStorage();
-    const ts = Date.now();
-    const fullPath = `menu-items/${ts}-${sanitizeFileName(optimized.file.name)}`;
-    const imageRef = ref(storage, fullPath);
-    await uploadBytes(imageRef, optimized.file, {
-      contentType: optimized.file.type || "image/webp",
-      cacheControl: "public,max-age=31536000,immutable",
-    });
-    const imageUrl = await getDownloadURL(imageRef);
-    return {
-      imageUrl,
-      thumbUrl: imageUrl,
-      meta: {
-        originalWidth: optimized.meta.originalWidth,
-        originalHeight: optimized.meta.originalHeight,
-        originalFileSize: optimized.meta.originalFileSize,
-        optimizedFileSize: optimized.meta.optimizedFileSize,
-        qualityTier: optimized.meta.qualityTier,
-      },
-    };
-  };
-
   const ensureCategoryExists = async (name: string) => {
     const normalized = name.trim();
     if (!normalized) return;
@@ -1038,7 +1017,7 @@ export function AdminMenuPanel() {
     try {
       const db = getClientDb();
       await ensureCategoryExists(categoria);
-      const uploaded = newImageFile ? await uploadImage(newImageFile) : null;
+      const uploaded = newImageFile ? await uploadMenuImage(newImageFile) : null;
       const uploadedImage = uploaded?.imageUrl ?? DEFAULT_MENU_IMAGE;
       const uploadedThumb = uploaded?.thumbUrl ?? uploadedImage;
 
@@ -1156,7 +1135,7 @@ export function AdminMenuPanel() {
     setFeedback(null);
     try {
       const db = getClientDb();
-      const uploaded = editImageFile ? await uploadImage(editImageFile) : null;
+      const uploaded = editImageFile ? await uploadMenuImage(editImageFile) : null;
       const uploadedImage =
         uploaded?.imageUrl || editingItem.immagine || DEFAULT_MENU_IMAGE;
       const uploadedThumb =
@@ -2657,7 +2636,7 @@ export function AdminMenuPanel() {
                             setNewIngredientSearch("");
                           }}
                         >
-                          + Crea "{newIngredientSearch.trim()}"
+                          + Crea &ldquo;{newIngredientSearch.trim()}&rdquo;
                         </button>
                       ) : null}
                       {filteredNewIngredientOptions.length === 0 &&
@@ -3303,7 +3282,7 @@ export function AdminMenuPanel() {
                                 setEditIngredientSearch("");
                               }}
                             >
-                              + Crea "{editIngredientSearch.trim()}"
+                              + Crea &ldquo;{editIngredientSearch.trim()}&rdquo;
                             </button>
                           ) : null}
                           {filteredEditIngredientOptions.length === 0 &&

@@ -1,30 +1,47 @@
 import { FieldValue } from "firebase-admin/firestore";
 import { getAdminDb } from "@/lib/firebase-admin";
 import { sendOwnerProposalOutcomeEmail } from "@/lib/email";
-import { verifyProposalActionToken } from "@/lib/reservation-proposal-token";
+import { verifyReservationActionToken } from "@/lib/reservation-action-token";
+import {
+  confirmForm,
+  errorPage,
+  escapeHtml,
+  getPageLocale,
+  htmlPage,
+  invalidLinkPage,
+  messagePage,
+  notFoundPage,
+  paragraph,
+} from "@/lib/reservation-action-page";
+import { formatWhen, getReservationTranslator } from "@/lib/reservation-i18n";
+import type { AppLocale } from "@/i18n/routing";
 
-const htmlResponse = (title: string, message: string, ok = true) => {
-  const accent = ok ? "#166534" : "#b42318";
-  return new Response(
-    `<!DOCTYPE html>
-<html lang="it">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>${title}</title>
-  </head>
-  <body style="margin:0;font-family:Arial,sans-serif;background:#f5f7f9;color:#183240;">
-    <main style="max-width:560px;margin:48px auto;padding:24px;background:#fff;border:1px solid #d9e5ea;border-radius:14px;">
-      <h1 style="margin:0 0 12px;font-size:22px;color:${accent};">${title}</h1>
-      <p style="margin:0;font-size:15px;line-height:1.6;">${message}</p>
-    </main>
-  </body>
-</html>`,
-    {
-      headers: {
-        "Content-Type": "text/html; charset=utf-8",
-      },
-    },
+// Risposta del cliente a una proposta di orario: il link nell'email (GET)
+// mostra la pagina con il pulsante, il click (POST) registra la risposta.
+
+type Decision = "accept" | "reject";
+
+type StatusDoc = {
+  reservationId?: string;
+  customerName?: string;
+  phone?: string;
+  email?: string;
+  date: string;
+  time: string;
+  proposedDate?: string;
+  proposedTime?: string;
+  status: string;
+};
+
+const parseDecision = (value: unknown): Decision | null =>
+  value === "accept" || value === "reject" ? value : null;
+
+const alreadyAnsweredPage = (locale: AppLocale) => {
+  const t = getReservationTranslator(locale);
+  return messagePage(
+    locale,
+    t("page.proposal.alreadyAnsweredTitle"),
+    t("page.proposal.alreadyAnsweredText"),
   );
 };
 
@@ -32,120 +49,137 @@ export async function GET(
   request: Request,
   context: { params: Promise<{ code: string }> },
 ) {
+  const locale = getPageLocale(request);
   try {
     const { code } = await context.params;
     const { searchParams } = new URL(request.url);
-    const decisionRaw = searchParams.get("decision");
+    const decision = parseDecision(searchParams.get("decision"));
     const token = searchParams.get("token") ?? "";
 
-    const decision =
-      decisionRaw === "accept" || decisionRaw === "reject" ? decisionRaw : null;
-
-    if (!decision || !token) {
-      return htmlResponse(
-        "Link non valido",
-        "Il link usato non e valido.",
-        false,
-      );
+    if (
+      !decision ||
+      !token ||
+      !verifyReservationActionToken({ code, decision, token })
+    ) {
+      return invalidLinkPage(locale);
     }
 
-    const validToken = verifyProposalActionToken({
-      code,
-      decision,
-      token,
-    });
+    const statusSnapshot = await getAdminDb()
+      .collection("reservation_status")
+      .doc(code)
+      .get();
 
-    if (!validToken) {
-      return htmlResponse(
-        "Link scaduto o non valido",
-        "Il link usato non e valido o e scaduto. Contatta la pizzeria.",
-        false,
-      );
+    if (!statusSnapshot.exists) {
+      return notFoundPage(locale);
+    }
+
+    const statusDoc = statusSnapshot.data() as StatusDoc;
+    if (statusDoc.status !== "proposed") {
+      return alreadyAnsweredPage(locale);
+    }
+
+    const t = getReservationTranslator(locale);
+    const accept = decision === "accept";
+    const proposedWhen = formatWhen(
+      statusDoc.proposedDate || statusDoc.date,
+      statusDoc.proposedTime || statusDoc.time,
+      locale,
+    );
+
+    return htmlPage(
+      locale,
+      accept
+        ? t("page.proposal.acceptQuestion")
+        : t("page.proposal.rejectQuestion"),
+      `${paragraph(
+        t("page.proposal.requested", {
+          when: formatWhen(statusDoc.date, statusDoc.time, locale),
+        }),
+      )}
+      <p style="margin:8px 0 0;font-size:15px;line-height:1.6;">${escapeHtml(t("page.proposal.proposed"))} <strong>${escapeHtml(proposedWhen)}</strong></p>
+      ${confirmForm(
+        { decision, token },
+        accept
+          ? t("page.proposal.acceptButton")
+          : t("page.proposal.rejectButton"),
+        accept ? "#166534" : "#b42318",
+      )}`,
+    );
+  } catch (error) {
+    console.error(
+      "Errore GET /api/reservations/[code]/proposal-response",
+      error,
+    );
+    return errorPage(locale);
+  }
+}
+
+export async function POST(
+  request: Request,
+  context: { params: Promise<{ code: string }> },
+) {
+  const locale = getPageLocale(request);
+  try {
+    const { code } = await context.params;
+    const form = await request.formData();
+    const decision = parseDecision(form.get("decision"));
+    const tokenValue = form.get("token");
+    const token = typeof tokenValue === "string" ? tokenValue : "";
+
+    if (
+      !decision ||
+      !token ||
+      !verifyReservationActionToken({ code, decision, token })
+    ) {
+      return invalidLinkPage(locale);
     }
 
     const db = getAdminDb();
     const statusRef = db.collection("reservation_status").doc(code);
-    const statusSnapshot = await statusRef.get();
 
-    if (!statusSnapshot.exists) {
-      return htmlResponse(
-        "Prenotazione non trovata",
-        "Non abbiamo trovato la prenotazione associata a questo link.",
-        false,
-      );
-    }
+    // Lettura e scrittura nella stessa transazione: due click ravvicinati (o
+    // "accetta" e "rifiuta" insieme) non possono registrare due risposte.
+    const outcome = await db.runTransaction(async (transaction) => {
+      const statusSnapshot = await transaction.get(statusRef);
+      if (!statusSnapshot.exists) return { kind: "not_found" as const };
 
-    const statusDoc = statusSnapshot.data() as {
-      reservationId?: string;
-      customerName?: string;
-      phone?: string;
-      email?: string;
-      date: string;
-      time: string;
-      proposedDate?: string;
-      proposedTime?: string;
-      status: string;
-    };
-
-    if (statusDoc.status !== "proposed") {
-      return htmlResponse(
-        "Risposta gia registrata",
-        "Abbiamo gia registrato una risposta a questa proposta.",
-      );
-    }
-
-    let reservationId = statusDoc.reservationId;
-    if (!reservationId) {
-      const fallbackQuery = await db
-        .collection("reservations")
-        .where("code", "==", code)
-        .limit(1)
-        .get();
-
-      if (!fallbackQuery.empty) {
-        reservationId = fallbackQuery.docs[0].id;
-        await statusRef.update({ reservationId });
+      const statusDoc = statusSnapshot.data() as StatusDoc;
+      if (statusDoc.status !== "proposed") {
+        return { kind: "already_answered" as const };
       }
-    }
 
-    if (!reservationId) {
-      return htmlResponse(
-        "Errore prenotazione",
-        "Non e stato possibile completare l'operazione. Contatta la pizzeria.",
-        false,
-      );
-    }
+      let reservationId = statusDoc.reservationId;
+      if (!reservationId) {
+        const fallbackQuery = await transaction.get(
+          db.collection("reservations").where("code", "==", code).limit(1),
+        );
+        reservationId = fallbackQuery.empty
+          ? undefined
+          : fallbackQuery.docs[0].id;
+      }
+      if (!reservationId) return { kind: "not_found" as const };
 
-    const nowIso = new Date().toISOString();
-    const nextStatus = decision === "accept" ? "confirmed" : "rejected";
-    const nextDate =
-      decision === "accept"
-        ? statusDoc.proposedDate || statusDoc.date
-        : statusDoc.date;
-    const nextTime =
-      decision === "accept"
-        ? statusDoc.proposedTime || statusDoc.time
-        : statusDoc.time;
+      const accepted = decision === "accept";
+      const update = {
+        status: accepted ? "confirmed" : "rejected",
+        date: accepted ? statusDoc.proposedDate || statusDoc.date : statusDoc.date,
+        time: accepted ? statusDoc.proposedTime || statusDoc.time : statusDoc.time,
+        updatedAt: new Date().toISOString(),
+        updatedAtServer: FieldValue.serverTimestamp(),
+      };
 
-    const update = {
-      status: nextStatus,
-      date: nextDate,
-      time: nextTime,
-      updatedAt: nowIso,
-      updatedAtServer: FieldValue.serverTimestamp(),
-    };
+      transaction.update(statusRef, { ...update, reservationId });
+      transaction.update(db.collection("reservations").doc(reservationId), update);
 
-    await statusRef.update(update);
-    await db.collection("reservations").doc(reservationId).update(update);
+      return { kind: "updated" as const, statusDoc, update };
+    });
+
+    if (outcome.kind === "not_found") return notFoundPage(locale);
+    if (outcome.kind === "already_answered") return alreadyAnsweredPage(locale);
+
+    const { statusDoc, update } = outcome;
 
     try {
-      const siteUrl =
-        process.env.NEXT_PUBLIC_SITE_URL ??
-        process.env.SITE_URL ??
-        "http://localhost:3000";
-      const dashboardLink = `${siteUrl}/riservato/dashboard?tab=reservations`;
-      const logoUrl = `${siteUrl}/assets/Centro.png`;
-
       await sendOwnerProposalOutcomeEmail({
         code,
         customerName: statusDoc.customerName || "Cliente",
@@ -156,33 +190,32 @@ export async function GET(
         time: statusDoc.time,
         proposedDate: statusDoc.proposedDate,
         proposedTime: statusDoc.proposedTime,
-        dashboardLink,
-        logoUrl,
       });
     } catch (error) {
       console.error("Errore invio email proprietario esito proposta", error);
     }
 
+    const t = getReservationTranslator(locale);
     if (decision === "accept") {
-      return htmlResponse(
-        "Proposta confermata",
-        `Grazie, abbiamo confermato la prenotazione per ${nextDate} alle ${nextTime}.`,
+      return messagePage(
+        locale,
+        t("page.proposal.acceptedTitle"),
+        t("page.proposal.acceptedText", {
+          when: formatWhen(update.date, update.time, locale),
+        }),
       );
     }
 
-    return htmlResponse(
-      "Proposta rifiutata",
-      "Hai rifiutato la proposta oraria. La prenotazione risulta non confermata.",
+    return messagePage(
+      locale,
+      t("page.proposal.rejectedTitle"),
+      t("page.proposal.rejectedText"),
     );
   } catch (error) {
     console.error(
-      "Errore GET /api/reservations/[code]/proposal-response",
+      "Errore POST /api/reservations/[code]/proposal-response",
       error,
     );
-    return htmlResponse(
-      "Errore",
-      "Non e stato possibile completare la richiesta. Riprova o contatta la pizzeria.",
-      false,
-    );
+    return errorPage(locale);
   }
 }

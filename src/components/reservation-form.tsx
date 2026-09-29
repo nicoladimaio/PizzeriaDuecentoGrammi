@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useLocale, useTranslations } from "next-intl";
 import { z } from "zod";
@@ -120,7 +120,7 @@ export function ReservationForm() {
   const t = useTranslations("Booking");
   const locale = useLocale();
   const STEP_1_TO_2_MESSAGE = t("loadingCalendar");
-  const STEP_3_TO_4_MESSAGE = t("openingSummary");
+  const STEP_3_TO_4_MESSAGE = t("openingDetails");
   const weekDayLabels = t("weekdays").split(",");
 
   const router = useRouter();
@@ -158,6 +158,11 @@ export function ReservationForm() {
   );
 
   const [error, setError] = useState<string | null>(null);
+  // Orario occupato da un altro cliente mentre si compilava il modulo:
+  // dopo aver ricaricato le disponibilità si mostra il messaggio.
+  const slotTakenRef = useRef(false);
+  // Giorno e ora scelti, letti quando arrivano disponibilità aggiornate.
+  const selectionRef = useRef({ date: "", time: "" });
   const [reviewOpen, setReviewOpen] = useState(false);
 
   const [selectedMonth, setSelectedMonth] = useState<string>("");
@@ -255,7 +260,9 @@ export function ReservationForm() {
   }, []);
 
   useEffect(() => {
-    if (!guests || step < 3) {
+    // Le disponibilità servono solo nella scelta di giorno e orario: passando
+    // ai dati personali non si ricaricano.
+    if (!guests || step !== 3) {
       return;
     }
 
@@ -282,6 +289,29 @@ export function ReservationForm() {
         }
 
         setAvailability(data);
+
+        // Se il giorno o l'ora scelti non sono più disponibili, si tolgono.
+        const { date, time } = selectionRef.current;
+        const day = data.days.find((entry) => entry.date === date);
+        if (!date || !day) {
+          setSelectedDate("");
+          setSelectedTime("");
+          setStep3View("date");
+        } else if (!day.hasAvailability) {
+          setSelectedTime("");
+        } else if (
+          time &&
+          !(data.slotsByDate[date] ?? []).some(
+            (slot) => slot.time === time && slot.available,
+          )
+        ) {
+          setSelectedTime("");
+        }
+
+        if (slotTakenRef.current) {
+          slotTakenRef.current = false;
+          setError(t("errors.slotUnavailable"));
+        }
 
         const firstDay = data.days[0]?.date;
         if (firstDay) {
@@ -312,42 +342,23 @@ export function ReservationForm() {
   }, [guests, step]);
 
   useEffect(() => {
-    if (!guests || step < 3) {
-      setAvailability(null);
-      setSelectedDate("");
-      setSelectedTime("");
-      setStep3View("date");
-      setSelectedMonth("");
-      setLoadingAvailability(false);
-      return;
-    }
-  }, [guests, step]);
+    selectionRef.current = { date: selectedDate, time: selectedTime };
+  }, [selectedDate, selectedTime]);
 
-  useEffect(() => {
-    if (!availability) return;
+  const backToGuests = () => {
+    setAvailability(null);
+    setSelectedDate("");
+    setSelectedTime("");
+    setStep3View("date");
+    setSelectedMonth("");
+    setLoadingAvailability(false);
+    setStep(1);
+  };
 
-    if (!selectedDate || !dayAvailabilityMap.has(selectedDate)) {
-      setSelectedDate("");
-      setSelectedTime("");
-      setStep3View("date");
-      return;
-    }
-
-    if (!dayAvailabilityMap.get(selectedDate)) {
-      setSelectedTime("");
-      return;
-    }
-
-    if (selectedTime && !availableTimeOptions.includes(selectedTime)) {
-      setSelectedTime("");
-    }
-  }, [
-    availability,
-    selectedDate,
-    selectedTime,
-    dayAvailabilityMap,
-    availableTimeOptions,
-  ]);
+  const goToCalendar = () => {
+    setTransitionMessage(STEP_1_TO_2_MESSAGE);
+    setStep(3);
+  };
 
   const goToStep4 = () => {
     setTransitionMessage(STEP_3_TO_4_MESSAGE);
@@ -412,6 +423,17 @@ export function ReservationForm() {
         error?: string;
         code?: string;
       }>(response);
+
+      if (data.code === "slot_unavailable") {
+        // Si torna alla scelta dell'orario: il cambio di step ricarica le disponibilità.
+        slotTakenRef.current = true;
+        setReviewOpen(false);
+        setSelectedTime("");
+        setTurnstileToken(null);
+        setTurnstileKey((key) => key + 1);
+        setStep(3);
+        return;
+      }
 
       if (!response.ok || !data.ok) {
         // Gli errori del server sono in italiano: nelle altre lingue si usa il messaggio tradotto.
@@ -507,6 +529,8 @@ export function ReservationForm() {
                     setCustomGuestsOpen(false);
                     setCustomGuestsValue("");
                     setCustomGuestsError(null);
+                    // Un tocco basta: si passa subito al calendario.
+                    goToCalendar();
                   }}
                 >
                   {option}
@@ -581,19 +605,19 @@ export function ReservationForm() {
               </div>
             ) : null}
 
-            <div className="booking-step-actions">
-              <button
-                type="button"
-                className="btn-primary"
-                disabled={!canProceedStep1}
-                onClick={() => {
-                  setTransitionMessage(STEP_1_TO_2_MESSAGE);
-                  setStep(3);
-                }}
-              >
-                {t("next")}
-              </button>
-            </div>
+            {/* "Avanti" serve solo con "Altro", dove il numero si scrive a mano. */}
+            {customGuestsOpen ? (
+              <div className="booking-step-actions">
+                <button
+                  type="button"
+                  className="btn-primary"
+                  disabled={!canProceedStep1}
+                  onClick={goToCalendar}
+                >
+                  {t("next")}
+                </button>
+              </div>
+            ) : null}
           </div>
         ) : null}
 
@@ -677,18 +701,21 @@ export function ReservationForm() {
                   <button
                     type="button"
                     className="btn-secondary"
-                    onClick={() => setStep(1)}
+                    onClick={backToGuests}
                   >
                     {t("back")}
                   </button>
-                  <button
-                    type="button"
-                    className="btn-primary"
-                    disabled={!selectedDate}
-                    onClick={() => setStep3View("time")}
-                  >
-                    {t("goToTimes")}
-                  </button>
+                  {/* Toccare un giorno apre già gli orari: il pulsante serve
+                      solo tornando qui con "Cambia giorno". */}
+                  {selectedDate ? (
+                    <button
+                      type="button"
+                      className="btn-primary"
+                      onClick={() => setStep3View("time")}
+                    >
+                      {t("goToTimes")}
+                    </button>
+                  ) : null}
                 </div>
               </>
             ) : selectedDate ? (
@@ -710,7 +737,11 @@ export function ReservationForm() {
                           ? "booking-time-pill active"
                           : "booking-time-pill"
                       }
-                      onClick={() => setSelectedTime(time)}
+                      onClick={() => {
+                        setSelectedTime(time);
+                        // Un tocco basta: si passa subito ai dati personali.
+                        goToStep4();
+                      }}
                     >
                       <span>{time}</span>
                     </button>
@@ -763,6 +794,7 @@ export function ReservationForm() {
                 name="customerName"
                 type="text"
                 required
+                maxLength={80}
                 value={customerName}
                 onChange={(event) => setCustomerName(event.target.value)}
               />
@@ -773,6 +805,7 @@ export function ReservationForm() {
               <input
                 name="phone"
                 type="tel"
+                maxLength={30}
                 value={phone}
                 onChange={(event) => setPhone(event.target.value)}
               />
@@ -784,6 +817,7 @@ export function ReservationForm() {
                 name="email"
                 type="email"
                 required
+                maxLength={254}
                 value={email}
                 onChange={(event) => setEmail(event.target.value)}
               />
@@ -923,7 +957,7 @@ export function ReservationForm() {
 
       {error ? <p className="error-text">{error}</p> : null}
 
-      {transitionMessage || (loadingAvailability && step >= 3) ? (
+      {transitionMessage || (loadingAvailability && step === 3) ? (
         <div
           className="booking-loader-overlay"
           role="status"
@@ -937,7 +971,7 @@ export function ReservationForm() {
             />
             <p>
               {transitionMessage ??
-                (loadingAvailability ? STEP_1_TO_2_MESSAGE : t("loading"))}
+                (loadingAvailability ? t("refreshingTimes") : t("loading"))}
             </p>
           </div>
         </div>

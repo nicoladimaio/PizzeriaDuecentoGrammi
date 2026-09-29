@@ -29,7 +29,7 @@ export default function PrivacyPage() {
                 Marcianise (CE).
               </p>
               <p>
-                Contatti: <a href="mailto:info@duecentogrammi.it">info@duecentogrammi.it</a>{" "}
+                Contatti: <a href="mailto:info@pizzeriaduecentogrammi.it">info@pizzeriaduecentogrammi.it</a>{" "}
                 - <a href="tel:+390823833221">0823 833221</a>
               </p>
             </section>
@@ -91,7 +91,7 @@ export default function PrivacyPage() {
               <p>
                 Puoi chiedere accesso, rettifica, cancellazione, limitazione del
                 trattamento o opporti nei casi previsti dalla legge scrivendo a{" "}
-                <a href="mailto:info@duecentogrammi.it">info@duecentogrammi.it</a>.
+                <a href="mailto:info@pizzeriaduecentogrammi.it">info@pizzeriaduecentogrammi.it</a>.
               </p>
             </section>
 

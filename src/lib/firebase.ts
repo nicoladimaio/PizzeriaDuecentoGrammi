@@ -1,7 +1,9 @@
 import { initializeApp, getApps, getApp, type FirebaseApp } from "firebase/app";
-import { getAuth, type Auth } from "firebase/auth";
 import { getFirestore, type Firestore } from "firebase/firestore";
-import { getStorage, type FirebaseStorage } from "firebase/storage";
+
+// Solo app e database: è quello che serve alle pagine pubbliche (home, menu).
+// Login e archivio foto sono in firebase-auth.ts e firebase-storage.ts, così
+// il loro codice viene scaricato solo nell'area riservata.
 
 const firebaseConfig = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
@@ -14,7 +16,7 @@ const firebaseConfig = {
 
 let cachedApp: FirebaseApp | null = null;
 
-const getClientApp = (): FirebaseApp => {
+export const getClientApp = (): FirebaseApp => {
   if (typeof window === "undefined") {
     throw new Error("Firebase client disponibile solo nel browser.");
   }
@@ -29,7 +31,4 @@ const getClientApp = (): FirebaseApp => {
   return cachedApp;
 };
 
-export const getClientAuth = (): Auth => getAuth(getClientApp());
 export const getClientDb = (): Firestore => getFirestore(getClientApp());
-export const getClientStorage = (): FirebaseStorage =>
-  getStorage(getClientApp());

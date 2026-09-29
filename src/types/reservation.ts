@@ -2,15 +2,13 @@ export type ReservationStatus =
   | "pending"
   | "confirmed"
   | "rejected"
-  | "proposed";
-
-export type DiningArea = "inside" | "outside";
+  | "proposed"
+  | "cancelled";
 
 export type ReservationInput = {
   customerName: string;
   phone: string;
   email: string;
-  diningArea: DiningArea;
   date: string;
   time: string;
   guests: number;
@@ -40,10 +38,6 @@ export type ReservationSettings = {
   closeTime: string;
   slotMinutes: number;
   capacityPerSlot: number;
-  insideActive: boolean;
-  outsideActive: boolean;
-  insideCapacityPerSlot: number;
-  outsideCapacityPerSlot: number;
   workingDays: number[];
   holidays: string[];
   specialOpenings: string[];

@@ -2,7 +2,8 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { collection, onSnapshot, orderBy, query } from "firebase/firestore";
-import { getClientAuth, getClientDb } from "@/lib/firebase";
+import { getClientDb } from "@/lib/firebase";
+import { getClientAuth } from "@/lib/firebase-auth";
 import type { ReservationDoc, ReservationSettings } from "@/types/reservation";
 import type {
   ActionType,
@@ -22,15 +23,11 @@ import {
   minutesToTime,
   halfHourTimeOptions,
   normalizeSettings,
-  deriveTotalCapacity,
   getSlotTimesForWeekday,
   getSlotMinutesForDateKey,
   buildSettingsSnapshot,
 } from "@/components/admin-reservations/settings";
 import {
-  defaultRejectMessage,
-  defaultCancelConfirmedMessage,
-  defaultProposalMessage,
   proposalDatesPageSize,
   TOTAL_SEATS_FALLBACK,
   HISTORY_RETENTION_DAYS,
@@ -78,24 +75,12 @@ export function AdminReservationsPanel({
 
   const [settings, setSettings] =
     useState<ReservationSettings>(defaultSettings);
-  const [insideCapacityDraft, setInsideCapacityDraft] = useState(
-    String(defaultSettings.insideCapacityPerSlot),
-  );
-  const [outsideCapacityDraft, setOutsideCapacityDraft] = useState(
-    String(defaultSettings.outsideCapacityPerSlot),
-  );
   const [settingsLoading, setSettingsLoading] = useState(true);
   const [settingsSaving, setSettingsSaving] = useState(false);
   const [settingsError, setSettingsError] = useState<string | null>(null);
   const [settingsToast, setSettingsToast] = useState<string | null>(null);
   const [savedSettings, setSavedSettings] =
     useState<ReservationSettings>(defaultSettings);
-  const [savedInsideCapacityDraft, setSavedInsideCapacityDraft] = useState(
-    String(defaultSettings.insideCapacityPerSlot),
-  );
-  const [savedOutsideCapacityDraft, setSavedOutsideCapacityDraft] = useState(
-    String(defaultSettings.outsideCapacityPerSlot),
-  );
   const [cleanupPending, setCleanupPending] = useState(false);
   const [calendarPickerOpen, setCalendarPickerOpen] = useState(false);
   const [calendarPickerMode, setCalendarPickerMode] = useState<
@@ -209,12 +194,6 @@ export function AdminReservationsPanel({
           const normalized = normalizeSettings(data.settings);
           setSettings(normalized);
           setSavedSettings(normalized);
-          setInsideCapacityDraft(String(normalized.insideCapacityPerSlot));
-          setOutsideCapacityDraft(String(normalized.outsideCapacityPerSlot));
-          setSavedInsideCapacityDraft(String(normalized.insideCapacityPerSlot));
-          setSavedOutsideCapacityDraft(
-            String(normalized.outsideCapacityPerSlot),
-          );
         }
       } catch (err) {
         if (!ignore) {
@@ -396,7 +375,7 @@ export function AdminReservationsPanel({
       0,
     );
     const totalSeats = Math.max(
-      deriveTotalCapacity(settings),
+      settings.capacityPerSlot,
       TOTAL_SEATS_FALLBACK,
     );
     const availableSeats = Math.max(totalSeats - guestsCount, 0);
@@ -469,23 +448,13 @@ export function AdminReservationsPanel({
   ]);
 
   const currentSettingsSnapshot = useMemo(
-    () =>
-      buildSettingsSnapshot(
-        settings,
-        insideCapacityDraft,
-        outsideCapacityDraft,
-      ),
-    [insideCapacityDraft, outsideCapacityDraft, settings],
+    () => buildSettingsSnapshot(settings),
+    [settings],
   );
 
   const savedSettingsSnapshot = useMemo(
-    () =>
-      buildSettingsSnapshot(
-        savedSettings,
-        savedInsideCapacityDraft,
-        savedOutsideCapacityDraft,
-      ),
-    [savedInsideCapacityDraft, savedOutsideCapacityDraft, savedSettings],
+    () => buildSettingsSnapshot(savedSettings),
+    [savedSettings],
   );
 
   const hasUnsavedSettingsChanges = Boolean(
@@ -584,14 +553,6 @@ export function AdminReservationsPanel({
       }));
     }
   }, [settings.holidays, settings.specialOpenings]);
-
-  useEffect(() => {
-    setInsideCapacityDraft(String(settings.insideCapacityPerSlot));
-  }, [settings.insideCapacityPerSlot]);
-
-  useEffect(() => {
-    setOutsideCapacityDraft(String(settings.outsideCapacityPerSlot));
-  }, [settings.outsideCapacityPerSlot]);
 
   const onDraftChange = (
     code: string,
@@ -742,16 +703,9 @@ export function AdminReservationsPanel({
         proposedTime: "",
       };
 
-      const ownerResponseRaw = draft.ownerResponse.trim();
-      const ownerResponse =
-        ownerResponseRaw ||
-        (action === "rejected"
-          ? row.status === "confirmed"
-            ? defaultCancelConfirmedMessage
-            : defaultRejectMessage
-          : action === "proposed"
-            ? defaultProposalMessage
-            : "");
+      // Se il proprietario non scrive nulla il cliente riceve solo il testo
+      // standard dell'email, già tradotto nella sua lingua.
+      const ownerResponse = draft.ownerResponse.trim();
 
       const response = await fetch(`/api/reservations/${row.code}/decision`, {
         method: "POST",
@@ -809,10 +763,7 @@ export function AdminReservationsPanel({
         throw new Error("Sessione admin non valida.");
       }
 
-      const payloadToSave = {
-        ...settings,
-        capacityPerSlot: deriveTotalCapacity(settings),
-      };
+      const payloadToSave = settings;
 
       const response = await fetch("/api/admin/reservations/settings", {
         method: "POST",
@@ -835,10 +786,6 @@ export function AdminReservationsPanel({
       const normalized = normalizeSettings(payloadToSave);
       setSettings(normalized);
       setSavedSettings(normalized);
-      setInsideCapacityDraft(String(normalized.insideCapacityPerSlot));
-      setOutsideCapacityDraft(String(normalized.outsideCapacityPerSlot));
-      setSavedInsideCapacityDraft(String(normalized.insideCapacityPerSlot));
-      setSavedOutsideCapacityDraft(String(normalized.outsideCapacityPerSlot));
       setSettingsToast("Impostazioni prenotazioni salvate.");
       if (closeAfterSave) {
         setCalendarPickerOpen(false);
@@ -854,8 +801,6 @@ export function AdminReservationsPanel({
 
   const discardUnsavedSettingsChanges = () => {
     setSettings(savedSettings);
-    setInsideCapacityDraft(savedInsideCapacityDraft);
-    setOutsideCapacityDraft(savedOutsideCapacityDraft);
     setSettingsError(null);
     setSettingsToast("Modifiche annullate.");
   };
@@ -948,42 +893,6 @@ export function AdminReservationsPanel({
     setSettingsToast("Configurazione slot ripristinata.");
     setSettingsError(null);
     setAvailabilityActionsOpen(false);
-  };
-
-  const finalizeAreaCapacityDraft = (area: "inside" | "outside") => {
-    const currentDraft =
-      area === "inside" ? insideCapacityDraft : outsideCapacityDraft;
-    const fallback =
-      area === "inside"
-        ? settings.insideCapacityPerSlot
-        : settings.outsideCapacityPerSlot;
-
-    if (currentDraft.trim() === "") {
-      if (area === "inside") setInsideCapacityDraft(String(fallback));
-      if (area === "outside") setOutsideCapacityDraft(String(fallback));
-      return;
-    }
-
-    const parsed = Number(currentDraft);
-    if (!Number.isFinite(parsed) || parsed < 1) {
-      if (area === "inside") setInsideCapacityDraft(String(fallback));
-      if (area === "outside") setOutsideCapacityDraft(String(fallback));
-      return;
-    }
-
-    const normalized = Math.min(500, Math.round(parsed));
-    if (area === "inside") {
-      setInsideCapacityDraft(String(normalized));
-      if (normalized !== settings.insideCapacityPerSlot) {
-        setSettings((prev) => ({ ...prev, insideCapacityPerSlot: normalized }));
-      }
-      return;
-    }
-
-    setOutsideCapacityDraft(String(normalized));
-    if (normalized !== settings.outsideCapacityPerSlot) {
-      setSettings((prev) => ({ ...prev, outsideCapacityPerSlot: normalized }));
-    }
   };
 
   const cleanupOldReservations = async (silent = false) => {
@@ -1345,6 +1254,7 @@ export function AdminReservationsPanel({
     if (row.status === "pending") return "Nuova";
     if (row.status === "proposed") return "In attesa";
     if (row.status === "confirmed") return "Confermata";
+    if (row.status === "cancelled") return "Annullata dal cliente";
     return "Rifiutata";
   };
 
@@ -1881,10 +1791,6 @@ export function AdminReservationsPanel({
                       setSettings((prev) => ({
                         ...prev,
                         capacityPerSlot: normalized,
-                        insideCapacityPerSlot: normalized,
-                        outsideCapacityPerSlot: normalized,
-                        insideActive: true,
-                        outsideActive: false,
                       }));
                     }}
                   />
@@ -2268,10 +2174,10 @@ export function AdminReservationsPanel({
                   maxLength={300}
                   placeholder={
                     decisionDialogMode === "proposed"
-                      ? "Se lasci vuoto verra inviato un messaggio standard di proposta."
+                      ? "Se lasci vuoto verrà inviato un messaggio standard di proposta."
                       : selectedReservation.status === "confirmed"
-                        ? "Se lasci vuoto verra inviato un messaggio standard di annullamento."
-                        : "Se lasci vuoto verra inviato un messaggio standard di rifiuto."
+                        ? "Se lasci vuoto verrà inviato un messaggio standard di annullamento."
+                        : "Se lasci vuoto verrà inviato un messaggio standard di rifiuto."
                   }
                   onChange={(event) =>
                     onDraftChange(
@@ -2288,7 +2194,8 @@ export function AdminReservationsPanel({
                   decisionDialogMode === "rejected"
                     ? " di annullamento"
                     : ""}
-                  .
+                  , che arriva nella lingua del cliente. Il messaggio
+                  personalizzato viene inviato così come lo scrivi.
                 </small>
               </label>
 

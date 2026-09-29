@@ -1,6 +1,5 @@
 // Normalizzazione dei documenti del menu: Firestore contiene campi con nomi
 // storici diversi (Nome/nome, Prezzo/prezzo, piccantezza in vari formati...).
-import { getMenuItems } from "@/lib/menu";
 import type { MenuImageFit, MenuProduct } from "@/types/menu-app";
 
 export const normalizeText = (value: unknown): string =>
@@ -205,48 +204,3 @@ export const normalizeCategoryKey = (name: string): string =>
 
 export const categoryAnchorId = (name: string): string =>
   `cat-${name.toLowerCase().replace(/\s+/g, "-")}`;
-
-/** Menu statico di riserva (public/assets/menu.json) se Firestore non risponde. */
-export const getFallbackProducts = (): MenuProduct[] =>
-  getMenuItems().map((entry, index) => {
-    const entryRecord = entry as Record<string, unknown>;
-    const ingredientsText = normalizeText(entry.Ingredienti);
-    const desc = normalizeText(entry.Descrizione);
-    const explicitSpice = parseSpiceLevel(
-      entry.piccantezza ?? entry.spiceLevel ?? entry.spicyLevel,
-    );
-    const category = normalizeText(entry.Categoria) || "Menu";
-    return {
-      id: `fallback-${index}`,
-      name: normalizeText(entry.Nome),
-      price: parsePrice(entry.Prezzo),
-      category,
-      spiceLevel:
-        explicitSpice > 0
-          ? explicitSpice
-          : inferSpiceFromText(`${entry.Nome} ${entry.Ingredienti}`),
-      image: normalizeImage(
-        normalizeText(entry.Immagine) || "assets/logo.jpg",
-      ),
-      imageThumb: normalizeImage(
-        normalizeText(
-          entryRecord.ImmagineThumb ??
-            entryRecord.immagineThumb ??
-            entryRecord.imageThumb,
-        ) ||
-          normalizeText(entry.Immagine) ||
-          "assets/logo.jpg",
-      ),
-      imageFit: normalizeImageFit(entryRecord.imageFit),
-      description: desc || ingredientsText,
-      ingredients: splitIngredients(ingredientsText),
-      allergens: [],
-      extras: [],
-      notes: [],
-      badges: {
-        special: false,
-        hot: false,
-        recent: false,
-      },
-    };
-  });

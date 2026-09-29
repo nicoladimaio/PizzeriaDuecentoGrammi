@@ -1,15 +1,22 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { onAuthStateChanged, signOut } from "firebase/auth";
+import { onAuthStateChanged } from "firebase/auth";
 import { collection, onSnapshot } from "firebase/firestore";
-import { getClientAuth, getClientDb } from "@/lib/firebase";
+import { getClientDb } from "@/lib/firebase";
+import { getClientAuth } from "@/lib/firebase-auth";
 import { isAllowedAdminEmail } from "@/lib/auth";
+import {
+  isAdminSessionExpired,
+  markAdminActivity,
+  signOutAdmin,
+} from "@/lib/admin-session";
 import { AdminMenuPanel } from "@/components/admin-menu-panel";
 import { AdminReservationsPanel } from "@/components/admin-reservations-panel";
 import type { SettingsLeaveGuard } from "@/components/admin-reservations/types";
 import type { ReservationSettings, ReservationStatus } from "@/types/reservation";
+import { defaultSettings } from "@/components/admin-reservations/settings";
 
 type AdminSection = "home" | "reservations" | "menu" | "settings";
 
@@ -24,29 +31,8 @@ type MenuEntrySummary = {
   visible?: unknown;
 };
 
-const ADMIN_INACTIVITY_LIMIT_MS = 2 * 60 * 60 * 1000;
-const defaultReservationSettings: ReservationSettings = {
-  openTime: "19:00",
-  closeTime: "23:00",
-  slotMinutes: 30,
-  capacityPerSlot: 40,
-  insideActive: true,
-  outsideActive: true,
-  insideCapacityPerSlot: 40,
-  outsideCapacityPerSlot: 24,
-  workingDays: [1, 2, 3, 4, 5, 6, 0],
-  holidays: [],
-  specialOpenings: [],
-  weeklyDisabledSlots: {},
-};
-
-const deriveTotalCapacity = (settings: ReservationSettings): number => {
-  const total =
-    (settings.insideActive ? settings.insideCapacityPerSlot : 0) +
-    (settings.outsideActive ? settings.outsideCapacityPerSlot : 0);
-  return total > 0 ? total : settings.capacityPerSlot;
-};
-
+// Ogni quanto controllare, a pagina aperta, se l'admin è inattivo da troppo.
+const INACTIVITY_CHECK_MS = 60 * 1000;
 const todayKey = () => {
   const now = new Date();
   const year = now.getFullYear();
@@ -133,7 +119,7 @@ export function AdminDashboard({
     useState(0);
   const [menuIngredientsCount, setMenuIngredientsCount] = useState(0);
   const [reservationSettings, setReservationSettings] = useState<ReservationSettings>(
-    defaultReservationSettings,
+    defaultSettings,
   );
   const [settingsLeaveGuard, setSettingsLeaveGuard] =
     useState<SettingsLeaveGuard | null>(null);
@@ -143,7 +129,6 @@ export function AdminDashboard({
     useState(false);
   const [leavingAfterSave, setLeavingAfterSave] = useState(false);
   const [pendingLogout, setPendingLogout] = useState(false);
-  const inactivityTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     const auth = getClientAuth();
@@ -167,6 +152,13 @@ export function AdminDashboard({
         return;
       }
 
+      if (isAdminSessionExpired()) {
+        await signOutAdmin(auth);
+        router.replace("/riservato/accesso-200g");
+        return;
+      }
+
+      markAdminActivity(true);
       setBooting(false);
     };
 
@@ -193,24 +185,18 @@ export function AdminDashboard({
 
     const auth = getClientAuth();
 
-    const clearInactivityTimer = () => {
-      if (inactivityTimerRef.current) {
-        clearTimeout(inactivityTimerRef.current);
-        inactivityTimerRef.current = null;
-      }
+    // L'ultima attività è salvata nel browser (lib/admin-session): così il
+    // limite vale anche se la scheda viene chiusa o il telefono la sospende.
+    const expireIfInactive = () => {
+      if (!isAdminSessionExpired()) return false;
+      void signOutAdmin(auth).then(() =>
+        router.replace("/riservato/accesso-200g"),
+      );
+      return true;
     };
 
-    const expireSession = async () => {
-      clearInactivityTimer();
-      await signOut(auth);
-      router.replace("/riservato/accesso-200g");
-    };
-
-    const resetInactivityTimer = () => {
-      clearInactivityTimer();
-      inactivityTimerRef.current = setTimeout(() => {
-        void expireSession();
-      }, ADMIN_INACTIVITY_LIMIT_MS);
+    const onActivity = () => {
+      if (!expireIfInactive()) markAdminActivity();
     };
 
     const events: Array<keyof WindowEventMap> = [
@@ -222,25 +208,25 @@ export function AdminDashboard({
     ];
 
     events.forEach((eventName) => {
-      window.addEventListener(eventName, resetInactivityTimer, {
+      window.addEventListener(eventName, onActivity, {
         passive: true,
       });
     });
 
     const onVisibilityChange = () => {
       if (document.visibilityState === "visible") {
-        resetInactivityTimer();
+        expireIfInactive();
       }
     };
 
     document.addEventListener("visibilitychange", onVisibilityChange);
-    resetInactivityTimer();
+    const intervalId = setInterval(expireIfInactive, INACTIVITY_CHECK_MS);
 
     return () => {
-      clearInactivityTimer();
+      clearInterval(intervalId);
       document.removeEventListener("visibilitychange", onVisibilityChange);
       events.forEach((eventName) => {
-        window.removeEventListener(eventName, resetInactivityTimer);
+        window.removeEventListener(eventName, onActivity);
       });
     };
   }, [booting, router]);
@@ -277,7 +263,7 @@ export function AdminDashboard({
         const user = auth.currentUser;
         if (!user || !isAllowedAdminEmail(user.email)) {
           if (!ignore) {
-            setReservationSettings(defaultReservationSettings);
+            setReservationSettings(defaultSettings);
           }
           return;
         }
@@ -297,7 +283,7 @@ export function AdminDashboard({
         }
       } catch {
         if (!ignore) {
-          setReservationSettings(defaultReservationSettings);
+          setReservationSettings(defaultSettings);
         }
       }
     };
@@ -363,7 +349,7 @@ export function AdminDashboard({
 
   const onLogout = async () => {
     const auth = getClientAuth();
-    await signOut(auth);
+    await signOutAdmin(auth);
     router.replace("/");
   };
 
@@ -466,7 +452,7 @@ export function AdminDashboard({
       .sort((left, right) => left.localeCompare(right))[0] ?? "--:--";
 
   const dashboardDate = formatDashboardDate();
-  const totalCapacity = deriveTotalCapacity(reservationSettings);
+  const totalCapacity = reservationSettings.capacityPerSlot;
   const occupancyRatio =
     totalCapacity > 0
       ? Math.min((todayGuestsCount / totalCapacity) * 100, 100)

@@ -8,7 +8,6 @@
   },
   "Menu": {
     "menu": "Carta",
-    "loading": "Cargando la carta...",
     "searchPlaceholder": "Buscar en la carta...",
     "searchAria": "Buscar platos",
     "openSearch": "Abrir búsqueda",
@@ -25,7 +24,8 @@
     "closeAria": "Cerrar detalle",
     "ingredients": "Ingredientes",
     "allergensAria": "Alérgenos del plato",
-    "cardInfoAria": "Picante y alérgenos"
+    "cardInfoAria": "Picante y alérgenos",
+    "unavailable": "La carta no está disponible en este momento. Inténtalo de nuevo en unos minutos."
   },
   "Spice": {
     "aria": "Picante: {label}",
@@ -77,10 +77,11 @@
     "subtitle": "Tres pasos rápidos.",
     "stepAria": "Paso {step} de 3",
     "loadingCalendar": "Cargando el calendario...",
-    "openingSummary": "Abriendo el resumen de tu reserva...",
+    "openingDetails": "Último paso: tus datos...",
+    "refreshingTimes": "Actualizando los horarios disponibles...",
     "loading": "Cargando...",
     "loaderAlt": "Cargando reserva",
-    "redirecting": "Enviando tu reserva...",
+    "redirecting": "Enviando tu solicitud de reserva...",
     "guestsQuestion": "¿Cuántas personas sois?",
     "guestsAria": "Número de personas",
     "other": "Otro",
@@ -133,7 +134,8 @@
       "captcha": "Confirma que no eres un robot.",
       "send": "Se ha producido un error al enviar. Inténtalo de nuevo en unos minutos.",
       "notConfirmed": "El servidor no ha confirmado la reserva. Inténtalo de nuevo en unos minutos o contacta con la pizzería.",
-      "invalidResponse": "El servidor ha devuelto una respuesta no válida."
+      "invalidResponse": "El servidor ha devuelto una respuesta no válida.",
+      "slotUnavailable": "La hora elegida acaba de ser ocupada. Elige otra hora."
     },
     "legalLinksAria": "Información legal",
     "privacy": "Privacidad",
@@ -146,5 +148,83 @@
     "home": "VOLVER AL INICIO",
     "newBooking": "NUEVA RESERVA",
     "legal": "Información legal: <privacy>Privacidad</privacy> y <terms>Condiciones de reserva</terms>."
+  },
+  "Reservation": {
+    "dateAtTime": "{date} a las {time}",
+    "contact": "Para cualquier cosa, puedes llamarnos al {phone}.",
+    "email": {
+      "greeting": "Hola, {name}:",
+      "whenLabel": "Fecha y hora",
+      "requestedLabel": "Fecha y hora solicitadas",
+      "proposedLabel": "Hora propuesta",
+      "guestsLabel": "Personas",
+      "notesLabel": "Notas",
+      "ownerNoteLabel": "Mensaje de la pizzería",
+      "cancelIntro": "¿Ya no puedes venir? Avísanos cancelando la reserva, así liberamos la mesa.",
+      "cancelButton": "Cancelar reserva",
+      "recap": {
+        "subject": "Solicitud de reserva recibida - Duecento Grammi",
+        "title": "Solicitud recibida",
+        "intro": "hemos recibido tu solicitud de reserva. Te escribiremos en cuanto nuestro equipo la haya gestionado."
+      },
+      "confirmed": {
+        "subject": "Reserva confirmada - Duecento Grammi",
+        "title": "Reserva confirmada",
+        "intro": "gracias por elegir Duecento Grammi: tu reserva está confirmada. ¡Te esperamos!"
+      },
+      "rejected": {
+        "subject": "Reserva no confirmada - Duecento Grammi",
+        "title": "Reserva no confirmada",
+        "intro": "gracias por tu solicitud. Lamentablemente no podemos confirmarla para la hora indicada. Puedes hacer una nueva solicitud desde nuestra web."
+      },
+      "cancelled": {
+        "subject": "Reserva cancelada - Duecento Grammi",
+        "title": "Reserva cancelada",
+        "intro": "lamentablemente hemos tenido que cancelar tu reserva. Disculpa las molestias."
+      },
+      "proposed": {
+        "subject": "Nueva propuesta de horario - Duecento Grammi",
+        "title": "Nueva propuesta de horario",
+        "intro": "no tenemos mesa a la hora que pediste, pero podemos proponerte una alternativa. Si te viene bien, confírmala con el botón de abajo.",
+        "acceptButton": "Acepto el nuevo horario",
+        "rejectButton": "Rechazo la propuesta"
+      },
+      "reminder": {
+        "subject": "Te esperamos hoy - Duecento Grammi",
+        "title": "Te esperamos hoy",
+        "intro": "te recordamos tu reserva de hoy en Duecento Grammi."
+      }
+    },
+    "page": {
+      "invalidLinkTitle": "Enlace caducado o no válido",
+      "invalidLinkText": "El enlace no es válido o ha caducado.",
+      "notFoundTitle": "Reserva no encontrada",
+      "notFoundText": "No hemos encontrado la reserva asociada a este enlace.",
+      "errorTitle": "Error",
+      "errorText": "No se ha podido completar la solicitud. Inténtalo de nuevo en unos minutos.",
+      "proposal": {
+        "alreadyAnsweredTitle": "Respuesta ya registrada",
+        "alreadyAnsweredText": "Ya hemos registrado una respuesta a esta propuesta.",
+        "acceptQuestion": "¿Confirmas el nuevo horario?",
+        "rejectQuestion": "¿Rechazas el nuevo horario?",
+        "requested": "Habías pedido: {when}.",
+        "proposed": "La pizzería te propone:",
+        "acceptButton": "Sí, confirmo el nuevo horario",
+        "rejectButton": "Rechazo la propuesta",
+        "acceptedTitle": "Reserva confirmada",
+        "acceptedText": "¡Gracias! Te esperamos el {when}.",
+        "rejectedTitle": "Propuesta rechazada",
+        "rejectedText": "Has rechazado el nuevo horario, así que la reserva no está confirmada. Si quieres, puedes hacer una nueva solicitud desde nuestra web."
+      },
+      "cancel": {
+        "question": "¿Quieres cancelar la reserva?",
+        "details": "Reserva para {guests, plural, one {# persona} other {# personas}}:",
+        "button": "Sí, cancelar la reserva",
+        "doneTitle": "Reserva cancelada",
+        "doneText": "Hemos cancelado tu reserva. ¡Gracias por avisarnos!",
+        "notPossibleTitle": "No es posible cancelar",
+        "notPossibleText": "Esta reserva ya está cancelada, no está confirmada o ya ha pasado."
+      }
+    }
   }
 }

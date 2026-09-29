@@ -8,7 +8,6 @@
   },
   "Menu": {
     "menu": "Menu",
-    "loading": "Caricamento menu...",
     "searchPlaceholder": "Cerca nel menu...",
     "searchAria": "Cerca piatti",
     "openSearch": "Apri ricerca",
@@ -25,7 +24,8 @@
     "closeAria": "Chiudi dettaglio",
     "ingredients": "Ingredienti",
     "allergensAria": "Allergeni del piatto",
-    "cardInfoAria": "Piccantezza e allergeni del piatto"
+    "cardInfoAria": "Piccantezza e allergeni del piatto",
+    "unavailable": "Il menu non è disponibile in questo momento. Riprova tra qualche minuto."
   },
   "Spice": {
     "aria": "Piccantezza: {label}",
@@ -77,10 +77,11 @@
     "subtitle": "Procedi in 3 passaggi rapidi.",
     "stepAria": "Step {step} di 3",
     "loadingCalendar": "Sto caricando il calendario...",
-    "openingSummary": "Sto aprendo il riepilogo della tua prenotazione...",
+    "openingDetails": "Ultimo passaggio: i tuoi dati...",
+    "refreshingTimes": "Sto aggiornando gli orari disponibili...",
     "loading": "Caricamento...",
     "loaderAlt": "Caricamento prenotazione",
-    "redirecting": "Conferma prenotazione in corso...",
+    "redirecting": "Invio della richiesta in corso...",
     "guestsQuestion": "Quante persone siete?",
     "guestsAria": "Numero persone",
     "other": "Altro",
@@ -133,7 +134,8 @@
       "captcha": "Conferma di non essere un robot.",
       "send": "Errore durante l'invio. Riprova tra poco.",
       "notConfirmed": "Invio non confermato dal server. Se hai dubbi, riprova tra poco o contatta la pizzeria.",
-      "invalidResponse": "Il server ha restituito una risposta non valida."
+      "invalidResponse": "Il server ha restituito una risposta non valida.",
+      "slotUnavailable": "L'orario scelto è stato appena occupato. Scegli un altro orario."
     },
     "legalLinksAria": "Informazioni legali",
     "privacy": "Privacy",
@@ -146,5 +148,83 @@
     "home": "TORNA ALLA HOME",
     "newBooking": "NUOVA PRENOTAZIONE",
     "legal": "Informazioni legali: <privacy>Privacy</privacy> e <terms>Termini di prenotazione</terms>."
+  },
+  "Reservation": {
+    "dateAtTime": "{date} alle {time}",
+    "contact": "Per qualsiasi cosa puoi chiamarci allo {phone}.",
+    "email": {
+      "greeting": "Ciao {name},",
+      "whenLabel": "Data e ora",
+      "requestedLabel": "Data e ora richieste",
+      "proposedLabel": "Orario proposto",
+      "guestsLabel": "Persone",
+      "notesLabel": "Note",
+      "ownerNoteLabel": "Messaggio della pizzeria",
+      "cancelIntro": "Non riesci più a venire? Avvisaci annullando la prenotazione, così liberiamo il tavolo.",
+      "cancelButton": "Annulla prenotazione",
+      "recap": {
+        "subject": "Richiesta di prenotazione ricevuta - Duecento Grammi",
+        "title": "Richiesta ricevuta",
+        "intro": "abbiamo ricevuto la tua richiesta di prenotazione. Ti scriveremo appena il nostro staff l'avrà gestita."
+      },
+      "confirmed": {
+        "subject": "Prenotazione confermata - Duecento Grammi",
+        "title": "Prenotazione confermata",
+        "intro": "grazie per aver scelto Duecento Grammi: la tua prenotazione è confermata. Ti aspettiamo!"
+      },
+      "rejected": {
+        "subject": "Prenotazione non confermata - Duecento Grammi",
+        "title": "Prenotazione non confermata",
+        "intro": "grazie per la tua richiesta. Purtroppo non riusciamo a confermarla per l'orario indicato. Puoi fare una nuova richiesta dal nostro sito."
+      },
+      "cancelled": {
+        "subject": "Prenotazione annullata - Duecento Grammi",
+        "title": "Prenotazione annullata",
+        "intro": "purtroppo abbiamo dovuto annullare la tua prenotazione. Ci scusiamo per il disagio."
+      },
+      "proposed": {
+        "subject": "Nuova proposta di orario - Duecento Grammi",
+        "title": "Nuova proposta di orario",
+        "intro": "per l'orario che hai chiesto non abbiamo posto, ma possiamo proporti un'alternativa. Se ti va bene, confermala con il pulsante qui sotto.",
+        "acceptButton": "Accetto il nuovo orario",
+        "rejectButton": "Rifiuto la proposta"
+      },
+      "reminder": {
+        "subject": "Ti aspettiamo oggi - Duecento Grammi",
+        "title": "Ti aspettiamo oggi",
+        "intro": "ti ricordiamo la tua prenotazione di oggi da Duecento Grammi."
+      }
+    },
+    "page": {
+      "invalidLinkTitle": "Link scaduto o non valido",
+      "invalidLinkText": "Il link usato non è valido o è scaduto.",
+      "notFoundTitle": "Prenotazione non trovata",
+      "notFoundText": "Non abbiamo trovato la prenotazione collegata a questo link.",
+      "errorTitle": "Errore",
+      "errorText": "Non è stato possibile completare la richiesta. Riprova tra poco.",
+      "proposal": {
+        "alreadyAnsweredTitle": "Risposta già registrata",
+        "alreadyAnsweredText": "Abbiamo già registrato una risposta a questa proposta.",
+        "acceptQuestion": "Confermi il nuovo orario?",
+        "rejectQuestion": "Rifiuti il nuovo orario?",
+        "requested": "Avevi chiesto: {when}.",
+        "proposed": "La pizzeria ti propone:",
+        "acceptButton": "Sì, confermo il nuovo orario",
+        "rejectButton": "Rifiuto la proposta",
+        "acceptedTitle": "Prenotazione confermata",
+        "acceptedText": "Grazie! Ti aspettiamo {when}.",
+        "rejectedTitle": "Proposta rifiutata",
+        "rejectedText": "Hai rifiutato il nuovo orario: la prenotazione non è confermata. Se vuoi, puoi fare una nuova richiesta dal nostro sito."
+      },
+      "cancel": {
+        "question": "Vuoi annullare la prenotazione?",
+        "details": "Prenotazione per {guests, plural, one {# persona} other {# persone}}:",
+        "button": "Sì, annulla la prenotazione",
+        "doneTitle": "Prenotazione annullata",
+        "doneText": "Abbiamo annullato la tua prenotazione. Grazie per averci avvisato!",
+        "notPossibleTitle": "Non è possibile annullare",
+        "notPossibleText": "Questa prenotazione risulta già annullata, non confermata oppure è già passata."
+      }
+    }
   }
 }

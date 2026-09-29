@@ -1,3 +1,5 @@
+import { getDownloadURL, ref, uploadBytes } from "firebase/storage";
+import { getClientStorage } from "@/lib/firebase-storage";
 import type { MenuImageMeta, MenuImageQualityTier } from "@/types/menu-app";
 import type {
   ImageUploadAnalysis,
@@ -215,4 +217,31 @@ export const optimizeImageForUpload = async (
   } finally {
     URL.revokeObjectURL(objectUrl);
   }
+};
+
+/** Ottimizza la foto e la carica su Firebase Storage (cartella menu-items). */
+export const uploadMenuImage = async (
+  file: File,
+): Promise<{ imageUrl: string; thumbUrl: string; meta: MenuImageMeta }> => {
+  const analysis = await analyzeImageFile(file);
+  const optimized = await optimizeImageForUpload(file, analysis);
+  const storage = getClientStorage();
+  const fullPath = `menu-items/${Date.now()}-${sanitizeFileName(optimized.file.name)}`;
+  const imageRef = ref(storage, fullPath);
+  await uploadBytes(imageRef, optimized.file, {
+    contentType: optimized.file.type || "image/webp",
+    cacheControl: "public,max-age=31536000,immutable",
+  });
+  const imageUrl = await getDownloadURL(imageRef);
+  return {
+    imageUrl,
+    thumbUrl: imageUrl,
+    meta: {
+      originalWidth: optimized.meta.originalWidth,
+      originalHeight: optimized.meta.originalHeight,
+      originalFileSize: optimized.meta.originalFileSize,
+      optimizedFileSize: optimized.meta.optimizedFileSize,
+      qualityTier: optimized.meta.qualityTier,
+    },
+  };
 };

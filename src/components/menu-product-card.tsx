@@ -79,7 +79,9 @@ export function MenuProductCard({
               ? "qr-product-image qr-product-image-contain"
               : "qr-product-image"
           }
-          quality={90}
+          // 85: a occhio identica a 100 ma circa un quarto più leggera
+          // (i valori ammessi sono in images.qualities di next.config.ts).
+          quality={85}
         />
       </div>
       <div className="qr-product-body">

@@ -2,5 +2,9 @@
 command = "npm run build"
 publish = ".next"
 
+[build.environment]
+# firebase-admin 14 richiede Node 22 o superiore.
+NODE_VERSION = "22"
+
 [[plugins]]
 package = "@netlify/plugin-nextjs"

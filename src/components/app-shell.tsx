@@ -1,32 +1,29 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useSyncExternalStore } from "react";
 import { usePathname } from "next/navigation";
 import { SiteHeader } from "@/components/site-header";
+
+// Nella home l'header compare solo dopo aver scorso un po' (sopra c'è il video).
+const subscribeToScroll = (onChange: () => void) => {
+  window.addEventListener("scroll", onChange, { passive: true });
+  return () => window.removeEventListener("scroll", onChange);
+};
+const isScrolledPastTop = () => window.scrollY > 40;
+const isScrolledOnServer = () => false;
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const isReservedArea = pathname.startsWith("/riservato");
   const isHome = pathname === "/";
-  const [showHeaderOnHome, setShowHeaderOnHome] = useState(false);
+  const scrolled = useSyncExternalStore(
+    subscribeToScroll,
+    isScrolledPastTop,
+    isScrolledOnServer,
+  );
   const homeHeaderClassName = isHome
-    ? `topbar-home-reveal${showHeaderOnHome ? " visible" : ""}`
+    ? `topbar-home-reveal${scrolled ? " visible" : ""}`
     : undefined;
-
-  useEffect(() => {
-    if (!isHome) {
-      setShowHeaderOnHome(true);
-      return;
-    }
-
-    const updateVisibility = () => {
-      setShowHeaderOnHome(window.scrollY > 40);
-    };
-
-    updateVisibility();
-    window.addEventListener("scroll", updateVisibility, { passive: true });
-    return () => window.removeEventListener("scroll", updateVisibility);
-  }, [isHome]);
 
   return (
     <>

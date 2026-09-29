@@ -2,242 +2,19 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { getAdminDb } from "@/lib/firebase-admin";
 import {
-  addDaysToDateKey,
-  getRomeNow,
-  getWeekdayOfDateKey,
-} from "@/lib/rome-time";
+  ACTIVE_RESERVATION_STATUSES,
+  MAX_BOOKING_DAYS,
+  getSlotTimes,
+  isDayClosed,
+  isSameDayClosed,
+  isSlotDisabled,
+  resolveReservationSettings,
+} from "@/lib/reservation-availability";
+import { addDaysToDateKey, getRomeNow } from "@/lib/rome-time";
 
 const querySchema = z.object({
   guests: z.coerce.number().int().min(1).max(20),
 });
-
-const MAX_DAYS = 31;
-const ACTIVE_STATUSES = new Set(["pending", "confirmed", "proposed"]);
-
-const parseMinutes = (value: string): number => {
-  const [hours, minutes] = value.split(":").map(Number);
-  return hours * 60 + minutes;
-};
-
-const getServiceEndMinutes = (openTime: string, closeTime: string): number | null => {
-  const open = parseMinutes(openTime);
-  const close = parseMinutes(closeTime);
-
-  if (open === close) {
-    return null;
-  }
-
-  return close > open ? close : close + 24 * 60;
-};
-
-const parseSlotMinutes = (value: unknown): number | null => {
-  return typeof value === "number" &&
-    Number.isFinite(value) &&
-    Number.isInteger(value) &&
-    value >= 5 &&
-    value <= 180
-    ? value
-    : null;
-};
-
-const minutesToTime = (value: number): string => {
-  const normalized = ((value % (24 * 60)) + 24 * 60) % (24 * 60);
-  const hours = String(Math.floor(normalized / 60)).padStart(2, "0");
-  const minutes = String(normalized % 60).padStart(2, "0");
-  return `${hours}:${minutes}`;
-};
-
-const getSlotSettings = () => {
-  const openTime = process.env.RESERVATION_OPEN_TIME ?? "19:00";
-  const closeTime = process.env.RESERVATION_CLOSE_TIME ?? "23:00";
-  const slotMinutes = Number(process.env.RESERVATION_SLOT_MINUTES ?? 30);
-  const capacityPerSlot = Number(
-    process.env.RESERVATION_CAPACITY_PER_SLOT ?? 40,
-  );
-  const insideCapacityPerSlot = Number(
-    process.env.RESERVATION_CAPACITY_INSIDE_PER_SLOT ?? capacityPerSlot,
-  );
-  const outsideCapacityPerSlot = Number(
-    process.env.RESERVATION_CAPACITY_OUTSIDE_PER_SLOT ?? 24,
-  );
-
-  const openMinutes = parseMinutes(openTime);
-  const closeMinutes = getServiceEndMinutes(openTime, closeTime) ?? parseMinutes(closeTime);
-
-  const safeSlot =
-    Number.isFinite(slotMinutes) && slotMinutes > 0 ? slotMinutes : 30;
-  const safeCapacity =
-    Number.isFinite(capacityPerSlot) && capacityPerSlot > 0
-      ? capacityPerSlot
-      : 40;
-
-  return {
-    openTime,
-    closeTime,
-    slotMinutes: safeSlot,
-    capacityPerSlot: safeCapacity,
-    insideCapacityPerSlot:
-      Number.isFinite(insideCapacityPerSlot) && insideCapacityPerSlot > 0
-        ? Math.round(insideCapacityPerSlot)
-        : safeCapacity,
-    outsideCapacityPerSlot:
-      Number.isFinite(outsideCapacityPerSlot) && outsideCapacityPerSlot > 0
-        ? Math.round(outsideCapacityPerSlot)
-        : 24,
-    openMinutes,
-    closeMinutes,
-  };
-};
-
-const asDateKey = (value: unknown): string | null => {
-  if (typeof value !== "string") return null;
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return null;
-  return value;
-};
-
-const uniqueWeekdays = (source: unknown): number[] => {
-  if (!Array.isArray(source)) return [1, 2, 3, 4, 5, 6, 0];
-  const values = source
-    .filter((value): value is number => Number.isInteger(value))
-    .filter((value) => value >= 0 && value <= 6);
-  return [...new Set(values)];
-};
-
-const isValidTimeValue = (value: unknown): value is string =>
-  typeof value === "string" && /^([01]\d|2[0-3]):([0-5]\d)$/.test(value);
-
-const resolveSlotSettings = async (db: ReturnType<typeof getAdminDb>) => {
-  const envSettings = getSlotSettings();
-  const defaultWorkingDays = [1, 2, 3, 4, 5, 6, 0];
-
-  try {
-    const settingsSnap = await db
-      .collection("reservation_settings")
-      .doc("default")
-        .get();
-    const data = settingsSnap.data() as
-      | {
-          openTime?: unknown;
-          closeTime?: unknown;
-          slotMinutes?: unknown;
-          capacityPerSlot?: unknown;
-          insideActive?: unknown;
-          outsideActive?: unknown;
-          insideCapacityPerSlot?: unknown;
-          outsideCapacityPerSlot?: unknown;
-          workingDays?: unknown;
-          holidays?: unknown;
-          specialOpenings?: unknown;
-          weeklyDisabledSlots?: unknown;
-        }
-      | undefined;
-
-    const openTime =
-      typeof data?.openTime === "string" &&
-      /^([01]\d|2[0-3]):([0-5]\d)$/.test(data.openTime)
-        ? data.openTime
-        : envSettings.openTime;
-
-    const closeTime =
-      typeof data?.closeTime === "string" &&
-      /^([01]\d|2[0-3]):([0-5]\d)$/.test(data.closeTime)
-        ? data.closeTime
-        : envSettings.closeTime;
-
-    const slotMinutes =
-      parseSlotMinutes(data?.slotMinutes) ??
-      parseSlotMinutes(envSettings.slotMinutes) ??
-      30;
-
-    const capacityPerSlot =
-      typeof data?.capacityPerSlot === "number" &&
-      Number.isFinite(data.capacityPerSlot) &&
-      data.capacityPerSlot > 0
-        ? Math.round(data.capacityPerSlot)
-        : envSettings.capacityPerSlot;
-
-    const insideActive =
-      typeof data?.insideActive === "boolean" ? data.insideActive : true;
-    const outsideActive =
-      typeof data?.outsideActive === "boolean" ? data.outsideActive : true;
-    const insideCapacityPerSlot =
-      typeof data?.insideCapacityPerSlot === "number" &&
-      Number.isFinite(data.insideCapacityPerSlot) &&
-      data.insideCapacityPerSlot > 0
-        ? Math.round(data.insideCapacityPerSlot)
-        : envSettings.insideCapacityPerSlot;
-    const outsideCapacityPerSlot =
-      typeof data?.outsideCapacityPerSlot === "number" &&
-      Number.isFinite(data.outsideCapacityPerSlot) &&
-      data.outsideCapacityPerSlot > 0
-        ? Math.round(data.outsideCapacityPerSlot)
-        : envSettings.outsideCapacityPerSlot;
-
-    const workingDays = uniqueWeekdays(data?.workingDays);
-    const holidays = Array.isArray(data?.holidays)
-      ? data.holidays
-          .map(asDateKey)
-          .filter((value): value is string => Boolean(value))
-      : [];
-    const specialOpenings = Array.isArray(data?.specialOpenings)
-      ? data.specialOpenings
-          .map(asDateKey)
-          .filter((value): value is string => Boolean(value))
-      : [];
-    const weeklyDisabledSlots =
-      data?.weeklyDisabledSlots &&
-      typeof data.weeklyDisabledSlots === "object" &&
-      !Array.isArray(data.weeklyDisabledSlots)
-        ? Object.fromEntries(
-            Object.entries(data.weeklyDisabledSlots).map(([weekday, values]) => [
-              weekday,
-              Array.isArray(values)
-                ? values.filter(isValidTimeValue)
-                : [],
-            ]),
-          )
-        : {};
-
-    return {
-      ...envSettings,
-      openTime,
-      closeTime,
-      slotMinutes,
-      capacityPerSlot,
-      insideActive,
-      outsideActive,
-      insideCapacityPerSlot,
-      outsideCapacityPerSlot,
-      openMinutes: parseMinutes(openTime),
-      closeMinutes:
-        getServiceEndMinutes(openTime, closeTime) ?? parseMinutes(closeTime),
-      workingDays: workingDays.length > 0 ? workingDays : defaultWorkingDays,
-      holidays: new Set(holidays),
-      specialOpenings: new Set(specialOpenings),
-      weeklyDisabledSlots,
-    };
-  } catch {
-    const fallbackSlotMinutes = parseSlotMinutes(envSettings.slotMinutes) ?? 30;
-    return {
-      ...envSettings,
-      slotMinutes: fallbackSlotMinutes,
-      capacityPerSlot: envSettings.capacityPerSlot,
-      insideActive: true,
-      outsideActive: true,
-      insideCapacityPerSlot: envSettings.insideCapacityPerSlot,
-      outsideCapacityPerSlot: envSettings.outsideCapacityPerSlot,
-      workingDays: defaultWorkingDays,
-      holidays: new Set<string>(),
-      specialOpenings: new Set<string>(),
-      weeklyDisabledSlots: {},
-    };
-  }
-};
-
-const getSlotMinutesForDate = (
-  _dateKey: string,
-  settings: Awaited<ReturnType<typeof resolveSlotSettings>>,
-): number => settings.slotMinutes;
 
 export async function GET(request: Request) {
   try {
@@ -255,17 +32,15 @@ export async function GET(request: Request) {
 
     const { guests } = parsed.data;
     const db = getAdminDb();
-    const settings = await resolveSlotSettings(db);
-    const totalCapacity =
-      (settings.insideActive ? settings.insideCapacityPerSlot : 0) +
-      (settings.outsideActive ? settings.outsideCapacityPerSlot : 0) ||
-      settings.capacityPerSlot;
+    const settings = await resolveReservationSettings(db);
+    const totalCapacity = settings.capacityPerSlot;
+    const slotTimes = getSlotTimes(settings);
 
     const romeNow = getRomeNow();
-    const sameDayClosedAfterOpen = romeNow.minutes >= settings.openMinutes;
+    const sameDayClosedAfterOpen = isSameDayClosed(settings, romeNow);
 
     const startKey = romeNow.dateKey;
-    const endKey = addDaysToDateKey(startKey, MAX_DAYS - 1);
+    const endKey = addDaysToDateKey(startKey, MAX_BOOKING_DAYS - 1);
 
     const reservationSnapshot = await db
       .collection("reservations")
@@ -284,7 +59,7 @@ export async function GET(request: Request) {
       };
 
       if (!data.date || !data.time || !data.guests || !data.status) continue;
-      if (!ACTIVE_STATUSES.has(data.status)) continue;
+      if (!ACTIVE_RESERVATION_STATUSES.has(data.status)) continue;
 
       const key = `${data.date}|${data.time}`;
       occupancy.set(key, (occupancy.get(key) ?? 0) + data.guests);
@@ -301,40 +76,23 @@ export async function GET(request: Request) {
       Array<{ time: string; available: boolean; remainingSeats: number }>
     > = {};
 
-    for (let i = 0; i < MAX_DAYS; i += 1) {
+    for (let i = 0; i < MAX_BOOKING_DAYS; i += 1) {
       const date = addDaysToDateKey(startKey, i);
-      const slotMinutesForDate = getSlotMinutesForDate(date, settings);
-      const weekDay = getWeekdayOfDateKey(date);
-      const isClosedByRules =
-        !settings.workingDays.includes(weekDay) || settings.holidays.has(date);
-      const isClosedBySameDayCutoff = i === 0 && sameDayClosedAfterOpen;
-      const isClosedDay =
-        (isClosedByRules && !settings.specialOpenings.has(date)) ||
-        isClosedBySameDayCutoff;
 
-      const slotTimes: string[] = [];
-      for (
-        let minute = settings.openMinutes;
-        minute <= settings.closeMinutes;
-        minute += slotMinutesForDate
-      ) {
-        slotTimes.push(minutesToTime(minute));
-      }
-
-      const slots = isClosedDay
+      const slots = isDayClosed(date, settings, romeNow)
         ? slotTimes.map((time) => ({
             time,
             available: false,
             remainingSeats: 0,
           }))
         : slotTimes.map((time) => {
-            const isSlotDisabled =
-              (settings.weeklyDisabledSlots[String(weekDay)] ?? []).includes(time);
             const reserved = occupancy.get(`${date}|${time}`) ?? 0;
             const remainingSeats = Math.max(totalCapacity - reserved, 0);
             return {
               time,
-              available: !isSlotDisabled && remainingSeats >= guests,
+              available:
+                !isSlotDisabled(date, time, settings) &&
+                remainingSeats >= guests,
               remainingSeats,
             };
           });
@@ -353,7 +111,7 @@ export async function GET(request: Request) {
       days,
       slotsByDate,
       config: {
-        maxDays: MAX_DAYS,
+        maxDays: MAX_BOOKING_DAYS,
         openTime: settings.openTime,
         closeTime: settings.closeTime,
         slotMinutes: settings.slotMinutes,

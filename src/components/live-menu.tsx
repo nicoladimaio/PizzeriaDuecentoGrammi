@@ -2,27 +2,34 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties } from "react";
-import { useLocale, useTranslations } from "next-intl";
+import { useTranslations } from "next-intl";
 import { AllergenBadge } from "@/components/allergens/allergen-badge";
 import { MenuMobileTopbar } from "@/components/menu-mobile-topbar";
 import { MenuCategoriesBar } from "@/components/menu-categories-bar";
 import { MenuProductCard } from "@/components/menu-product-card";
 import { MenuProductSheet } from "@/components/menu-product-sheet";
-import { useLiveMenuData } from "@/hooks/use-live-menu-data";
 import {
   categoryAnchorId,
   normalizeCategoryKey,
   unique,
 } from "@/lib/menu-parsing";
+import type { PublicMenuData } from "@/lib/menu-mapping";
 import type { MenuCategory, MenuProduct } from "@/types/menu-app";
 
 const topOffsetForActiveCategory = 168;
 
-export function LiveMenu() {
-  const locale = useLocale();
+const EMPTY_MENU: PublicMenuData = {
+  products: [],
+  categories: [],
+  categoryLabels: {},
+  globalAllergens: [],
+};
+
+/** Menu pubblico: i dati arrivano già pronti dal server (lib/public-menu.ts). */
+export function LiveMenu({ menu }: { menu: PublicMenuData | null }) {
   const t = useTranslations("Menu");
-  const { products, categories, categoryLabels, globalAllergens, loading } =
-    useLiveMenuData(locale);
+  const { products, categories, categoryLabels, globalAllergens } =
+    menu ?? EMPTY_MENU;
 
   const [activeCategory, setActiveCategory] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
@@ -187,16 +194,18 @@ export function LiveMenu() {
   const menuShellStyle = useMemo(
     () =>
       ({
-        "--qr-header-offset": showSearch ? "106px" : "56px",
+        "--qr-header-offset": showSearch ? "104px" : "52px",
       }) as CSSProperties,
     [showSearch],
   );
 
-  if (loading) {
+  if (products.length === 0) {
     return (
       <section className="menu-section">
         <div className="container">
-          <p className="section-subtitle">{t("loading")}</p>
+          <p className="section-subtitle" role="status">
+            {t("unavailable")}
+          </p>
         </div>
       </section>
     );

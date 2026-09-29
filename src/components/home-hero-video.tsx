@@ -4,50 +4,33 @@ import { useEffect, useRef } from "react";
 
 type HomeHeroVideoProps = {
   src: string;
-  loopDurationSeconds?: number;
-  startAtSeconds?: number;
+  /** Primo fotogramma: si vede subito, mentre il video carica. */
+  poster: string;
 };
 
-export function HomeHeroVideo({
-  src,
-  loopDurationSeconds = 12,
-  startAtSeconds = 0,
-}: HomeHeroVideoProps) {
+// Il file video contiene già solo il tratto da mostrare in loop: niente
+// logica di taglio lato browser.
+export function HomeHeroVideo({ src, poster }: HomeHeroVideoProps) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
 
   useEffect(() => {
     const element = videoRef.current;
     if (!element) return;
 
-    const safeStart = Number.isFinite(startAtSeconds)
-      ? Math.max(0, startAtSeconds)
-      : 0;
-    const safeLoopDuration = Number.isFinite(loopDurationSeconds)
-      ? Math.max(2, loopDurationSeconds)
-      : 12;
-    const loopEnd = safeStart + safeLoopDuration;
-
-    const onLoadedMetadata = () => {
-      if (element.duration > safeStart) {
-        element.currentTime = safeStart;
+    // Chi ha chiesto al sistema di ridurre le animazioni vede solo il poster.
+    const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
+    const applyPreference = () => {
+      if (reducedMotion.matches) {
+        element.pause();
+      } else {
+        void element.play().catch(() => {});
       }
     };
 
-    const onTimeUpdate = () => {
-      if (element.currentTime >= loopEnd) {
-        element.currentTime = safeStart;
-        void element.play();
-      }
-    };
-
-    element.addEventListener("loadedmetadata", onLoadedMetadata);
-    element.addEventListener("timeupdate", onTimeUpdate);
-
-    return () => {
-      element.removeEventListener("loadedmetadata", onLoadedMetadata);
-      element.removeEventListener("timeupdate", onTimeUpdate);
-    };
-  }, [loopDurationSeconds, startAtSeconds]);
+    applyPreference();
+    reducedMotion.addEventListener("change", applyPreference);
+    return () => reducedMotion.removeEventListener("change", applyPreference);
+  }, []);
 
   return (
     <div className="home-video-wrap" aria-hidden>
@@ -56,8 +39,10 @@ export function HomeHeroVideo({
         className="home-video-bg"
         autoPlay
         muted
+        loop
         playsInline
         preload="auto"
+        poster={poster}
       >
         <source src={src} type="video/mp4" />
       </video>
