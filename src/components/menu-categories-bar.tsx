@@ -48,12 +48,17 @@ export function MenuCategoriesBar({
     const key = activeCategory.toLowerCase().trim();
     if (!key) return;
     const target = chipRefs.current[key];
-    if (!target) return;
-    target.scrollIntoView({
-      behavior: "smooth",
-      inline: "center",
-      block: "nearest",
-    });
+    const container = scrollRef.current;
+    if (!target || !container) return;
+    // Solo scroll orizzontale della barra: scrollIntoView muoverebbe anche
+    // la pagina, interrompendo lo scroll verso la sezione sui telefoni.
+    const chipRect = target.getBoundingClientRect();
+    const containerRect = container.getBoundingClientRect();
+    const left =
+      container.scrollLeft +
+      (chipRect.left - containerRect.left) -
+      (container.clientWidth - chipRect.width) / 2;
+    container.scrollTo({ left: Math.max(0, left), behavior: "smooth" });
   }, [activeCategory]);
 
   const onMouseDown = (event: MouseEvent<HTMLDivElement>) => {

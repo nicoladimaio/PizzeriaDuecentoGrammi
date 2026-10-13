@@ -40,6 +40,10 @@ export function LiveMenu({ menu }: { menu: PublicMenuData | null }) {
     null,
   );
   const sectionRefs = useRef<Record<string, HTMLElement | null>>({});
+  // Mentre la pagina scorre dopo il tocco su una categoria, la categoria
+  // attiva resta quella scelta invece di seguire le sezioni attraversate.
+  const scrollLockRef = useRef(false);
+  const scrollLockTimerRef = useRef<number | null>(null);
 
   const getCategoryLabel = (name: string) =>
     categoryLabels[normalizeCategoryKey(name)] ?? name;
@@ -170,17 +174,38 @@ export function LiveMenu({ menu }: { menu: PublicMenuData | null }) {
     };
 
     const onScroll = () => {
+      if (scrollLockRef.current) {
+        // Sblocca quando lo scroll si ferma (nessun evento per 150ms).
+        if (scrollLockTimerRef.current !== null) {
+          window.clearTimeout(scrollLockTimerRef.current);
+        }
+        scrollLockTimerRef.current = window.setTimeout(() => {
+          scrollLockRef.current = false;
+          scrollLockTimerRef.current = null;
+        }, 150);
+        return;
+      }
       if (ticking) return;
       ticking = true;
       window.requestAnimationFrame(updateActiveCategoryFromScroll);
     };
 
+    // Se l'utente tocca o usa la rotella durante lo scroll, torna subito
+    // a seguire la posizione.
+    const releaseLock = () => {
+      scrollLockRef.current = false;
+    };
+
     window.addEventListener("scroll", onScroll, { passive: true });
     window.addEventListener("resize", onScroll);
+    window.addEventListener("touchstart", releaseLock, { passive: true });
+    window.addEventListener("wheel", releaseLock, { passive: true });
 
     return () => {
       window.removeEventListener("scroll", onScroll);
       window.removeEventListener("resize", onScroll);
+      window.removeEventListener("touchstart", releaseLock);
+      window.removeEventListener("wheel", releaseLock);
     };
   }, [categorySections]);
 
@@ -188,6 +213,15 @@ export function LiveMenu({ menu }: { menu: PublicMenuData | null }) {
     setActiveCategory(categoryName);
     const target = sectionRefs.current[normalizeCategoryKey(categoryName)];
     if (!target) return;
+    scrollLockRef.current = true;
+    if (scrollLockTimerRef.current !== null) {
+      window.clearTimeout(scrollLockTimerRef.current);
+    }
+    // Riserva: se la pagina è già in posizione non arriva nessuno scroll.
+    scrollLockTimerRef.current = window.setTimeout(() => {
+      scrollLockRef.current = false;
+      scrollLockTimerRef.current = null;
+    }, 1000);
     target.scrollIntoView({ behavior: "smooth", block: "start" });
   };
 
