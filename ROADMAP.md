@@ -11,13 +11,10 @@ Lista delle attività aperte sul sito. Si aggiorna man mano che si chiudono i pu
 
 ## Da fare subito
 
-1. **Prove sul sito vero** (le fa l'utente), se non già completate:
-   - prenotazione in inglese con la propria email, fino all'email di riepilogo;
-   - dal pannello: conferma, proposta di un altro orario, rifiuto, e relative email;
+1. **Prove sul sito vero** (le fa l'utente). Già fatte: prenotazione in inglese con email di riepilogo, conferma/altro orario/rifiuto dal pannello con relative email, modifica di un piatto e menu pubblico, anteprima su WhatsApp. Restano:
    - link "Cancel booking" nell'email;
-   - modifica di un piatto e controllo del menu pubblico;
    - salvataggio delle impostazioni prenotazioni e controllo degli orari nel footer;
-   - anteprima del link su WhatsApp.
+   - dopo il prossimo deploy: bottoni delle categorie nel menu su Android e iPhone (corretto lo scroll che si bloccava o tornava alla prima categoria).
 2. **Regole Firestore**: la modifica è già in `firestore.rules` (non committata). `menu_items`, `menu_categories` e `menu_ingredients` leggibili solo dall'admin; il sito pubblico legge il menu dal server con firebase-admin, che ignora le regole. Pubblicare con `firebase deploy --only firestore:rules` (non passa da Netlify) dopo le prove, poi controllare menu pubblico e pannello.
 
 ## Manutenzione

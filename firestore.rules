@@ -18,17 +18,17 @@ service cloud.firestore {
     }
 
     match /menu_items/{itemId} {
-      allow read: if true;
+      allow read: if isAdmin();
       allow create, update, delete: if isAdmin();
     }
 
     match /menu_categories/{categoryId} {
-      allow read: if true;
+      allow read: if isAdmin();
       allow create, update, delete: if isAdmin();
     }
 
     match /menu_ingredients/{ingredientId} {
-      allow read: if true;
+      allow read: if isAdmin();
       allow create, update, delete: if isAdmin();
     }
   }
