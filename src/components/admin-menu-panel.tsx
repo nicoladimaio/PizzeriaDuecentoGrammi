@@ -439,57 +439,48 @@ export function AdminMenuPanel() {
     return merged;
   }, [categoryNames, items]);
 
-  useEffect(() => {
-    if (visibleCategories.length === 0) {
-      setActiveCategory("");
-      return;
+  // Gli stati che dipendono da altri si sistemano durante il render (quando
+  // la dipendenza cambia) invece che in un effetto: niente render doppio.
+
+  // Categoria attiva sempre tra quelle esistenti.
+  const activeCategoryExists = visibleCategories.some(
+    (entry) => entry.toLowerCase() === activeCategory.toLowerCase(),
+  );
+  const fallbackActiveCategory = visibleCategories[0] ?? "";
+  if (!activeCategoryExists && activeCategory !== fallbackActiveCategory) {
+    setActiveCategory(fallbackActiveCategory);
+  }
+
+  // Nuovo piatto: categoria iniziale = quella aperta, o la prima visibile.
+  if (showItemModal && !newItemCategory) {
+    const defaultNewItemCategory =
+      activeCategory ||
+      categories.find((category) => category.visible)?.name ||
+      categoryNames[0] ||
+      "";
+    if (defaultNewItemCategory) setNewItemCategory(defaultNewItemCategory);
+  }
+
+  // Chiusura delle finestre piatto: azzera ricerca e trascinamento ingredienti.
+  const [prevShowItemModal, setPrevShowItemModal] = useState(showItemModal);
+  if (prevShowItemModal !== showItemModal) {
+    setPrevShowItemModal(showItemModal);
+    if (!showItemModal) {
+      setShowNewIngredientResults(false);
+      setNewIngredientSearch("");
+      setDraggingNewIngredientId(null);
     }
+  }
 
-    const exists = visibleCategories.some(
-      (entry) => entry.toLowerCase() === activeCategory.toLowerCase(),
-    );
-    if (!exists) setActiveCategory(visibleCategories[0]);
-  }, [visibleCategories, activeCategory]);
-
-  useEffect(() => {
-    if (!showItemModal) return;
-    if (newItemCategory) return;
-
-    if (activeCategory) {
-      setNewItemCategory(activeCategory);
-      return;
+  const [prevEditingItemId, setPrevEditingItemId] = useState(editingItemId);
+  if (prevEditingItemId !== editingItemId) {
+    setPrevEditingItemId(editingItemId);
+    if (!editingItemId) {
+      setShowEditIngredientResults(false);
+      setEditIngredientSearch("");
+      setDraggingEditIngredientId(null);
     }
-
-    const firstVisibleCategory = categories.find(
-      (category) => category.visible,
-    )?.name;
-    if (firstVisibleCategory) {
-      setNewItemCategory(firstVisibleCategory);
-      return;
-    }
-
-    setNewItemCategory(categoryNames[0] ?? "");
-  }, [
-    showItemModal,
-    newItemCategory,
-    categories,
-    activeCategory,
-    categoryNames,
-  ]);
-
-  useEffect(() => {
-    if (showItemModal) return;
-    setShowNewIngredientResults(false);
-    setNewIngredientSearch("");
-    setDraggingNewIngredientId(null);
-  }, [showItemModal]);
-
-  useEffect(() => {
-    if (editingItemId) return;
-    setShowEditIngredientResults(false);
-    setEditIngredientSearch("");
-    setDraggingEditIngredientId(null);
-  }, [editingItemId]);
+  }
 
   const itemsByCategory = useMemo(() => {
     return items.reduce<Record<string, AdminMenuItem[]>>((acc, item) => {
@@ -702,17 +693,24 @@ export function AdminMenuPanel() {
     return () => window.clearTimeout(timer);
   }, [dishCreatedToast]);
 
-  useEffect(() => {
+  // Cambio scheda: apre solo la sezione corrispondente.
+  const [prevNewDishActiveTab, setPrevNewDishActiveTab] =
+    useState(newDishActiveTab);
+  if (prevNewDishActiveTab !== newDishActiveTab) {
+    setPrevNewDishActiveTab(newDishActiveTab);
     setNewDishIdentityOpen(newDishActiveTab === "identity");
     setNewDishIngredientsOpen(newDishActiveTab === "ingredients");
     setNewDishImageOpen(newDishActiveTab === "image");
-  }, [newDishActiveTab]);
+  }
 
-  useEffect(() => {
+  const [prevEditDishActiveTab, setPrevEditDishActiveTab] =
+    useState(editDishActiveTab);
+  if (prevEditDishActiveTab !== editDishActiveTab) {
+    setPrevEditDishActiveTab(editDishActiveTab);
     setEditDishIdentityOpen(editDishActiveTab === "identity");
     setEditDishIngredientsOpen(editDishActiveTab === "ingredients");
     setEditDishImageOpen(editDishActiveTab === "image");
-  }, [editDishActiveTab]);
+  }
 
   const ensureCategoryExists = async (name: string) => {
     const normalized = name.trim();

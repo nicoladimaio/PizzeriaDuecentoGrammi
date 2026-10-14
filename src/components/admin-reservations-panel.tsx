@@ -81,7 +81,6 @@ export function AdminReservationsPanel({
   const [settingsToast, setSettingsToast] = useState<string | null>(null);
   const [savedSettings, setSavedSettings] =
     useState<ReservationSettings>(defaultSettings);
-  const [cleanupPending, setCleanupPending] = useState(false);
   const [calendarPickerOpen, setCalendarPickerOpen] = useState(false);
   const [calendarPickerMode, setCalendarPickerMode] = useState<
     "holiday" | "opening"
@@ -226,11 +225,13 @@ export function AdminReservationsPanel({
     return copy;
   }, [rows, highlightedCode]);
 
-  useEffect(() => {
-    if (!selectedCode && highlightedCode) {
-      setSelectedCode(highlightedCode);
-    }
-  }, [highlightedCode, selectedCode]);
+  // Gli stati che dipendono da altri si sistemano durante il render (quando
+  // la dipendenza cambia) invece che in un effetto: niente render doppio.
+
+  // Prenotazione arrivata dal link dell'email: aperta subito.
+  if (!selectedCode && highlightedCode) {
+    setSelectedCode(highlightedCode);
+  }
 
   const selectedReservation = useMemo(() => {
     if (!selectedCode) return null;
@@ -484,18 +485,19 @@ export function AdminReservationsPanel({
     settings.slotMinutes,
   ]);
 
-  useEffect(() => {
-    setManualReservationForm((prev) => {
-      if (manualTimeOptions.includes(prev.time)) {
-        return prev;
-      }
-
-      return {
+  // Orario della prenotazione manuale sempre tra quelli disponibili.
+  const [prevManualTimeOptions, setPrevManualTimeOptions] = useState<
+    string[] | null
+  >(null);
+  if (prevManualTimeOptions !== manualTimeOptions) {
+    setPrevManualTimeOptions(manualTimeOptions);
+    if (!manualTimeOptions.includes(manualReservationForm.time)) {
+      setManualReservationForm((prev) => ({
         ...prev,
         time: manualTimeOptions[0] ?? "20:00",
-      };
-    });
-  }, [manualTimeOptions]);
+      }));
+    }
+  }
 
   const availableProposalDays = useMemo(() => {
     if (!decisionAvailability) return [] as string[];
@@ -534,7 +536,19 @@ export function AdminReservationsPanel({
     [availableProposalDays, currentProposalPageStart],
   );
 
-  useEffect(() => {
+  // Ferie e aperture straordinarie passate tolte dalle impostazioni.
+  const [prevSpecialDates, setPrevSpecialDates] = useState<{
+    holidays: string[];
+    specialOpenings: string[];
+  } | null>(null);
+  if (
+    prevSpecialDates?.holidays !== settings.holidays ||
+    prevSpecialDates?.specialOpenings !== settings.specialOpenings
+  ) {
+    setPrevSpecialDates({
+      holidays: settings.holidays,
+      specialOpenings: settings.specialOpenings,
+    });
     const current = todayKey();
     const filteredHolidays = settings.holidays.filter(
       (value) => value >= current,
@@ -552,7 +566,7 @@ export function AdminReservationsPanel({
         specialOpenings: filteredOpenings,
       }));
     }
-  }, [settings.holidays, settings.specialOpenings]);
+  }
 
   const onDraftChange = (
     code: string,
@@ -895,40 +909,6 @@ export function AdminReservationsPanel({
     setAvailabilityActionsOpen(false);
   };
 
-  const cleanupOldReservations = async (silent = false) => {
-    setError(null);
-    setCleanupPending(true);
-
-    try {
-      const auth = getClientAuth();
-      const token = await auth.currentUser?.getIdToken();
-      if (!token) {
-        if (silent) return;
-        throw new Error("Sessione admin non valida.");
-      }
-
-      const response = await fetch("/api/admin/reservations/cleanup", {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
-
-      const data = await parseJsonResponse<{
-        deletedCount?: number;
-        error?: string;
-      }>(response);
-
-      if (!response.ok) {
-        throw new Error(data.error ?? "Pulizia non riuscita.");
-      }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Errore inatteso.");
-    } finally {
-      setCleanupPending(false);
-    }
-  };
-
   const deleteReservation = async (code: string) => {
     setError(null);
     setPendingCode(code);
@@ -997,8 +977,42 @@ export function AdminReservationsPanel({
     }
   };
 
+  // All'apertura del pannello elimina le prenotazioni vecchie (silenziosa:
+  // mostra solo eventuali errori del server).
   useEffect(() => {
-    void cleanupOldReservations(true);
+    let ignore = false;
+
+    const cleanupOldReservations = async () => {
+      try {
+        const token = await getClientAuth().currentUser?.getIdToken();
+        if (!token) return;
+
+        const response = await fetch("/api/admin/reservations/cleanup", {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        });
+
+        const data = await parseJsonResponse<{
+          deletedCount?: number;
+          error?: string;
+        }>(response);
+
+        if (!response.ok) {
+          throw new Error(data.error ?? "Pulizia non riuscita.");
+        }
+      } catch (err) {
+        if (!ignore) {
+          setError(err instanceof Error ? err.message : "Errore inatteso.");
+        }
+      }
+    };
+
+    void cleanupOldReservations();
+    return () => {
+      ignore = true;
+    };
   }, []);
 
   const resetManualReservationForm = () => {
@@ -1064,11 +1078,22 @@ export function AdminReservationsPanel({
     }
   };
 
-  useEffect(() => {
-    if (!confirmedSelectedDate) {
-      setConfirmedSelectedDate(todayKey());
-      return;
-    }
+  // Giorno scelto nelle confermate: ieri/oggi/domani hanno il loro pulsante,
+  // gli altri giorni compaiono come data scelta nel calendario.
+  const [prevConfirmedDates, setPrevConfirmedDates] = useState<{
+    confirmed: string;
+    calendar: string;
+  } | null>(null);
+  if (
+    prevConfirmedDates?.confirmed !== confirmedSelectedDate ||
+    prevConfirmedDates?.calendar !== calendarSelectedDate
+  ) {
+    const confirmedChanged =
+      prevConfirmedDates?.confirmed !== confirmedSelectedDate;
+    setPrevConfirmedDates({
+      confirmed: confirmedSelectedDate,
+      calendar: calendarSelectedDate,
+    });
 
     const isBaseDay = [
       dateKeyDaysAgo(1),
@@ -1076,20 +1101,15 @@ export function AdminReservationsPanel({
       dateKeyDaysAhead(1),
     ].includes(confirmedSelectedDate);
 
-    if (!isBaseDay && calendarSelectedDate !== confirmedSelectedDate) {
+    if (!confirmedSelectedDate) {
+      setConfirmedSelectedDate(todayKey());
+    } else if (!isBaseDay && calendarSelectedDate !== confirmedSelectedDate) {
       setCalendarSelectedDate(confirmedSelectedDate);
     }
-  }, [calendarSelectedDate, confirmedSelectedDate]);
-
-  useEffect(() => {
-    if (
-      confirmedSelectedDate === dateKeyDaysAgo(1) ||
-      confirmedSelectedDate === todayKey() ||
-      confirmedSelectedDate === dateKeyDaysAhead(1)
-    ) {
+    if (confirmedChanged && isBaseDay) {
       setCalendarSelectedDate("");
     }
-  }, [confirmedSelectedDate]);
+  }
 
   useEffect(() => {
     if (!settingsToast) return;
@@ -1287,7 +1307,13 @@ export function AdminReservationsPanel({
     });
   };
 
-  useEffect(() => {
+  // Fasce disattivate sempre valide per orari e intervallo impostati.
+  const [prevSlotSettings, setPrevSlotSettings] = useState<string | null>(
+    null,
+  );
+  const slotSettingsKey = `${settings.openTime}|${settings.closeTime}|${settings.slotMinutes}`;
+  if (prevSlotSettings !== slotSettingsKey) {
+    setPrevSlotSettings(slotSettingsKey);
     setSettings((prev) => {
       const normalizedDisabledSlots = Object.fromEntries(
         Object.entries(prev.weeklyDisabledSlots).map(([weekday, values]) => {
@@ -1314,7 +1340,7 @@ export function AdminReservationsPanel({
         weeklyDisabledSlots: normalizedDisabledSlots,
       };
     });
-  }, [settings.openTime, settings.closeTime, settings.slotMinutes]);
+  }
 
   const openConfirmedCalendarPicker = () => {
     const targetDate =
