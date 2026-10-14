@@ -1,5 +1,6 @@
 import type { QueryDocumentSnapshot } from "firebase/firestore";
 import type { ReservationDoc } from "@/types/reservation";
+import type { AdminReservationRow } from "@/components/admin-reservations/types";
 import type { ActionType } from "@/components/admin-reservations/types";
 
 export const proposalDatesPageSize = 8;
@@ -25,7 +26,7 @@ export const actionLoadingLabel = (action: ActionType | null) => {
 
 export const mapSnapshot = (
   snap: QueryDocumentSnapshot,
-): ReservationDoc & { id: string } => {
+): AdminReservationRow => {
   const data = snap.data() as ReservationDoc;
   return {
     ...data,

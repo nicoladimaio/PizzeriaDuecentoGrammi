@@ -1,3 +1,8 @@
+import type { ReservationDoc } from "@/types/reservation";
+
+/** Prenotazione come la mostra il pannello (con l'id del documento). */
+export type AdminReservationRow = ReservationDoc & { id: string };
+
 export type ActionType = "confirmed" | "rejected" | "proposed" | "delete";
 
 export type ProposalDraft = {

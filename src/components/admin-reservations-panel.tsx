@@ -7,6 +7,7 @@ import { getClientAuth } from "@/lib/firebase-auth";
 import type { ReservationDoc, ReservationSettings } from "@/types/reservation";
 import type {
   ActionType,
+  AdminReservationRow,
   ProposalDraft,
   DecisionDialogMode,
   DecisionAvailability,
@@ -16,12 +17,9 @@ import type {
   SettingsTab,
 } from "@/components/admin-reservations/types";
 import {
-  slotMinuteOptions,
-  weekdayOptions,
   defaultSettings,
   parseMinutes,
   minutesToTime,
-  halfHourTimeOptions,
   normalizeSettings,
   getSlotTimesForWeekday,
   getSlotMinutesForDateKey,
@@ -41,14 +39,23 @@ import {
   dateKeyDaysAhead,
   monthKey,
   parseDateKey,
-  monthLabel,
   startOfMonthFromKey,
   endOfMonthFromKey,
   shiftMonth,
-  formatDateShort,
   getOperationalDayLabel,
   buildMonthCells,
 } from "@/components/admin-reservations/dates";
+import { OpenReservationsGroup } from "@/components/admin-reservations/open-reservations-group";
+import { ConfirmedReservationsGroup } from "@/components/admin-reservations/confirmed-reservations-group";
+import { SettingsGeneralTab } from "@/components/admin-reservations/settings-general-tab";
+import { SettingsAvailabilityTab } from "@/components/admin-reservations/settings-availability-tab";
+import { SettingsExceptionsTab } from "@/components/admin-reservations/settings-exceptions-tab";
+import { ReservationDetailModal } from "@/components/admin-reservations/reservation-detail-modal";
+import { ReservationDecisionDialog } from "@/components/admin-reservations/reservation-decision-dialog";
+import { ManualReservationModal } from "@/components/admin-reservations/manual-reservation-modal";
+import { CopySettingsModal } from "@/components/admin-reservations/copy-settings-modal";
+import { ConfirmedCalendarModal } from "@/components/admin-reservations/confirmed-calendar-modal";
+import { SettingsCalendarPickerModal } from "@/components/admin-reservations/settings-calendar-picker-modal";
 
 export function AdminReservationsPanel({
   highlightedCode,
@@ -62,7 +69,7 @@ export function AdminReservationsPanel({
   onSettingsLeaveGuardChange?: (guard: SettingsLeaveGuard | null) => void;
 }) {
   const [loading, setLoading] = useState(true);
-  const [rows, setRows] = useState<Array<ReservationDoc & { id: string }>>([]);
+  const [rows, setRows] = useState<AdminReservationRow[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [pendingCode, setPendingCode] = useState<string | null>(null);
   const [arrivedPendingCode, setArrivedPendingCode] = useState<string | null>(
@@ -238,22 +245,6 @@ export function AdminReservationsPanel({
     return rows.find((row) => row.code === selectedCode) ?? null;
   }, [rows, selectedCode]);
 
-  const newRows = useMemo(
-    () =>
-      orderedRows.filter(
-        (row) => row.date >= todayKey() && row.status === "pending",
-      ),
-    [orderedRows],
-  );
-
-  const proposedRows = useMemo(
-    () =>
-      orderedRows.filter(
-        (row) => row.date >= todayKey() && row.status === "proposed",
-      ),
-    [orderedRows],
-  );
-
   const openRows = useMemo(
     () =>
       orderedRows.filter(
@@ -346,12 +337,12 @@ export function AdminReservationsPanel({
 
   const confirmedRowsForSelectedDate = useMemo(() => {
     if (!confirmedSelectedDate)
-      return [] as Array<ReservationDoc & { id: string }>;
+      return [] as AdminReservationRow[];
     return confirmedRows.filter((row) => row.date === confirmedSelectedDate);
   }, [confirmedRows, confirmedSelectedDate]);
 
   const confirmedRowsByTime = useMemo(() => {
-    const groups = new Map<string, Array<ReservationDoc & { id: string }>>();
+    const groups = new Map<string, AdminReservationRow[]>();
     confirmedRowsForSelectedDate.forEach((row) => {
       const key = row.time || "--:--";
       const existing = groups.get(key) ?? [];
@@ -943,7 +934,7 @@ export function AdminReservationsPanel({
   };
 
   const toggleReservationArrived = async (
-    row: ReservationDoc & { id: string },
+    row: AdminReservationRow,
   ) => {
     setError(null);
     setArrivedPendingCode(row.code);
@@ -1410,259 +1401,32 @@ export function AdminReservationsPanel({
           </div>
 
           {reservationsView === "open" ? (
-            <div className="admin-reservation-group">
-              <h4>Da gestire</h4>
-              {openRows.length === 0 ? (
-                <p className="section-subtitle">
-                  Nessuna prenotazione da gestire.
-                </p>
-              ) : (
-                <div className="admin-reservation-list">
-                  {openRows.map((row) => (
-                    <button
-                      key={row.id}
-                      type="button"
-                      className={
-                        highlightedCode === row.code
-                          ? "admin-reservation-item highlighted"
-                          : "admin-reservation-item"
-                      }
-                      onClick={() => setSelectedCode(row.code)}
-                    >
-                      <span className="admin-reservation-main">
-                        <strong>{row.customerName}</strong>
-                        <small>
-                          {row.date} · {row.time} · {row.guests} persone
-                        </small>
-                      </span>
-                      <span className={`badge ${row.status}`}>
-                        {statusLabel(row)}
-                      </span>
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
+            <OpenReservationsGroup
+              highlightedCode={highlightedCode}
+              openRows={openRows}
+              setSelectedCode={setSelectedCode}
+              statusLabel={statusLabel}
+            />
           ) : null}
 
           {reservationsView === "confirmed" ? (
-            <div className="admin-reservation-group admin-confirmed-group">
-              <>
-                <div className="admin-confirmed-day-hero">
-                  <button
-                    type="button"
-                    className="admin-confirmed-day-btn"
-                    disabled={confirmedSelectedIndex <= 0}
-                    onClick={() => {
-                      const idx = confirmedSelectedIndex;
-                      if (idx > 0) {
-                        const previousDay = confirmedNavigationDays[idx - 1];
-                        if (previousDay) {
-                          setConfirmedSelectedDate(previousDay.date);
-                        }
-                      }
-                    }}
-                  >
-                    ←
-                  </button>
-                  <div className="admin-confirmed-day-label">
-                    <strong>
-                      {parseDateKey(
-                        confirmedSelectedDate || todayKey(),
-                      ).toLocaleDateString("it-IT", {
-                        weekday: "long",
-                        day: "numeric",
-                        month: "long",
-                      })}
-                    </strong>
-                    {isConfirmedSelectedHistoricDay ? (
-                      <span className="admin-confirmed-day-meta-chip">
-                        Storico
-                      </span>
-                    ) : null}
-                    <small className="admin-confirmed-day-summary">
-                      {`👥 ${confirmedSelectedSummary.guestsCount} coperti · 🍕 ${confirmedSelectedSummary.reservationsCount} ${
-                        confirmedSelectedSummary.reservationsCount === 1
-                          ? "prenotazione"
-                          : "prenotazioni"
-                      }`}
-                    </small>
-                  </div>
-                  <button
-                    type="button"
-                    className="admin-confirmed-day-btn"
-                    disabled={
-                      confirmedSelectedIndex >=
-                      confirmedNavigationDays.length - 1
-                    }
-                    onClick={() => {
-                      const idx = confirmedSelectedIndex;
-                      if (idx >= 0 && idx < confirmedNavigationDays.length - 1) {
-                        const nextDay = confirmedNavigationDays[idx + 1];
-                        if (nextDay) {
-                          setConfirmedSelectedDate(nextDay.date);
-                        }
-                      }
-                    }}
-                  >
-                    →
-                  </button>
-                </div>
-
-                <div className="admin-confirmed-day-strip-wrap">
-                  <div
-                    ref={confirmedDayStripRef}
-                    className="admin-confirmed-day-strip"
-                    role="toolbar"
-                    aria-label="Navigazione giorni prenotazioni confermate"
-                  >
-                    {confirmedNavigationDays.map((day) => (
-                      <button
-                        key={day.date}
-                        type="button"
-                        aria-pressed={confirmedSelectedDate === day.date}
-                        className={
-                          confirmedSelectedDate === day.date
-                            ? "admin-confirmed-day-pill active"
-                            : "admin-confirmed-day-pill"
-                        }
-                        onClick={() => {
-                          setConfirmedSelectedDate(day.date);
-                        }}
-                      >
-                        <span className="admin-confirmed-day-pill-label">
-                          {day.label}
-                        </span>
-                        {day.reservationsCount > 0 ? (
-                          <span className="admin-confirmed-day-pill-badge">
-                            {day.reservationsCount}
-                          </span>
-                        ) : null}
-                      </button>
-                    ))}
-                    <button
-                      type="button"
-                      className="admin-confirmed-day-pill admin-confirmed-day-pill-calendar"
-                      onClick={openConfirmedCalendarPicker}
-                      aria-label="Apri calendario"
-                      aria-pressed={confirmedCalendarOpen}
-                    >
-                      <span className="admin-confirmed-day-pill-icon" aria-hidden>
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                          <rect x="3.5" y="5" width="17" height="15" rx="3" />
-                          <path d="M7.5 3.5v3" />
-                          <path d="M16.5 3.5v3" />
-                          <path d="M3.5 9.5h17" />
-                        </svg>
-                      </span>
-                      <span className="admin-confirmed-day-pill-label">
-                        Calendario
-                      </span>
-                    </button>
-                  </div>
-                </div>
-
-                {confirmedRowsByTime.length === 0 ? (
-                  <div className="admin-confirmed-empty-state">
-                    <span className="admin-confirmed-empty-icon" aria-hidden>
-                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
-                        <rect x="4" y="5" width="16" height="15" rx="3" />
-                        <path d="M8 3.5v3" />
-                        <path d="M16 3.5v3" />
-                        <path d="M4 9.5h16" />
-                        <path d="M8.5 13h7" />
-                      </svg>
-                    </span>
-                    <strong>
-                      {isConfirmedSelectedPastDay
-                        ? "Nessuna prenotazione registrata in questo giorno."
-                        : "Nessuna prenotazione per questo giorno"}
-                    </strong>
-                    <p>
-                      {isConfirmedSelectedPastDay
-                        ? "Questo giorno e disponibile solo per consultazione."
-                        : "Puoi aggiungerne una manualmente con il pulsante +."}
-                    </p>
-                  </div>
-                ) : (
-                  <div className="admin-confirmed-time-groups">
-                    {confirmedRowsByTime.map((group) => (
-                      <div
-                        key={group.time}
-                        className={
-                          highlightedCurrentTimeSlot === group.time
-                            ? "admin-time-slot-block current"
-                            : "admin-time-slot-block"
-                        }
-                      >
-                        <h5>{group.time}</h5>
-                        <div className="admin-reservation-list admin-reservation-list-compact-grid">
-                          {group.rows.map((row) => (
-                            <div
-                              key={row.id}
-                              role="button"
-                              tabIndex={0}
-                              className={
-                                row.arrived
-                                  ? "admin-reservation-item admin-reservation-item-compact admin-reservation-item-arrived"
-                                  : "admin-reservation-item admin-reservation-item-compact"
-                              }
-                              onClick={() => setSelectedCode(row.code)}
-                              onKeyDown={(event) => {
-                                if (
-                                  event.key === "Enter" ||
-                                  event.key === " "
-                                ) {
-                                  event.preventDefault();
-                                  setSelectedCode(row.code);
-                                }
-                              }}
-                            >
-                              <span className="admin-reservation-main">
-                                <strong>{row.customerName}</strong>
-                                <small>
-                                  {row.guests} persone
-                                </small>
-                                {row.arrived ? (
-                                  <span className="admin-arrived-badge">
-                                    Arrivato
-                                  </span>
-                                ) : null}
-                              </span>
-                              <button
-                                type="button"
-                                className={
-                                  row.arrived
-                                    ? "admin-presence-toggle active"
-                                    : "admin-presence-toggle"
-                                }
-                                disabled={arrivedPendingCode === row.code}
-                                onClick={(event) => {
-                                  event.stopPropagation();
-                                  void toggleReservationArrived(row);
-                                }}
-                                title={
-                                  row.arrived
-                                    ? "Segna cliente non presente"
-                                    : "Segna cliente presente"
-                                }
-                                aria-label={
-                                  row.arrived
-                                    ? "Segna cliente non presente"
-                                    : "Segna cliente presente"
-                                }
-                              >
-                                {row.arrived ? "✓" : "✕"}
-                              </button>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </>
-            </div>
+            <ConfirmedReservationsGroup
+              arrivedPendingCode={arrivedPendingCode}
+              confirmedCalendarOpen={confirmedCalendarOpen}
+              confirmedDayStripRef={confirmedDayStripRef}
+              confirmedNavigationDays={confirmedNavigationDays}
+              confirmedRowsByTime={confirmedRowsByTime}
+              confirmedSelectedDate={confirmedSelectedDate}
+              confirmedSelectedIndex={confirmedSelectedIndex}
+              confirmedSelectedSummary={confirmedSelectedSummary}
+              highlightedCurrentTimeSlot={highlightedCurrentTimeSlot}
+              isConfirmedSelectedHistoricDay={isConfirmedSelectedHistoricDay}
+              isConfirmedSelectedPastDay={isConfirmedSelectedPastDay}
+              openConfirmedCalendarPicker={openConfirmedCalendarPicker}
+              setConfirmedSelectedDate={setConfirmedSelectedDate}
+              setSelectedCode={setSelectedCode}
+              toggleReservationArrived={toggleReservationArrived}
+            />
           ) : null}
         </section>
       ) : (
@@ -1740,297 +1504,36 @@ export function AdminReservationsPanel({
               </div>
 
               {settingsTab === "general" ? (
-                <div className="admin-settings-tab-panel">
-              <div className="admin-settings-row admin-settings-row-3">
-                <div className="admin-settings-time-inline">
-                  <label>
-                    Orario apertura
-                    <select
-                      value={settings.openTime}
-                      onChange={(event) =>
-                        setSettings((prev) => ({
-                          ...prev,
-                          openTime: event.target.value,
-                        }))
-                      }
-                    >
-                      {halfHourTimeOptions.map((time) => (
-                        <option key={time} value={time}>
-                          {time}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                  <label>
-                    Orario chiusura
-                    <select
-                      value={settings.closeTime}
-                      onChange={(event) =>
-                        setSettings((prev) => ({
-                          ...prev,
-                          closeTime: event.target.value,
-                        }))
-                      }
-                    >
-                      {halfHourTimeOptions.map((time) => (
-                        <option key={time} value={time}>
-                          {time}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                </div>
-                    <label className="admin-settings-interval-field">
-                      Intervallo standard
-                      <select
-                        value={settings.slotMinutes}
-                    onChange={(event) =>
-                      setSettings((prev) => ({
-                        ...prev,
-                        slotMinutes:
-                          Number(event.target.value) === 15 ? 15 : 30,
-                      }))
-                    }
-                  >
-                    {slotMinuteOptions.map((option) => (
-                      <option key={option} value={option}>
-                        {option} minuti
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                    <div />
-              </div>
-
-              <div>
-                <label>
-                  Capienza per fascia oraria
-                  <input
-                    type="number"
-                    min={1}
-                    max={500}
-                    value={settings.capacityPerSlot}
-                    onChange={(event) => {
-                      const parsed = Number(event.target.value);
-                      if (!Number.isFinite(parsed) || parsed < 1) return;
-                      const normalized = Math.min(500, Math.round(parsed));
-                      setSettings((prev) => ({
-                        ...prev,
-                        capacityPerSlot: normalized,
-                      }));
-                    }}
-                  />
-                </label>
-              </div>
-
-              <div>
-                <p className="booking-step-title">Giorni lavorativi</p>
-                <div className="admin-inline-chips">
-                  {weekdayOptions.map((day) => (
-                    <button
-                      key={day.key}
-                      type="button"
-                      className={
-                        settings.workingDays.includes(day.key)
-                          ? "booking-chip active"
-                          : "booking-chip"
-                      }
-                      onClick={() => toggleWorkingDay(day.key)}
-                    >
-                      {day.label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-                </div>
+                <SettingsGeneralTab
+                  setSettings={setSettings}
+                  settings={settings}
+                  toggleWorkingDay={toggleWorkingDay}
+                />
               ) : null}
 
               {settingsTab === "availability" ? (
-                <div className="admin-settings-tab-panel">
-                  <div className="admin-settings-info-card admin-settings-info-card-with-actions">
-                    <div>
-                      <strong>Disponibilita settimanale</strong>
-                      <p>
-                        <span className="admin-settings-copy-desktop">
-                          Scegli gli orari disponibili per ciascun giorno della
-                          settimana. Gli slot disattivati non saranno piu
-                          prenotabili dai clienti. Le prenotazioni gia
-                          esistenti resteranno valide.
-                        </span>
-                        <span className="admin-settings-copy-mobile">
-                          Attiva o disattiva gli orari prenotabili.
-                        </span>
-                      </p>
-                    </div>
-                    <div className="admin-settings-actions-menu-wrap">
-                      <button
-                        type="button"
-                        className="btn-secondary admin-modal-btn"
-                        onClick={() =>
-                          setAvailabilityActionsOpen((prev) => !prev)
-                        }
-                        aria-expanded={availabilityActionsOpen}
-                      >
-                        Azioni
-                      </button>
-                      {availabilityActionsOpen ? (
-                        <div className="admin-settings-actions-menu">
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setAvailabilityActionsOpen(false);
-                              setShowCopyConfigModal(true);
-                            }}
-                          >
-                            Duplica configurazione
-                          </button>
-                          <button
-                            type="button"
-                            onClick={regenerateWeeklySlotAvailability}
-                          >
-                            Rigenera slot
-                          </button>
-                          <button
-                            type="button"
-                            onClick={regenerateWeeklySlotAvailability}
-                          >
-                            Ripristina configurazione standard
-                          </button>
-                        </div>
-                      ) : null}
-                    </div>
-                  </div>
-
-                  <div
-                    ref={availabilityWeekdayStripRef}
-                    className="admin-settings-weekday-strip"
-                    role="tablist"
-                    aria-label="Giorni disponibilita orarie"
-                  >
-                    {weekdayOptions.map((day) => (
-                      <button
-                        key={day.key}
-                        type="button"
-                        role="tab"
-                        aria-selected={selectedAvailabilityWeekday === day.key}
-                        className={
-                          selectedAvailabilityWeekday === day.key
-                            ? "admin-settings-weekday-tab active"
-                            : "admin-settings-weekday-tab"
-                        }
-                        onClick={() => setSelectedAvailabilityWeekday(day.key)}
-                      >
-                        {day.label}
-                      </button>
-                    ))}
-                  </div>
-
-                  <div className="admin-settings-slot-grid">
-                    {selectedAvailabilitySlots.map((slotTime) => {
-                      const isEnabled = !(
-                        settings.weeklyDisabledSlots[String(selectedAvailabilityWeekday)] ?? []
-                      ).includes(slotTime);
-                      const hasExistingReservations =
-                        (slotReservationCountsByWeekdayTime.get(
-                          `${selectedAvailabilityWeekday}|${slotTime}`,
-                        ) ?? 0) > 0;
-
-                      return (
-                        <button
-                          key={slotTime}
-                          type="button"
-                          className={
-                            isEnabled
-                              ? "admin-settings-slot-chip active"
-                              : "admin-settings-slot-chip"
-                          }
-                          onClick={() =>
-                            toggleWeeklySlotAvailability(
-                              selectedAvailabilityWeekday,
-                              slotTime,
-                            )
-                          }
-                        >
-                          <span>{slotTime}</span>
-                          {!isEnabled && hasExistingReservations ? (
-                            <small>Gia prenotato</small>
-                          ) : null}
-                        </button>
-                      );
-                    })}
-                  </div>
-
-                  <p className="admin-settings-note">
-                    Le prenotazioni gia esistenti restano valide anche se
-                    disattivi uno slot. La modifica blocca solo nuove
-                    prenotazioni.
-                  </p>
-                </div>
+                <SettingsAvailabilityTab
+                  availabilityActionsOpen={availabilityActionsOpen}
+                  availabilityWeekdayStripRef={availabilityWeekdayStripRef}
+                  regenerateWeeklySlotAvailability={regenerateWeeklySlotAvailability}
+                  selectedAvailabilitySlots={selectedAvailabilitySlots}
+                  selectedAvailabilityWeekday={selectedAvailabilityWeekday}
+                  setAvailabilityActionsOpen={setAvailabilityActionsOpen}
+                  setSelectedAvailabilityWeekday={setSelectedAvailabilityWeekday}
+                  setShowCopyConfigModal={setShowCopyConfigModal}
+                  settings={settings}
+                  slotReservationCountsByWeekdayTime={slotReservationCountsByWeekdayTime}
+                  toggleWeeklySlotAvailability={toggleWeeklySlotAvailability}
+                />
               ) : null}
 
               {settingsTab === "exceptions" ? (
-              <div className="admin-settings-tab-panel">
-                <div className="admin-chip-head">
-                  <p className="booking-step-title">
-                    Festività / chiusure straordinarie
-                  </p>
-                  <button
-                    type="button"
-                    className="admin-add-chip-btn"
-                    onClick={() => openCalendarPicker("holiday")}
-                    aria-label="Aggiungi chiusura straordinaria"
-                  >
-                    +
-                  </button>
-                </div>
-
-                <div className="admin-inline-chips admin-chip-scroll">
-                  {settings.holidays.map((value) => (
-                    <button
-                      key={value}
-                      type="button"
-                      className="booking-chip"
-                      onClick={() => removeHoliday(value)}
-                    >
-                      {value} ×
-                    </button>
-                  ))}
-                </div>
-
-                <div
-                  className="admin-chip-head"
-                  style={{ marginTop: "0.65rem" }}
-                >
-                  <p className="booking-step-title">Aperture straordinarie</p>
-                  <button
-                    type="button"
-                    className="admin-add-chip-btn"
-                    onClick={() => openCalendarPicker("opening")}
-                    aria-label="Aggiungi apertura straordinaria"
-                  >
-                    +
-                  </button>
-                </div>
-                <div className="admin-inline-chips admin-chip-scroll">
-                  {settings.specialOpenings.map((value) => (
-                    <button
-                      key={value}
-                      type="button"
-                      className="booking-chip"
-                      onClick={() => removeSpecialOpening(value)}
-                    >
-                      {value} ×
-                    </button>
-                  ))}
-                </div>
-
-                {settings.holidays.length === 0 &&
-                settings.specialOpenings.length === 0 ? (
-                  <p className="admin-settings-empty-note">
-                    Nessuna data speciale configurata.
-                  </p>
-                ) : null}
-              </div>
+              <SettingsExceptionsTab
+                openCalendarPicker={openCalendarPicker}
+                removeHoliday={removeHoliday}
+                removeSpecialOpening={removeSpecialOpening}
+                settings={settings}
+              />
               ) : null}
 
               <div className="booking-step-actions">
@@ -2057,589 +1560,59 @@ export function AdminReservationsPanel({
       ) : null}
 
       {selectedReservation ? (
-        <div className="admin-modal-backdrop" role="dialog" aria-modal="true">
-          <div className="admin-modal">
-            <div className="admin-modal-head">
-              <h3>Dettaglio prenotazione</h3>
-              <button
-                type="button"
-                className="btn-secondary admin-modal-btn"
-                onClick={() => setSelectedCode(null)}
-              >
-                Chiudi
-              </button>
-            </div>
-
-            <p>
-              <strong>Cliente:</strong> {selectedReservation.customerName}
-            </p>
-            <p>
-              <strong>Telefono:</strong> {selectedReservation.phone || "-"}
-            </p>
-            <p>
-              <strong>Data/Ora richieste:</strong> {selectedReservation.date}{" "}
-              alle {selectedReservation.time}
-            </p>
-            <p>
-              <strong>Persone:</strong> {selectedReservation.guests}
-            </p>
-            <p>
-              <strong>Stato:</strong> {statusLabel(selectedReservation)}
-            </p>
-            <p>
-              <strong>Arrivo cliente:</strong>{" "}
-              {selectedReservation.arrived ? "Presente" : "Non presente"}
-            </p>
-            {selectedReservation.status === "proposed" &&
-            selectedReservation.proposedDate &&
-            selectedReservation.proposedTime ? (
-              <p>
-                <strong>Proposta attuale:</strong>{" "}
-                {selectedReservation.proposedDate} alle{" "}
-                {selectedReservation.proposedTime}
-              </p>
-            ) : null}
-            <p>
-              <strong>Note:</strong> {selectedReservation.notes || "-"}
-            </p>
-
-            {(() => {
-              const isBusy = pendingCode === selectedReservation.code;
-              const isConfirmedReservation =
-                selectedReservation.status === "confirmed";
-
-              return (
-                <div className="booking-form" style={{ marginTop: "0.7rem" }}>
-                  {!isConfirmedReservation ? (
-                    <div className="two-cols admin-decision-actions">
-                      <button
-                        type="button"
-                        className="btn-primary"
-                        disabled={isBusy}
-                        onClick={() =>
-                          void runDecision(selectedReservation, "confirmed")
-                        }
-                      >
-                        Conferma
-                      </button>
-                      <button
-                        type="button"
-                        className="btn-secondary admin-modal-btn admin-decision-reject"
-                        disabled={isBusy}
-                        onClick={() =>
-                          openDecisionDialog("rejected", selectedReservation)
-                        }
-                      >
-                        Rifiuta
-                      </button>
-                    </div>
-                  ) : (
-                    <button
-                      type="button"
-                      className="btn-secondary admin-modal-btn admin-decision-reject"
-                      disabled={isBusy}
-                      onClick={() =>
-                        openDecisionDialog("rejected", selectedReservation)
-                      }
-                    >
-                      Annulla prenotazione
-                    </button>
-                  )}
-
-                  {!isConfirmedReservation ? (
-                    <button
-                      type="button"
-                      className="btn-secondary admin-modal-btn admin-decision-propose"
-                      disabled={isBusy}
-                      onClick={() =>
-                        openDecisionDialog("proposed", selectedReservation)
-                      }
-                    >
-                      Proponi nuovo orario
-                    </button>
-                  ) : null}
-
-                  {!isConfirmedReservation ? (
-                    <button
-                      type="button"
-                      className="btn-secondary admin-modal-btn admin-decision-reject"
-                      disabled={isBusy}
-                      onClick={() =>
-                        void deleteReservation(selectedReservation.code)
-                      }
-                    >
-                      Elimina prenotazione
-                    </button>
-                  ) : null}
-                </div>
-              );
-            })()}
-          </div>
-        </div>
+        <ReservationDetailModal
+          deleteReservation={deleteReservation}
+          openDecisionDialog={openDecisionDialog}
+          pendingCode={pendingCode}
+          runDecision={runDecision}
+          selectedReservation={selectedReservation}
+          setSelectedCode={setSelectedCode}
+          statusLabel={statusLabel}
+        />
       ) : null}
 
       {selectedReservation && decisionDialogMode ? (
-        <div className="admin-modal-backdrop" role="dialog" aria-modal="true">
-          <div className="admin-modal admin-calendar-modal">
-            <div className="admin-modal-head">
-              <h3>
-                {decisionDialogMode === "rejected"
-                  ? selectedReservation.status === "confirmed"
-                    ? "Annulla prenotazione"
-                    : "Rifiuta prenotazione"
-                  : "Proponi nuovo orario"}
-              </h3>
-            </div>
-
-            <div className="booking-form">
-              <label>
-                Messaggio al cliente
-                <textarea
-                  value={drafts[selectedReservation.code]?.ownerResponse ?? ""}
-                  rows={2}
-                  maxLength={300}
-                  placeholder={
-                    decisionDialogMode === "proposed"
-                      ? "Se lasci vuoto verrà inviato un messaggio standard di proposta."
-                      : selectedReservation.status === "confirmed"
-                        ? "Se lasci vuoto verrà inviato un messaggio standard di annullamento."
-                        : "Se lasci vuoto verrà inviato un messaggio standard di rifiuto."
-                  }
-                  onChange={(event) =>
-                    onDraftChange(
-                      selectedReservation.code,
-                      "ownerResponse",
-                      event.target.value,
-                    )
-                  }
-                />
-                <small className="admin-decision-hint">
-                  Scrivi un messaggio personalizzato, oppure lascia vuoto per
-                  usare automaticamente il messaggio standard
-                  {selectedReservation.status === "confirmed" &&
-                  decisionDialogMode === "rejected"
-                    ? " di annullamento"
-                    : ""}
-                  , che arriva nella lingua del cliente. Il messaggio
-                  personalizzato viene inviato così come lo scrivi.
-                </small>
-              </label>
-
-              {decisionDialogMode === "proposed" ? (
-                <>
-                  {decisionLoading ? (
-                    <p className="section-subtitle">
-                      Caricamento disponibilita...
-                    </p>
-                  ) : null}
-
-                  {!decisionLoading && decisionAvailability ? (
-                    <>
-                      <p className="booking-step-title">Data proposta</p>
-                      {availableProposalDays.length > 0 ? (
-                        <>
-                          <div className="admin-proposal-date-nav">
-                            <button
-                              type="button"
-                              className="admin-confirmed-day-btn"
-                              disabled={currentProposalPageStart === 0}
-                              onClick={() => {
-                                const previousPageStart =
-                                  currentProposalPageStart -
-                                  proposalDatesPageSize;
-                                if (previousPageStart >= 0) {
-                                  setProposalDate(
-                                    selectedReservation.code,
-                                    availableProposalDays[previousPageStart],
-                                  );
-                                }
-                              }}
-                            >
-                              ←
-                            </button>
-                            <strong className="admin-proposal-date-label">
-                              {`${Math.min(currentProposalPageStart + 1, availableProposalDays.length)}-${Math.min(
-                                currentProposalPageStart +
-                                  proposalDatesPageSize,
-                                availableProposalDays.length,
-                              )} di ${availableProposalDays.length}`}
-                            </strong>
-                            <button
-                              type="button"
-                              className="admin-confirmed-day-btn"
-                              disabled={
-                                currentProposalPageStart +
-                                  proposalDatesPageSize >=
-                                availableProposalDays.length
-                              }
-                              onClick={() => {
-                                const nextPageStart =
-                                  currentProposalPageStart +
-                                  proposalDatesPageSize;
-                                if (
-                                  nextPageStart < availableProposalDays.length
-                                ) {
-                                  setProposalDate(
-                                    selectedReservation.code,
-                                    availableProposalDays[nextPageStart],
-                                  );
-                                }
-                              }}
-                            >
-                              →
-                            </button>
-                          </div>
-
-                          <div
-                            className="admin-proposal-time-grid"
-                            role="group"
-                          >
-                            {pagedProposalDays.map((dateValue) => (
-                              <button
-                                key={dateValue}
-                                type="button"
-                                className={
-                                  currentProposalDate === dateValue
-                                    ? "admin-proposal-time-card active"
-                                    : "admin-proposal-time-card"
-                                }
-                                onClick={() =>
-                                  setProposalDate(
-                                    selectedReservation.code,
-                                    dateValue,
-                                  )
-                                }
-                              >
-                                {formatDateShort(dateValue)}
-                              </button>
-                            ))}
-                          </div>
-                        </>
-                      ) : null}
-
-                      <p
-                        className="booking-step-title"
-                        style={{ marginTop: "0.5rem" }}
-                      >
-                        Orario proposto
-                      </p>
-                      <div className="admin-proposal-time-grid" role="group">
-                        {(
-                          decisionAvailability.slotsByDate[
-                            currentProposalDate
-                          ] ?? []
-                        )
-                          .filter((slot) => slot.available)
-                          .map((slot) => (
-                            <button
-                              key={slot.time}
-                              type="button"
-                              className={
-                                drafts[selectedReservation.code]
-                                  ?.proposedTime === slot.time
-                                  ? "admin-proposal-time-card active"
-                                  : "admin-proposal-time-card"
-                              }
-                              onClick={() =>
-                                onDraftChange(
-                                  selectedReservation.code,
-                                  "proposedTime",
-                                  slot.time,
-                                )
-                              }
-                            >
-                              {slot.time}
-                            </button>
-                          ))}
-                      </div>
-                    </>
-                  ) : null}
-
-                  {!decisionLoading &&
-                  decisionAvailability &&
-                  decisionAvailability.days.filter((day) => day.hasAvailability)
-                    .length === 0 ? (
-                    <p className="section-subtitle">
-                      Non ci sono date disponibili da proporre con le
-                      impostazioni correnti.
-                    </p>
-                  ) : null}
-                </>
-              ) : null}
-
-              {decisionError ? (
-                <p className="error-text">{decisionError}</p>
-              ) : null}
-
-              <div className="booking-step-actions two-buttons">
-                <button
-                  type="button"
-                  className="btn-secondary admin-modal-btn"
-                  onClick={closeDecisionDialog}
-                  disabled={pendingCode === selectedReservation.code}
-                >
-                  Annulla
-                </button>
-
-                <button
-                  type="button"
-                  className={
-                    decisionDialogMode === "rejected"
-                      ? "btn-secondary admin-modal-btn admin-decision-reject"
-                      : "btn-secondary admin-modal-btn admin-decision-propose"
-                  }
-                  disabled={
-                    pendingCode === selectedReservation.code ||
-                    (decisionDialogMode === "proposed" &&
-                      (!(
-                        drafts[selectedReservation.code]?.proposedDate ?? ""
-                      ) ||
-                        !(
-                          drafts[selectedReservation.code]?.proposedTime ?? ""
-                        )))
-                  }
-                  onClick={() =>
-                    void runDecision(selectedReservation, decisionDialogMode)
-                  }
-                >
-                  {decisionDialogMode === "rejected"
-                    ? selectedReservation.status === "confirmed"
-                      ? "Conferma annullamento"
-                      : "Conferma rifiuto"
-                    : "Invia proposta"}
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
+        <ReservationDecisionDialog
+          availableProposalDays={availableProposalDays}
+          closeDecisionDialog={closeDecisionDialog}
+          currentProposalDate={currentProposalDate}
+          currentProposalPageStart={currentProposalPageStart}
+          decisionAvailability={decisionAvailability}
+          decisionDialogMode={decisionDialogMode}
+          decisionError={decisionError}
+          decisionLoading={decisionLoading}
+          drafts={drafts}
+          onDraftChange={onDraftChange}
+          pagedProposalDays={pagedProposalDays}
+          pendingCode={pendingCode}
+          runDecision={runDecision}
+          selectedReservation={selectedReservation}
+          setProposalDate={setProposalDate}
+        />
       ) : null}
 
       {showManualReservationModal ? (
-        <div className="admin-modal-backdrop" role="dialog" aria-modal="true">
-          <div className="admin-modal admin-manual-reservation-modal">
-            <div className="admin-modal-head">
-              <h3>Aggiungi prenotazione</h3>
-              <button
-                type="button"
-                className="btn-secondary admin-modal-btn"
-                onClick={() => setShowManualReservationModal(false)}
-                disabled={manualReservationSaving}
-              >
-                Chiudi
-              </button>
-            </div>
-
-            <div className="booking-form">
-              <label>
-                Nome e cognome
-                <input
-                  value={manualReservationForm.customerName}
-                  onChange={(event) =>
-                    setManualReservationForm((prev) => ({
-                      ...prev,
-                      customerName: event.target.value,
-                    }))
-                  }
-                />
-              </label>
-
-              <div className="two-cols">
-                <label>
-                  Telefono (opzionale)
-                  <input
-                    value={manualReservationForm.phone}
-                    onChange={(event) =>
-                      setManualReservationForm((prev) => ({
-                        ...prev,
-                        phone: event.target.value,
-                      }))
-                    }
-                  />
-                </label>
-                <label>
-                  Email (opzionale)
-                  <input
-                    type="email"
-                    value={manualReservationForm.email}
-                    onChange={(event) =>
-                      setManualReservationForm((prev) => ({
-                        ...prev,
-                        email: event.target.value,
-                      }))
-                    }
-                  />
-                </label>
-              </div>
-
-              <div className="two-cols">
-                <label>
-                  Data
-                  <input
-                    type="date"
-                    value={manualReservationForm.date}
-                    min={todayKey()}
-                    max={manualReservationMaxDate}
-                    onChange={(event) =>
-                      setManualReservationForm((prev) => ({
-                        ...prev,
-                        date: event.target.value,
-                      }))
-                    }
-                  />
-                </label>
-                <label>
-                  Orario
-                  <select
-                    value={manualReservationForm.time}
-                    onChange={(event) =>
-                      setManualReservationForm((prev) => ({
-                        ...prev,
-                        time: event.target.value,
-                      }))
-                    }
-                  >
-                    {manualTimeOptions.map((timeOption) => (
-                      <option key={timeOption} value={timeOption}>
-                        {timeOption}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-              </div>
-
-              <div className="two-cols">
-                <label>
-                  Persone
-                  <input
-                    type="number"
-                    min={1}
-                    max={20}
-                    value={manualReservationForm.guests}
-                    onChange={(event) =>
-                      setManualReservationForm((prev) => ({
-                        ...prev,
-                        guests: event.target.value,
-                      }))
-                    }
-                  />
-                </label>
-              </div>
-
-              <label>
-                Note
-                <textarea
-                  rows={3}
-                  maxLength={300}
-                  value={manualReservationForm.notes}
-                  onChange={(event) =>
-                    setManualReservationForm((prev) => ({
-                      ...prev,
-                      notes: event.target.value,
-                    }))
-                  }
-                />
-              </label>
-
-              {manualReservationError ? (
-                <p className="error-text">{manualReservationError}</p>
-              ) : null}
-
-              <div className="booking-step-actions two-buttons">
-                <button
-                  type="button"
-                  className="btn-secondary admin-modal-btn"
-                  onClick={() => setShowManualReservationModal(false)}
-                  disabled={manualReservationSaving}
-                >
-                  Annulla
-                </button>
-                <button
-                  type="button"
-                  className="btn-primary"
-                  onClick={() => void submitManualReservation()}
-                  disabled={manualReservationSaving}
-                >
-                  {manualReservationSaving ? "Salvataggio..." : "Salva"}
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
+        <ManualReservationModal
+          manualReservationError={manualReservationError}
+          manualReservationForm={manualReservationForm}
+          manualReservationMaxDate={manualReservationMaxDate}
+          manualReservationSaving={manualReservationSaving}
+          manualTimeOptions={manualTimeOptions}
+          setManualReservationForm={setManualReservationForm}
+          setShowManualReservationModal={setShowManualReservationModal}
+          submitManualReservation={submitManualReservation}
+        />
       ) : null}
 
       {showCopyConfigModal ? (
-        <div className="admin-modal-backdrop" role="dialog" aria-modal="true">
-          <div className="admin-modal admin-settings-modal">
-            <div className="admin-modal-head">
-              <h3>Duplica configurazione</h3>
-              <button
-                type="button"
-                className="btn-secondary admin-modal-btn"
-                onClick={() => setShowCopyConfigModal(false)}
-              >
-                Annulla
-              </button>
-            </div>
-
-            <div className="booking-form">
-              <label>
-                Giorno sorgente
-                <select
-                  value={copySourceWeekday}
-                  onChange={(event) =>
-                    setCopySourceWeekday(Number(event.target.value))
-                  }
-                >
-                  {weekdayOptions.map((day) => (
-                    <option key={day.key} value={day.key}>
-                      {day.label}
-                    </option>
-                  ))}
-                </select>
-              </label>
-
-              <div>
-                <p className="booking-step-title">Giorni di destinazione</p>
-                <div className="admin-inline-chips">
-                  {weekdayOptions
-                    .filter((day) => day.key !== copySourceWeekday)
-                    .map((day) => (
-                      <button
-                        key={day.key}
-                        type="button"
-                        className={
-                          copyTargetWeekdays.includes(day.key)
-                            ? "booking-chip active"
-                            : "booking-chip"
-                        }
-                        onClick={() => toggleCopyTargetWeekday(day.key)}
-                      >
-                        {day.label}
-                      </button>
-                    ))}
-                </div>
-              </div>
-
-              <div className="booking-step-actions two-buttons">
-                <button
-                  type="button"
-                  className="btn-secondary admin-modal-btn"
-                  onClick={() => setShowCopyConfigModal(false)}
-                >
-                  Annulla
-                </button>
-                <button
-                  type="button"
-                  className="btn-primary"
-                  onClick={applyWeeklySlotCopy}
-                  disabled={copyTargetWeekdays.length === 0}
-                >
-                  Duplica
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
+        <CopySettingsModal
+          applyWeeklySlotCopy={applyWeeklySlotCopy}
+          copySourceWeekday={copySourceWeekday}
+          copyTargetWeekdays={copyTargetWeekdays}
+          setCopySourceWeekday={setCopySourceWeekday}
+          setShowCopyConfigModal={setShowCopyConfigModal}
+          toggleCopyTargetWeekday={toggleCopyTargetWeekday}
+        />
       ) : null}
 
       {!settingsOnly ? (
@@ -2670,196 +1643,31 @@ export function AdminReservationsPanel({
       ) : null}
 
       {confirmedCalendarOpen ? (
-        <div className="admin-modal-backdrop" role="dialog" aria-modal="true">
-          <div className="admin-modal admin-calendar-modal admin-confirmed-calendar-modal">
-            <div className="admin-modal-head">
-              <h3>Seleziona un giorno</h3>
-              <button
-                type="button"
-                className="btn-secondary admin-modal-btn admin-confirmed-calendar-close"
-                onClick={() => setConfirmedCalendarOpen(false)}
-              >
-                Chiudi
-              </button>
-            </div>
-
-            <div className="admin-holiday-calendar admin-confirmed-calendar">
-              <div className="admin-holiday-calendar-head">
-                <button
-                  type="button"
-                  className="btn-secondary admin-modal-btn"
-                  disabled={confirmedCalendarPrevMonthDisabled}
-                  onClick={() =>
-                    setConfirmedCalendarMonth((prev) => shiftMonth(prev, -1))
-                  }
-                >
-                  ←
-                </button>
-                <strong>{monthLabel(confirmedCalendarMonth)}</strong>
-                <button
-                  type="button"
-                  className="btn-secondary admin-modal-btn"
-                  disabled={confirmedCalendarNextMonthDisabled}
-                  onClick={() =>
-                    setConfirmedCalendarMonth((prev) => shiftMonth(prev, 1))
-                  }
-                >
-                  →
-                </button>
-              </div>
-
-              <div className="admin-holiday-weekdays">
-                <span>L</span>
-                <span>M</span>
-                <span>M</span>
-                <span>G</span>
-                <span>V</span>
-                <span>S</span>
-                <span>D</span>
-              </div>
-
-              <div className="admin-holiday-days">
-                {confirmedCalendarCells.map((cell, index) => {
-                  if (cell.kind === "empty") {
-                    return (
-                      <span
-                        key={`confirmed-empty-${index}`}
-                        className="admin-holiday-empty"
-                      />
-                    );
-                  }
-
-                  const isDisabled =
-                    cell.dateKey < manualReservationMinHistoricDate ||
-                    cell.dateKey > manualReservationMaxDate;
-                  const isActive = confirmedSelectedDate === cell.dateKey;
-                  const isPast = cell.dateKey < todayKey();
-                  const reservationsCount =
-                    confirmedCountsByDate.get(cell.dateKey) ?? 0;
-
-                  return (
-                    <button
-                      key={cell.dateKey}
-                      type="button"
-                      className={
-                        isActive
-                          ? "admin-holiday-day admin-confirmed-calendar-day active"
-                          : isPast
-                            ? "admin-holiday-day admin-confirmed-calendar-day past"
-                            : "admin-holiday-day admin-confirmed-calendar-day"
-                      }
-                      disabled={isDisabled}
-                      onClick={() => selectConfirmedCalendarDate(cell.dateKey)}
-                    >
-                      <span>{cell.day}</span>
-                      <span className="admin-confirmed-calendar-day-meta">
-                        {reservationsCount > 0 ? (
-                          <small>{reservationsCount}</small>
-                        ) : (
-                          <small>&nbsp;</small>
-                        )}
-                        {reservationsCount > 0 ? (
-                          <span
-                            className="admin-confirmed-calendar-dot"
-                            aria-hidden
-                          />
-                        ) : null}
-                      </span>
-                    </button>
-                  );
-                })}
-              </div>
-              <p className="admin-confirmed-calendar-legend">
-                Gli ultimi 14 giorni sono disponibili come storico.
-              </p>
-            </div>
-          </div>
-        </div>
+        <ConfirmedCalendarModal
+          confirmedCalendarCells={confirmedCalendarCells}
+          confirmedCalendarMonth={confirmedCalendarMonth}
+          confirmedCalendarNextMonthDisabled={confirmedCalendarNextMonthDisabled}
+          confirmedCalendarPrevMonthDisabled={confirmedCalendarPrevMonthDisabled}
+          confirmedCountsByDate={confirmedCountsByDate}
+          confirmedSelectedDate={confirmedSelectedDate}
+          manualReservationMaxDate={manualReservationMaxDate}
+          manualReservationMinHistoricDate={manualReservationMinHistoricDate}
+          selectConfirmedCalendarDate={selectConfirmedCalendarDate}
+          setConfirmedCalendarMonth={setConfirmedCalendarMonth}
+          setConfirmedCalendarOpen={setConfirmedCalendarOpen}
+        />
       ) : null}
 
       {calendarPickerOpen ? (
-        <div className="admin-modal-backdrop" role="dialog" aria-modal="true">
-          <div className="admin-modal admin-calendar-modal">
-            <div className="admin-modal-head">
-              <h3>
-                {calendarPickerMode === "holiday"
-                  ? "Aggiungi festivita"
-                  : "Aggiungi apertura straordinaria"}
-              </h3>
-              <button
-                type="button"
-                className="btn-secondary admin-modal-btn"
-                onClick={() => setCalendarPickerOpen(false)}
-              >
-                Chiudi
-              </button>
-            </div>
-
-            <div className="admin-holiday-calendar">
-              <div className="admin-holiday-calendar-head">
-                <button
-                  type="button"
-                  className="btn-secondary admin-modal-btn"
-                  onClick={() =>
-                    setHolidayMonth((prev) => shiftMonth(prev, -1))
-                  }
-                >
-                  ←
-                </button>
-                <strong>{monthLabel(holidayMonth)}</strong>
-                <button
-                  type="button"
-                  className="btn-secondary admin-modal-btn"
-                  onClick={() => setHolidayMonth((prev) => shiftMonth(prev, 1))}
-                >
-                  →
-                </button>
-              </div>
-
-              <div className="admin-holiday-weekdays">
-                <span>L</span>
-                <span>M</span>
-                <span>M</span>
-                <span>G</span>
-                <span>V</span>
-                <span>S</span>
-                <span>D</span>
-              </div>
-
-              <div className="admin-holiday-days">
-                {holidayCalendarCells.map((cell, index) => {
-                  if (cell.kind === "empty") {
-                    return (
-                      <span
-                        key={`empty-${index}`}
-                        className="admin-holiday-empty"
-                      />
-                    );
-                  }
-
-                  const isPast = cell.dateKey < todayKey();
-                  const isActive = isCalendarDayActive(cell.dateKey);
-
-                  return (
-                    <button
-                      key={cell.dateKey}
-                      type="button"
-                      className={
-                        isActive
-                          ? "admin-holiday-day active"
-                          : "admin-holiday-day"
-                      }
-                      disabled={isPast}
-                      onClick={() => addHolidayByDate(cell.dateKey)}
-                    >
-                      {cell.day}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          </div>
-        </div>
+        <SettingsCalendarPickerModal
+          addHolidayByDate={addHolidayByDate}
+          calendarPickerMode={calendarPickerMode}
+          holidayCalendarCells={holidayCalendarCells}
+          holidayMonth={holidayMonth}
+          isCalendarDayActive={isCalendarDayActive}
+          setCalendarPickerOpen={setCalendarPickerOpen}
+          setHolidayMonth={setHolidayMonth}
+        />
       ) : null}
     </article>
   );
