@@ -11,7 +11,6 @@ import {
   type WheelEvent,
 } from "react";
 import { AdminMenuTranslationsPanel } from "@/components/admin-menu-translations-panel";
-import { SpiceLevelIndicator } from "@/components/spice-level-indicator";
 import {
   addDoc,
   collection,
@@ -22,7 +21,7 @@ import {
 } from "firebase/firestore";
 import { getClientDb } from "@/lib/firebase";
 import { createMenuChangeWatcher } from "@/components/admin-menu/menu-cache";
-import type { MenuImageFit, MenuImageMeta } from "@/types/menu-app";
+import type { MenuImageFit } from "@/types/menu-app";
 import type {
   AdminMenuItem,
   MenuCategory,
@@ -33,34 +32,38 @@ import type {
 } from "@/components/admin-menu/types";
 import {
   ALLERGENS,
-  MENU_DESCRIPTION_MAX_LENGTH,
   DEFAULT_MENU_IMAGE_FIT,
   DEFAULT_MENU_IMAGE,
 } from "@/components/admin-menu/constants";
 import {
   hasCustomMenuImage,
-  getMenuImageQualityLabel,
   getMenuImageMetaFromRaw,
-  formatBytes,
-  sanitizeFileName,
   analyzeImageFile,
   uploadMenuImage,
 } from "@/components/admin-menu/images";
-import { AllergenIcon, VisibilityIcon } from "@/components/admin-menu/icons";
 import {
   normalizePrice,
-  formatPriceDraft,
   reorderIds,
-  setReorderDragGhost,
   toggleInArray,
 } from "@/components/admin-menu/helpers";
 import {
   normalizeText,
   parseStringArray,
   unique as uniqueInsensitive,
-  parseSpiceLevel,
   extractSpiceLevelFromRaw,
 } from "@/lib/menu-parsing";
+import { MenuPanelHeader } from "@/components/admin-menu/panel-header";
+import { MenuDishesView } from "@/components/admin-menu/dishes-view";
+import { MenuIngredientsView } from "@/components/admin-menu/ingredients-view";
+import { MenuCategoryModal } from "@/components/admin-menu/category-modal";
+import { MenuAllergenFiltersModal } from "@/components/admin-menu/allergen-filters-modal";
+import { MenuNewIngredientModal } from "@/components/admin-menu/new-ingredient-modal";
+import { MenuEditIngredientModal } from "@/components/admin-menu/edit-ingredient-modal";
+import { MenuMobileDock } from "@/components/admin-menu/mobile-dock";
+import { MenuNewDishModal } from "@/components/admin-menu/new-dish-modal";
+import { MenuEditDishModal } from "@/components/admin-menu/edit-dish-modal";
+import { MenuQuickIngredientModal } from "@/components/admin-menu/quick-ingredient-modal";
+import { MenuReorderOverlay } from "@/components/admin-menu/reorder-overlay";
 
 export function AdminMenuPanel() {
   const [items, setItems] = useState<AdminMenuItem[]>([]);
@@ -766,28 +769,6 @@ export function AdminMenuPanel() {
 
     setSelectedIds((prev) => [...prev, exact.id]);
     return "added";
-  };
-
-  const addAllergenFromQuery = (
-    query: string,
-    selectedKeys: string[],
-    setSelectedKeys: Dispatch<SetStateAction<string[]>>,
-  ) => {
-    const normalized = query.trim().toLowerCase();
-    if (!normalized) return;
-
-    const exact = ALLERGENS.find(
-      (allergen) => allergen.label.toLowerCase() === normalized,
-    );
-    const firstMatch =
-      exact ??
-      ALLERGENS.find((allergen) =>
-        allergen.label.toLowerCase().includes(normalized),
-      );
-    if (!firstMatch) return;
-    if (selectedKeys.includes(firstMatch.key)) return;
-
-    setSelectedKeys((prev) => [...prev, firstMatch.key]);
   };
 
   const saveNewIngredient = async (event: FormEvent<HTMLFormElement>) => {
@@ -1512,2371 +1493,265 @@ export function AdminMenuPanel() {
         </div>
       ) : null}
 
-      <div className="admin-menu-sticky-header">
-        <div className="admin-menu-sticky-header">
-          <div className="menu-top-tabs-row">
-            <div className="admin-tabs menu-top-tabs">
-              <button
-                type="button"
-                className={
-                  menuSubview === "dishes" ? "admin-tab active" : "admin-tab"
-                }
-                onClick={() => {
-                  setMenuSubview("dishes");
-                  setFabOpen(false);
-                }}
-              >
-                Piatti
-              </button>
-
-              <button
-                type="button"
-                className={
-                  menuSubview === "ingredients"
-                    ? "admin-tab active"
-                    : "admin-tab"
-                }
-                onClick={() => {
-                  setMenuSubview("ingredients");
-                  setFabOpen(false);
-                }}
-              >
-                Ingredienti
-              </button>
-
-              <button
-                type="button"
-                className={
-                  menuSubview === "translations"
-                    ? "admin-tab active"
-                    : "admin-tab"
-                }
-                onClick={() => {
-                  setMenuSubview("translations");
-                  setFabOpen(false);
-                }}
-              >
-                Traduzioni
-              </button>
-            </div>
-
-            {menuSubview !== "translations" ? (
-              <div className="category-actions">
-                <button
-                  type="button"
-                  className={`category-actions-btn ${fabOpen ? "open" : ""}`}
-                  onClick={() => setFabOpen((v) => !v)}
-                  aria-label="Azioni"
-                >
-                  <span />
-                  <span />
-                  <span />
-                </button>
-
-                {fabOpen ? (
-                  <div className="category-actions-menu">
-                    {menuSubview === "dishes" ? (
-                      <>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            openNewDishModal();
-                            setFabOpen(false);
-                          }}
-                        >
-                          Nuovo piatto
-                        </button>
-
-                        <button
-                          type="button"
-                          onClick={() => {
-                            openCategoryManager();
-                            setFabOpen(false);
-                          }}
-                        >
-                          Categorie
-                        </button>
-
-                        <button
-                          type="button"
-                          onClick={() => {
-                            openReorderModal();
-                            setFabOpen(false);
-                          }}
-                          disabled={!activeCategory || visibleItems.length <= 1}
-                        >
-                          Riordina
-                        </button>
-                      </>
-                    ) : (
-                      <>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setShowIngredientModal(true);
-                            setFabOpen(false);
-                          }}
-                        >
-                          Nuovo ingrediente
-                        </button>
-
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setShowAllergenFilters(true);
-                            setFabOpen(false);
-                          }}
-                        >
-                          Filtra allergeni
-                        </button>
-                      </>
-                    )}
-                  </div>
-                ) : null}
-              </div>
-            ) : null}
-          </div>
-
-          {menuSubview === "dishes" ? (
-            <div
-              className="category-scroll"
-              ref={categoryScrollRef}
-              role="tablist"
-              aria-label="Categorie menu"
-              onWheel={onCategoryScrollWheel}
-            >
-              {visibleCategories.map((categoryName) => {
-                const categoryDoc = categories.find(
-                  (entry) =>
-                    entry.name.toLowerCase() === categoryName.toLowerCase(),
-                );
-                const categoryId = categoryDoc?.id ?? null;
-                const isVisible =
-                  categoryVisibilityByName[categoryName.toLowerCase()] ?? true;
-
-                return (
-                  <button
-                    key={categoryName}
-                    type="button"
-                    role="tab"
-                    draggable={Boolean(categoryId)}
-                    onDragStart={() => {
-                      if (categoryId) setDraggingCategoryId(categoryId);
-                    }}
-                    onDragOver={(event) => {
-                      if (categoryId) event.preventDefault();
-                    }}
-                    onDrop={() => {
-                      if (draggingCategoryId && categoryId) {
-                        void reorderCategories(draggingCategoryId, categoryId);
-                      }
-                      setDraggingCategoryId(null);
-                    }}
-                    onDragEnd={() => {
-                      setDraggingCategoryId(null);
-                    }}
-                    className={
-                      activeCategory === categoryName
-                        ? "category-pill active"
-                        : isVisible
-                          ? "category-pill"
-                          : "category-pill category-pill-muted"
-                    }
-                    onClick={() => {
-                      setActiveCategory(categoryName);
-                    }}
-                  >
-                    {categoryName}
-                    {!isVisible ? (
-                      <span className="pill-state"> (nascosta)</span>
-                    ) : null}
-                  </button>
-                );
-              })}
-            </div>
-          ) : menuSubview === "ingredients" ? (
-            <div className="ingredient-search-row">
-              <input
-                type="search"
-                placeholder="Cerca ingrediente..."
-                value={ingredientSearch}
-                onChange={(event) => {
-                  setIngredientSearch(event.currentTarget.value);
-                }}
-              />
-            </div>
-          ) : null}
-        </div>
-      </div>
+      <MenuPanelHeader
+        activeCategory={activeCategory}
+        categories={categories}
+        categoryScrollRef={categoryScrollRef}
+        categoryVisibilityByName={categoryVisibilityByName}
+        draggingCategoryId={draggingCategoryId}
+        fabOpen={fabOpen}
+        ingredientSearch={ingredientSearch}
+        menuSubview={menuSubview}
+        onCategoryScrollWheel={onCategoryScrollWheel}
+        openCategoryManager={openCategoryManager}
+        openNewDishModal={openNewDishModal}
+        openReorderModal={openReorderModal}
+        reorderCategories={reorderCategories}
+        setActiveCategory={setActiveCategory}
+        setDraggingCategoryId={setDraggingCategoryId}
+        setFabOpen={setFabOpen}
+        setIngredientSearch={setIngredientSearch}
+        setMenuSubview={setMenuSubview}
+        setShowAllergenFilters={setShowAllergenFilters}
+        setShowIngredientModal={setShowIngredientModal}
+        visibleCategories={visibleCategories}
+        visibleItems={visibleItems}
+      />
 
       {menuSubview === "translations" ? <AdminMenuTranslationsPanel /> : null}
 
       {menuSubview === "dishes" ? (
-        <>
-          {/* <div className="admin-menu-toolbar minimal-right admin-menu-toolbar-desktop">
-            <button
-              type="button"
-              className="admin-mini-btn"
-              onClick={openCategoryManager}
-            >
-              + Categoria
-            </button>
-            <button
-              type="button"
-              className="admin-mini-btn"
-              onClick={openNewDishModal}
-            >
-              + Nuovo piatto
-            </button>
-            <button
-              type="button"
-              className="admin-mini-btn"
-              onClick={openReorderModal}
-              disabled={!activeCategory || visibleItems.length <= 1}
-            >
-              Riordina
-            </button>
-          </div> */}
-
-          {visibleItems.length === 0 ? (
-            <article className="admin-card empty-state-card">
-              <p className="section-subtitle">Nessun piatto disponibile</p>
-            </article>
-          ) : (
-            <div className="admin-grid modern-grid compact-cards dish-square-grid">
-              {visibleItems.map((item) => (
-                <article
-                  className={
-                    item.visible
-                      ? "admin-dish-card admin-dish-card-compact"
-                      : "admin-dish-card admin-dish-card-compact admin-dish-card-hidden"
-                  }
-                  key={item.id}
-                >
-                  <div className="admin-dish-media-wrap compact">
-                    {item.imageMeta?.qualityTier ? (
-                      <span
-                        className={`admin-image-quality-badge ${item.imageMeta.qualityTier}`}
-                      >
-                        {getMenuImageQualityLabel(item.imageMeta.qualityTier)}
-                      </span>
-                    ) : null}
-                    {hasCustomMenuImage(item.immagine) ? (
-                      <img
-                        src={item.immagine || DEFAULT_MENU_IMAGE}
-                        alt={item.nome}
-                        className="admin-dish-media"
-                      />
-                    ) : (
-                      <div className="admin-dish-media-placeholder">
-                        Nessuna immagine caricata
-                      </div>
-                    )}
-                  </div>
-                  <div className="admin-dish-body compact">
-                    <div className="admin-dish-head">
-                      <h3>
-                        {item.nome}
-                        {item.specialita ? " ★" : ""}
-                      </h3>
-                      <span className="dish-price compact">
-                        {item.prezzo.toFixed(2)} EUR
-                      </span>
-                    </div>
-                    <p className="admin-dish-desc compact">
-                      {item.descrizione ||
-                        item.ingredienti ||
-                        "Nessuna descrizione"}
-                    </p>
-                    <SpiceLevelIndicator
-                      level={item.spiceLevel}
-                      className="admin-spice-indicator"
-                      hideWhenZero
-                    />
-                    {item.allergeni.length > 0 ? (
-                      <div className="chip-wrap">
-                        {item.allergeni.map((key) => (
-                          <span
-                            className="allergen-mini-icon"
-                            key={`${item.id}-${key}`}
-                            title={allergenMap[key]?.label ?? key}
-                          >
-                            <AllergenIcon type={key} />
-                          </span>
-                        ))}
-                      </div>
-                    ) : null}
-                    <div className="admin-dish-actions">
-                      <button
-                        type="button"
-                        className="icon-btn"
-                        aria-label={`Modifica ${item.nome}`}
-                        onClick={() => {
-                          openEditItem(item);
-                        }}
-                      >
-                        ✎
-                      </button>
-                      <button
-                        type="button"
-                        className={
-                          item.specialita ? "icon-btn star-active" : "icon-btn"
-                        }
-                        aria-label={`Stella homepage ${item.nome}`}
-                        disabled={savingId === item.id}
-                        onClick={() => {
-                          void toggleItemSpecialty(item);
-                        }}
-                      >
-                        {item.specialita ? "★" : "☆"}
-                      </button>
-                      <button
-                        type="button"
-                        className="icon-btn"
-                        aria-label={`Visibilita ${item.nome}`}
-                        disabled={savingId === item.id}
-                        onClick={() => {
-                          void toggleItemVisibility(item);
-                        }}
-                      >
-                        <VisibilityIcon visible={item.visible} />
-                      </button>
-                      <button
-                        type="button"
-                        className="icon-btn danger"
-                        aria-label={`Elimina ${item.nome}`}
-                        disabled={savingId === item.id}
-                        onClick={() => {
-                          void removeItem(item.id);
-                        }}
-                      >
-                        🗑
-                      </button>
-                    </div>
-                  </div>
-                </article>
-              ))}
-            </div>
-          )}
-        </>
+        <MenuDishesView
+          allergenMap={allergenMap}
+          openEditItem={openEditItem}
+          removeItem={removeItem}
+          savingId={savingId}
+          toggleItemSpecialty={toggleItemSpecialty}
+          toggleItemVisibility={toggleItemVisibility}
+          visibleItems={visibleItems}
+        />
       ) : null}
 
       {menuSubview === "ingredients" ? (
-        <>
-          {filteredIngredients.length === 0 ? (
-            <article className="admin-card empty-state-card">
-              <p className="section-subtitle">Nessun ingrediente trovato</p>
-            </article>
-          ) : (
-            <div className="admin-grid compact-cards ingredient-square-grid">
-              {filteredIngredients.map((ingredient) => {
-                return (
-                  <article
-                    className="ingredient-square-card reduced"
-                    key={ingredient.id}
-                  >
-                    <h4>{ingredient.name}</h4>
-
-                    <div className="chip-wrap">
-                      {ingredient.allergeni.map((key) => (
-                        <span className="allergen-chip" key={key}>
-                          <span className="allergen-mini-icon" aria-hidden>
-                            <AllergenIcon type={key} />
-                          </span>
-                          <span>{allergenMap[key]?.label ?? key}</span>
-                        </span>
-                      ))}
-                    </div>
-
-                    <div className="admin-dish-actions">
-                      <button
-                        type="button"
-                        className="icon-btn"
-                        aria-label={`Modifica ingrediente ${ingredient.name}`}
-                        onClick={() => {
-                          openIngredientEdit(ingredient);
-                        }}
-                      >
-                        ✎
-                      </button>
-
-                      <button
-                        type="button"
-                        className="icon-btn danger"
-                        aria-label={`Elimina ingrediente ${ingredient.name}`}
-                        disabled={savingId === ingredient.id}
-                        onClick={() => {
-                          void removeIngredient(ingredient.id);
-                        }}
-                      >
-                        🗑
-                      </button>
-                    </div>
-                  </article>
-                );
-              })}
-            </div>
-          )}
-        </>
+        <MenuIngredientsView
+          allergenMap={allergenMap}
+          filteredIngredients={filteredIngredients}
+          openIngredientEdit={openIngredientEdit}
+          removeIngredient={removeIngredient}
+          savingId={savingId}
+        />
       ) : null}
 
       {showCategoryModal ? (
-        <div className="admin-modal-backdrop" role="presentation">
-          <div
-            className="admin-modal"
-            role="dialog"
-            aria-modal="true"
-            aria-label="Gestisci categorie"
-          >
-            <div className="admin-modal-head">
-              <h3>Categorie</h3>
-              <button
-                type="button"
-                className="icon-btn"
-                onClick={() => {
-                  setShowCategoryModal(false);
-                }}
-                aria-label="Chiudi popup categorie"
-              >
-                ×
-              </button>
-            </div>
-
-            <form className="booking-form" onSubmit={addCategory}>
-              <label>
-                Nuova categoria
-                <input
-                  value={newCategoryName}
-                  onChange={(event) => {
-                    setNewCategoryName(event.currentTarget.value);
-                  }}
-                  placeholder="Es. Pizze speciali"
-                  required
-                />
-              </label>
-              <button className="btn-success" type="submit" disabled={busy}>
-                Aggiungi
-              </button>
-            </form>
-
-            <div className="category-list drag-sort-category-list">
-              {categories.map((category, index) => (
-                <div
-                  className="category-row draggable"
-                  key={category.id}
-                  draggable
-                  onDragStart={() => {
-                    setDraggingModalCategoryId(category.id);
-                  }}
-                  onDragOver={(event) => {
-                    event.preventDefault();
-                  }}
-                  onDrop={() => {
-                    if (draggingModalCategoryId) {
-                      void reorderCategories(
-                        draggingModalCategoryId,
-                        category.id,
-                      );
-                    }
-                    setDraggingModalCategoryId(null);
-                  }}
-                  onDragEnd={() => {
-                    setDraggingModalCategoryId(null);
-                  }}
-                >
-                  <span className="drag-grip" aria-hidden>
-                    ⠿
-                  </span>
-                  <input
-                    value={categoryDrafts[category.id] ?? category.name}
-                    onChange={(event) => {
-                      const value = event.currentTarget.value;
-                      setCategoryDrafts((prev) => ({
-                        ...prev,
-                        [category.id]: value,
-                      }));
-                    }}
-                  />
-                  <button
-                    type="button"
-                    className="icon-btn"
-                    aria-label={`Visibilita categoria ${category.name}`}
-                    disabled={savingId === category.id}
-                    onClick={() => {
-                      void toggleCategoryVisibility(category);
-                    }}
-                  >
-                    <VisibilityIcon visible={category.visible} />
-                  </button>
-                  <button
-                    type="button"
-                    className="reorder-shift-btn"
-                    aria-label={`Sposta su categoria ${category.name}`}
-                    disabled={busy || savingId === category.id || index === 0}
-                    onClick={() => {
-                      void moveCategoryByStep(category.id, -1);
-                    }}
-                  >
-                    ↑
-                  </button>
-                  <button
-                    type="button"
-                    className="reorder-shift-btn"
-                    aria-label={`Sposta giu categoria ${category.name}`}
-                    disabled={
-                      busy ||
-                      savingId === category.id ||
-                      index === categories.length - 1
-                    }
-                    onClick={() => {
-                      void moveCategoryByStep(category.id, 1);
-                    }}
-                  >
-                    ↓
-                  </button>
-                  <button
-                    type="button"
-                    className="icon-btn"
-                    aria-label={`Modifica categoria ${category.name}`}
-                    disabled={savingId === category.id}
-                    onClick={() => {
-                      void renameCategory(category.id);
-                    }}
-                  >
-                    ✎
-                  </button>
-                  <button
-                    type="button"
-                    className="icon-btn danger"
-                    aria-label={`Elimina categoria ${category.name}`}
-                    disabled={savingId === category.id}
-                    onClick={() => {
-                      void removeCategory(category);
-                    }}
-                  >
-                    🗑
-                  </button>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
+        <MenuCategoryModal
+          addCategory={addCategory}
+          busy={busy}
+          categories={categories}
+          categoryDrafts={categoryDrafts}
+          draggingModalCategoryId={draggingModalCategoryId}
+          moveCategoryByStep={moveCategoryByStep}
+          newCategoryName={newCategoryName}
+          removeCategory={removeCategory}
+          renameCategory={renameCategory}
+          reorderCategories={reorderCategories}
+          savingId={savingId}
+          setCategoryDrafts={setCategoryDrafts}
+          setDraggingModalCategoryId={setDraggingModalCategoryId}
+          setNewCategoryName={setNewCategoryName}
+          setShowCategoryModal={setShowCategoryModal}
+          toggleCategoryVisibility={toggleCategoryVisibility}
+        />
       ) : null}
 
       {showAllergenFilters ? (
-        <div className="admin-modal-backdrop" role="presentation">
-          <div
-            className="admin-modal"
-            role="dialog"
-            aria-modal="true"
-            aria-label="Filtra ingredienti per allergeni"
-          >
-            <div className="admin-modal-head">
-              <h3>Filtra per allergeni</h3>
-              <button
-                type="button"
-                className="icon-btn"
-                onClick={() => {
-                  setShowAllergenFilters(false);
-                }}
-                aria-label="Chiudi popup filtri allergeni"
-              >
-                ×
-              </button>
-            </div>
-
-            <div className="allergen-grid modern-allergen-grid">
-              {ALLERGENS.map((allergen) => {
-                const active = selectedAllergenFilters.includes(allergen.key);
-                return (
-                  <button
-                    key={allergen.key}
-                    type="button"
-                    className={
-                      active
-                        ? "allergen-card filter active"
-                        : "allergen-card filter"
-                    }
-                    onClick={() => {
-                      setSelectedAllergenFilters((prev) =>
-                        toggleInArray(prev, allergen.key),
-                      );
-                    }}
-                  >
-                    <span className="allergen-icon modern" aria-hidden>
-                      <AllergenIcon type={allergen.key} />
-                    </span>
-                    <span>{allergen.label}</span>
-                  </button>
-                );
-              })}
-            </div>
-
-            <div
-              className="admin-menu-toolbar minimal-right"
-              style={{ marginTop: "0.9rem" }}
-            >
-              <button
-                type="button"
-                className="admin-mini-btn"
-                onClick={() => {
-                  setSelectedAllergenFilters([]);
-                }}
-              >
-                Reset filtri
-              </button>
-              <button
-                type="button"
-                className="btn-success"
-                onClick={() => {
-                  setShowAllergenFilters(false);
-                }}
-              >
-                Applica
-              </button>
-            </div>
-          </div>
-        </div>
+        <MenuAllergenFiltersModal
+          selectedAllergenFilters={selectedAllergenFilters}
+          setSelectedAllergenFilters={setSelectedAllergenFilters}
+          setShowAllergenFilters={setShowAllergenFilters}
+        />
       ) : null}
 
       {showIngredientModal ? (
-        <div className="admin-modal-backdrop" role="presentation">
-          <div
-            className="admin-modal"
-            role="dialog"
-            aria-modal="true"
-            aria-label="Aggiungi ingrediente"
-          >
-            <div className="admin-modal-head">
-              <h3>Nuovo ingrediente</h3>
-              <button
-                type="button"
-                className="icon-btn"
-                onClick={() => {
-                  setShowIngredientModal(false);
-                }}
-                aria-label="Chiudi popup ingrediente"
-              >
-                ×
-              </button>
-            </div>
-            <form className="booking-form" onSubmit={saveNewIngredient}>
-              <label>
-                Nome ingrediente
-                <input
-                  value={newIngredientName}
-                  onChange={(event) => {
-                    setNewIngredientName(event.currentTarget.value);
-                  }}
-                  required
-                />
-              </label>
-              <label>
-                Allergeni
-                <div className="allergen-picker compact">
-                  {ALLERGENS.map((allergen) => {
-                    const active = newIngredientAllergens.includes(
-                      allergen.key,
-                    );
-                    return (
-                      <button
-                        type="button"
-                        key={allergen.key}
-                        className={
-                          active ? "allergen-toggle active" : "allergen-toggle"
-                        }
-                        onClick={() => {
-                          setNewIngredientAllergens((prev) =>
-                            toggleInArray(prev, allergen.key),
-                          );
-                        }}
-                      >
-                        <span className="allergen-mini-icon" aria-hidden>
-                          <AllergenIcon type={allergen.key} />
-                        </span>
-                        <span>{allergen.label}</span>
-                      </button>
-                    );
-                  })}
-                </div>
-              </label>
-              <button className="btn-success" type="submit" disabled={busy}>
-                Salva ingrediente
-              </button>
-            </form>
-          </div>
-        </div>
+        <MenuNewIngredientModal
+          busy={busy}
+          newIngredientAllergens={newIngredientAllergens}
+          newIngredientName={newIngredientName}
+          saveNewIngredient={saveNewIngredient}
+          setNewIngredientAllergens={setNewIngredientAllergens}
+          setNewIngredientName={setNewIngredientName}
+          setShowIngredientModal={setShowIngredientModal}
+        />
       ) : null}
 
       {editingIngredientId ? (
-        <div className="admin-modal-backdrop" role="presentation">
-          <div
-            className="admin-modal"
-            role="dialog"
-            aria-modal="true"
-            aria-label="Modifica ingrediente"
-          >
-            <div className="admin-modal-head">
-              <h3>Modifica ingrediente</h3>
-              <button
-                type="button"
-                className="icon-btn"
-                onClick={() => {
-                  setEditingIngredientId(null);
-                  setIngredientEditName("");
-                  setIngredientEditAllergens([]);
-                }}
-                aria-label="Chiudi popup modifica ingrediente"
-              >
-                ×
-              </button>
-            </div>
-            <form
-              className="booking-form"
-              onSubmit={(event) => {
-                event.preventDefault();
-                void saveIngredientEdit();
-              }}
-            >
-              <label>
-                Nome
-                <input
-                  value={ingredientEditName}
-                  onChange={(event) => {
-                    setIngredientEditName(event.currentTarget.value);
-                  }}
-                />
-              </label>
-              <label>
-                Allergeni
-                <div className="allergen-picker compact">
-                  {ALLERGENS.map((allergen) => {
-                    const active = ingredientEditAllergens.includes(
-                      allergen.key,
-                    );
-                    return (
-                      <button
-                        type="button"
-                        key={allergen.key}
-                        className={
-                          active ? "allergen-toggle active" : "allergen-toggle"
-                        }
-                        onClick={() => {
-                          setIngredientEditAllergens((prev) =>
-                            toggleInArray(prev, allergen.key),
-                          );
-                        }}
-                      >
-                        <span className="allergen-mini-icon" aria-hidden>
-                          <AllergenIcon type={allergen.key} />
-                        </span>
-                        <span>{allergen.label}</span>
-                      </button>
-                    );
-                  })}
-                </div>
-              </label>
-              <div className="admin-menu-toolbar minimal-right">
-                <button
-                  type="button"
-                  className="admin-mini-btn"
-                  onClick={() => {
-                    setEditingIngredientId(null);
-                    setIngredientEditName("");
-                    setIngredientEditAllergens([]);
-                  }}
-                >
-                  Annulla
-                </button>
-                <button
-                  className="btn-success"
-                  type="submit"
-                  disabled={savingId === editingIngredientId}
-                >
-                  {savingId === editingIngredientId
-                    ? "Salvataggio..."
-                    : "Salva"}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
+        <MenuEditIngredientModal
+          editingIngredientId={editingIngredientId}
+          ingredientEditAllergens={ingredientEditAllergens}
+          ingredientEditName={ingredientEditName}
+          saveIngredientEdit={saveIngredientEdit}
+          savingId={savingId}
+          setEditingIngredientId={setEditingIngredientId}
+          setIngredientEditAllergens={setIngredientEditAllergens}
+          setIngredientEditName={setIngredientEditName}
+        />
       ) : null}
 
       {menuSubview === "dishes" ? (
-        <div className="admin-menu-mobile-dock" aria-label="Azioni menu">
-          <button
-            type="button"
-            className="admin-mini-btn"
-            onClick={openCategoryManager}
-          >
-            Categoria
-          </button>
-          <button
-            type="button"
-            className="admin-mini-btn"
-            onClick={openNewDishModal}
-          >
-            Nuovo piatto
-          </button>
-          <button
-            type="button"
-            className="admin-mini-btn"
-            onClick={openReorderModal}
-            disabled={!activeCategory || visibleItems.length <= 1}
-          >
-            Riordina
-          </button>
-        </div>
+        <MenuMobileDock
+          activeCategory={activeCategory}
+          openCategoryManager={openCategoryManager}
+          openNewDishModal={openNewDishModal}
+          openReorderModal={openReorderModal}
+          visibleItems={visibleItems}
+        />
       ) : null}
 
       {showItemModal ? (
-        <div className="admin-modal-backdrop" role="presentation">
-          <div
-            className="admin-modal menu-item-modal"
-            role="dialog"
-            aria-modal="true"
-            aria-label="Aggiungi piatto"
-          >
-            <div className="admin-modal-head">
-              <h3>Nuovo piatto</h3>
-              <button
-                type="button"
-                className="icon-btn"
-                onClick={() => {
-                  setShowMobilePhotoPicker(false);
-                  setShowItemModal(false);
-                }}
-                aria-label="Chiudi popup piatti"
-              >
-                ×
-              </button>
-            </div>
-
-            <form className="booking-form menu-item-form" onSubmit={createItem}>
-              <div className="menu-item-tabs" role="tablist" aria-label="Nuovo piatto">
-                <button
-                  type="button"
-                  role="tab"
-                  aria-selected={newDishActiveTab === "identity"}
-                  className={
-                    newDishActiveTab === "identity"
-                      ? "menu-item-tab active"
-                      : "menu-item-tab"
-                  }
-                  onClick={() => setNewDishActiveTab("identity")}
-                >
-                  Identità del piatto
-                </button>
-                <button
-                  type="button"
-                  role="tab"
-                  aria-selected={newDishActiveTab === "ingredients"}
-                  className={
-                    newDishActiveTab === "ingredients"
-                      ? "menu-item-tab active"
-                      : "menu-item-tab"
-                  }
-                  onClick={() => setNewDishActiveTab("ingredients")}
-                >
-                  Ingredienti e allergeni
-                </button>
-                <button
-                  type="button"
-                  role="tab"
-                  aria-selected={newDishActiveTab === "image"}
-                  className={
-                    newDishActiveTab === "image"
-                      ? "menu-item-tab active"
-                      : "menu-item-tab"
-                  }
-                  onClick={() => setNewDishActiveTab("image")}
-                >
-                  Immagine
-                </button>
-              </div>
-              <button
-                type="button"
-                className="menu-item-section-break menu-item-section-toggle"
-                onClick={() => setNewDishIdentityOpen((prev) => !prev)}
-                aria-expanded={newDishIdentityOpen}
-              >
-                <div>
-                  <h4>Identità del piatto</h4>
-                </div>
-                <span className="menu-item-section-chevron" aria-hidden>
-                  ↓
-                </span>
-              </button>
-              {newDishIdentityOpen ? (
-                <div className="menu-item-tab-panel" role="tabpanel">
-              <label>
-                Nome
-                <input
-                  value={newItemName}
-                  onChange={(event) => {
-                    setNewItemName(event.currentTarget.value);
-                  }}
-                  required
-                />
-              </label>
-
-              <label>
-                Descrizione (opzionale)
-                <textarea
-                  rows={3}
-                  maxLength={MENU_DESCRIPTION_MAX_LENGTH}
-                  value={newItemDescription}
-                  onChange={(event) => {
-                    setNewItemDescription(event.currentTarget.value);
-                  }}
-                  placeholder="Es. Impasto leggero, cottura croccante e gusto deciso."
-                />
-              </label>
-
-              <div className="two-cols">
-                <label className="menu-item-price-field">
-                  <span className="menu-item-price-label">Prezzo</span>
-                  <span className="menu-item-price-input-wrap">
-                    <span className="menu-item-price-currency">€</span>
-                    <input
-                      type="text"
-                      inputMode="decimal"
-                      placeholder="12,00"
-                      value={newItemPrice}
-                      onChange={(event) => {
-                        setNewItemPrice(
-                          formatPriceDraft(event.currentTarget.value),
-                        );
-                      }}
-                      required
-                    />
-                  </span>
-                </label>
-                <label>
-                  Categoria
-                  <select
-                    value={newItemCategory}
-                    onChange={(event) => {
-                      setNewItemCategory(event.currentTarget.value);
-                    }}
-                    required
-                  >
-                    {selectableCategories.map((category) => (
-                      <option key={category.id} value={category.name}>
-                        {category.name}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label>
-                  Piccantezza (opzionale)
-                  <div
-                    className="menu-item-spice-picker"
-                    role="group"
-                    aria-label="Piccantezza"
-                  >
-                    {[
-                      { value: 0, label: "No", icon: "○" },
-                      { value: 1, label: "Poco", icon: "🌶" },
-                      { value: 2, label: "Media", icon: "🌶🌶" },
-                      { value: 3, label: "Alta", icon: "🌶🌶🌶" },
-                    ].map((option) => (
-                      <button
-                        key={option.value}
-                        type="button"
-                        className={
-                          newItemSpiceLevel === option.value
-                            ? "menu-item-spice-btn active"
-                            : "menu-item-spice-btn"
-                        }
-                        onClick={() => setNewItemSpiceLevel(option.value)}
-                        aria-pressed={newItemSpiceLevel === option.value}
-                      >
-                        <span aria-hidden>{option.icon}</span>
-                        <span>{option.label}</span>
-                      </button>
-                    ))}
-                  </div>
-                  <select
-                    className="menu-item-spice-select-hidden"
-                    value={String(newItemSpiceLevel)}
-                    onChange={(event) => {
-                      setNewItemSpiceLevel(
-                        parseSpiceLevel(event.currentTarget.value),
-                      );
-                    }}
-                  >
-                    <option value="0">Non specificata</option>
-                    <option value="1">🌶 Poco piccante</option>
-                    <option value="2">🌶🌶 Piccante</option>
-                    <option value="3">🌶🌶🌶 Molto piccante</option>
-                  </select>
-                </label>
-              </div>
-                </div>
-              ) : null}
-
-              <button
-                type="button"
-                className="menu-item-section-break menu-item-section-toggle"
-                onClick={() => setNewDishIngredientsOpen((prev) => !prev)}
-                aria-expanded={newDishIngredientsOpen}
-              >
-                <div>
-                  <h4>Ingredienti e allergeni</h4>
-                </div>
-                <span className="menu-item-section-chevron" aria-hidden>
-                  ↓
-                </span>
-              </button>
-              {newDishIngredientsOpen ? (
-              <div className="menu-item-tab-panel" role="tabpanel">
-              <label className="menu-item-field-ingredients">
-                Ingredienti
-                <div className="ingredient-picker-wrap">
-                  <input
-                    className="chip-dropdown-input ingredient-search-input"
-                    value={newIngredientSearch}
-                    onFocus={() => {
-                      setShowNewIngredientResults(
-                        newIngredientSearch.trim().length >= 3,
-                      );
-                    }}
-                    onChange={(event) => {
-                      const value = event.currentTarget.value;
-                      setNewIngredientSearch(value);
-                      setShowNewIngredientResults(value.trim().length >= 3);
-                    }}
-                    onKeyDown={(event) => {
-                      if (event.key !== "Enter") return;
-                      event.preventDefault();
-                      const result = addIngredientFromQuery(
-                        newIngredientSearch,
-                        newItemIngredientIds,
-                        setNewItemIngredientIds,
-                        "new",
-                      );
-                      if (result === "added" || result === "create") {
-                        setNewIngredientSearch("");
-                        setShowNewIngredientResults(false);
-                      }
-                    }}
-                    placeholder="Cerca o aggiungi ingrediente..."
-                  />
-                  {showNewIngredientResults &&
-                  newIngredientSearch.trim().length >= 3 ? (
-                    <div className="ingredient-search-dropdown">
-                      {filteredNewIngredientOptions.length > 0
-                        ? filteredNewIngredientOptions
-                            .slice(0, 10)
-                            .map((ingredient) => {
-                              const active = newItemIngredientIds.includes(
-                                ingredient.id,
-                              );
-                              return (
-                                <button
-                                  type="button"
-                                  key={ingredient.id}
-                                  className={
-                                    active
-                                      ? "ingredient-search-item active"
-                                      : "ingredient-search-item"
-                                  }
-                                  onMouseDown={(event) => {
-                                    event.preventDefault();
-                                    setNewItemIngredientIds((prev) =>
-                                      toggleInArray(prev, ingredient.id),
-                                    );
-                                    setShowNewIngredientResults(false);
-                                    setNewIngredientSearch("");
-                                  }}
-                                >
-                                  <div>
-                                    <strong>{ingredient.name}</strong>
-                                    {ingredient.allergeni.length > 0 ? (
-                                      <div className="chip-wrap">
-                                        {ingredient.allergeni.map((key) => (
-                                          <span
-                                            className="allergen-chip"
-                                            key={`${ingredient.id}-${key}`}
-                                          >
-                                            <span
-                                              className="allergen-mini-icon"
-                                              aria-hidden
-                                            >
-                                              <AllergenIcon type={key} />
-                                            </span>
-                                            <span>
-                                              {allergenMap[key]?.label ?? key}
-                                            </span>
-                                          </span>
-                                        ))}
-                                      </div>
-                                    ) : null}
-                                  </div>
-                                </button>
-                              );
-                            })
-                        : null}
-                      {!newIngredientExactMatch &&
-                      newIngredientSearch.trim().length >= 2 ? (
-                        <button
-                          type="button"
-                          className="ingredient-search-item create-item"
-                          onMouseDown={(event) => {
-                            event.preventDefault();
-                            openQuickCreateIngredient(
-                              newIngredientSearch,
-                              "new",
-                            );
-                            setShowNewIngredientResults(false);
-                            setNewIngredientSearch("");
-                          }}
-                        >
-                          + Crea &ldquo;{newIngredientSearch.trim()}&rdquo;
-                        </button>
-                      ) : null}
-                      {filteredNewIngredientOptions.length === 0 &&
-                      !(
-                        !newIngredientExactMatch &&
-                        newIngredientSearch.trim().length >= 2
-                      ) ? (
-                        <div className="ingredient-empty-state">
-                          <p>Nessun ingrediente trovato</p>
-                        </div>
-                      ) : null}
-                    </div>
-                  ) : null}
-                </div>
-                <div className="ingredient-selected-head">
-                  <strong>
-                    Ingredienti selezionati ({newItemIngredientIds.length})
-                  </strong>
-                </div>
-                <div className="chip-wrap selected-chip-preview">
-                  {newItemIngredientIds.map((ingredientId) => {
-                    const ingredient = ingredientMap[ingredientId];
-                    if (!ingredient) return null;
-                    return (
-                      <button
-                        type="button"
-                        key={ingredientId}
-                        className="ingredient-chip ordered-chip"
-                        draggable
-                        onDragStart={() => {
-                          setDraggingNewIngredientId(ingredientId);
-                        }}
-                        onDragOver={(event) => {
-                          event.preventDefault();
-                        }}
-                        onDrop={() => {
-                          if (!draggingNewIngredientId) return;
-                          setNewItemIngredientIds((prev) =>
-                            reorderIds(
-                              prev,
-                              draggingNewIngredientId,
-                              ingredientId,
-                            ),
-                          );
-                          setDraggingNewIngredientId(null);
-                        }}
-                        onDragEnd={() => {
-                          setDraggingNewIngredientId(null);
-                        }}
-                        onClick={() => {
-                          setNewItemIngredientIds((prev) =>
-                            prev.filter((id) => id !== ingredientId),
-                          );
-                        }}
-                        title="Trascina per riordinare, clicca per rimuovere"
-                      >
-                        <span aria-hidden>✓</span>
-                        <span>{ingredient.name}</span>
-                        <span aria-hidden>✕</span>
-                      </button>
-                    );
-                  })}
-                </div>
-                <div className="ingredient-selected-head">
-                  <strong>Allergeni rilevati</strong>
-                </div>
-                <div className="chip-wrap">
-                  {newDetectedAllergenKeys.length > 0 ? (
-                    newDetectedAllergenKeys.map((key) => (
-                      <span
-                        className="allergen-chip"
-                        key={`new-detected-${key}`}
-                      >
-                        <span className="allergen-mini-icon" aria-hidden>
-                          <AllergenIcon type={key} />
-                        </span>
-                        <span>{allergenMap[key]?.label ?? key}</span>
-                      </span>
-                    ))
-                  ) : (
-                    <span className="section-subtitle">
-                      Nessun allergene rilevato
-                    </span>
-                  )}
-                </div>
-                <div className="menu-item-allergen-panel">
-                  <button
-                    type="button"
-                    className="menu-item-allergen-trigger"
-                    onClick={() =>
-                      setShowNewExtraAllergensPanel((prev) => !prev)
-                    }
-                    aria-expanded={showNewExtraAllergensPanel}
-                  >
-                    <span>Allergeni extra</span>
-                    <strong>
-                      {newItemAllergens.length > 0
-                        ? `${newItemAllergens.length} selezionati`
-                        : "Nessuno"}
-                    </strong>
-                  </button>
-                  {newItemAllergens.length > 0 ? (
-                    <div className="chip-wrap menu-item-allergen-summary">
-                      {newItemAllergens.map((key) => (
-                        <span className="allergen-chip" key={`new-extra-${key}`}>
-                          <span className="allergen-mini-icon" aria-hidden>
-                            <AllergenIcon type={key} />
-                          </span>
-                          <span>{allergenMap[key]?.label ?? key}</span>
-                        </span>
-                      ))}
-                    </div>
-                  ) : null}
-                  {showNewExtraAllergensPanel ? (
-                    <div className="allergen-picker compact menu-item-allergen-drawer">
-                      {newSelectableExtraAllergens.map((allergen) => {
-                        const active = newItemAllergens.includes(allergen.key);
-                        return (
-                          <button
-                            key={allergen.key}
-                            type="button"
-                            className={
-                              active
-                                ? "allergen-toggle active"
-                                : "allergen-toggle"
-                            }
-                            onClick={() => {
-                              setNewItemAllergens((prev) =>
-                                toggleInArray(prev, allergen.key),
-                              );
-                            }}
-                          >
-                            <span className="allergen-mini-icon" aria-hidden>
-                              <AllergenIcon type={allergen.key} />
-                            </span>
-                            <span>{allergen.label}</span>
-                          </button>
-                        );
-                      })}
-                    </div>
-                  ) : null}
-                </div>
-              </label>
-              </div>
-              ) : null}
-
-              <button
-                type="button"
-                className="menu-item-section-break menu-item-section-toggle"
-                onClick={() => setNewDishImageOpen((prev) => !prev)}
-                aria-expanded={newDishImageOpen}
-              >
-                <div>
-                  <h4>Immagine e resa visiva</h4>
-                </div>
-                <span className="menu-item-section-chevron" aria-hidden>
-                  ↓
-                </span>
-              </button>
-              {newDishImageOpen ? (
-                <div className="menu-item-tab-panel" role="tabpanel">
-              <label className="menu-item-field-image">
-                <span className="menu-item-image-head">
-                  <span>Immagine</span>
-                  <span className="menu-item-image-fit-group">
-                    <button
-                      type="button"
-                      className={
-                        newItemImageFit === "cover"
-                          ? "menu-item-image-fit-btn active"
-                          : "menu-item-image-fit-btn"
-                      }
-                      aria-pressed={newItemImageFit === "cover"}
-                      disabled={!hasNewImage}
-                      onClick={() => setNewItemImageFit("cover")}
-                    >
-                      Zoomata
-                    </button>
-                    <button
-                      type="button"
-                      className={
-                        newItemImageFit === "contain"
-                          ? "menu-item-image-fit-btn active"
-                          : "menu-item-image-fit-btn"
-                      }
-                      aria-pressed={newItemImageFit === "contain"}
-                      disabled={!hasNewImage}
-                      onClick={() => setNewItemImageFit("contain")}
-                    >
-                      Intera
-                    </button>
-                  </span>
-                </span>
-                <input
-                  ref={newImageInputRef}
-                  className="menu-item-hidden-file-input"
-                  type="file"
-                  accept="image/*"
-                  onChange={(event) => {
-                    const file = event.currentTarget.files?.[0] ?? null;
-                    void onNewImageChange(file);
-                  }}
-                />
-                <input
-                  ref={newImageCameraInputRef}
-                  className="menu-item-hidden-file-input"
-                  type="file"
-                  accept="image/*"
-                  capture="environment"
-                  onChange={(event) => {
-                    const file = event.currentTarget.files?.[0] ?? null;
-                    void onNewImageChange(file);
-                  }}
-                />
-                <div
-                  className={
-                    newImageDragActive
-                      ? "menu-item-upload-dropzone active"
-                      : "menu-item-upload-dropzone"
-                  }
-                  onDragOver={(event) => {
-                    event.preventDefault();
-                    setNewImageDragActive(true);
-                  }}
-                  onDragLeave={(event) => {
-                    event.preventDefault();
-                    setNewImageDragActive(false);
-                  }}
-                  onDrop={(event) => {
-                    event.preventDefault();
-                    const file = event.dataTransfer.files?.[0] ?? null;
-                    void onNewImageChange(file);
-                  }}
-                >
-                  <div className="menu-item-upload-copy">
-                    <strong>
-                      {hasNewImage
-                        ? "Immagine pronta"
-                        : "Trascina qui la foto del piatto"}
-                    </strong>
-                    <span>
-                      Desktop: drag and drop. Mobile: scatta o scegli dalla
-                      galleria.
-                    </span>
-                  </div>
-                  <div className="menu-item-upload-actions">
-                    <button
-                      type="button"
-                      className="admin-mini-btn menu-item-desktop-upload-btn"
-                      onClick={() => newImageInputRef.current?.click()}
-                    >
-                      Scegli foto
-                    </button>
-                    <button
-                      type="button"
-                      className="admin-mini-btn menu-item-mobile-upload-btn"
-                      onClick={() => setShowMobilePhotoPicker(true)}
-                    >
-                      Aggiungi foto
-                    </button>
-                  </div>
-                  {showMobilePhotoPicker ? (
-                    <div className="menu-item-mobile-picker">
-                      <button
-                        type="button"
-                        className="menu-item-mobile-picker-option"
-                        onClick={() => newImageInputRef.current?.click()}
-                      >
-                        Scegli da galleria
-                      </button>
-                      <button
-                        type="button"
-                        className="menu-item-mobile-picker-option"
-                        onClick={() => newImageCameraInputRef.current?.click()}
-                      >
-                        Scatta foto
-                      </button>
-                      <button
-                        type="button"
-                        className="menu-item-mobile-picker-cancel"
-                        onClick={() => setShowMobilePhotoPicker(false)}
-                      >
-                        Annulla
-                      </button>
-                    </div>
-                  ) : null}
-                </div>
-              </label>
-
-              {newImageAnalysis ? (
-                <div className="menu-image-meta-panel">
-                  <span
-                    className={`admin-image-quality-badge inline ${newImageAnalysis.qualityTier}`}
-                  >
-                    {getMenuImageQualityLabel(newImageAnalysis.qualityTier)}
-                  </span>
-                  <p className="menu-image-meta-text">
-                    Originale {newImageAnalysis.originalWidth}×
-                    {newImageAnalysis.originalHeight} ·{" "}
-                    {formatBytes(newImageAnalysis.originalFileSize)}
-                  </p>
-                  {newImageAnalysis.warning ? (
-                    <p className="menu-image-warning">
-                      {newImageAnalysis.warning}
-                    </p>
-                  ) : null}
-                </div>
-              ) : null}
-                </div>
-              ) : null}
-
-              <button
-                className="btn-success menu-item-submit"
-                type="submit"
-                disabled={busy}
-              >
-                {busy ? "Salvataggio..." : "Salva"}
-              </button>
-            </form>
-          </div>
-        </div>
+        <MenuNewDishModal
+          addIngredientFromQuery={addIngredientFromQuery}
+          allergenMap={allergenMap}
+          busy={busy}
+          createItem={createItem}
+          draggingNewIngredientId={draggingNewIngredientId}
+          filteredNewIngredientOptions={filteredNewIngredientOptions}
+          hasNewImage={hasNewImage}
+          ingredientMap={ingredientMap}
+          newDetectedAllergenKeys={newDetectedAllergenKeys}
+          newDishActiveTab={newDishActiveTab}
+          newDishIdentityOpen={newDishIdentityOpen}
+          newDishImageOpen={newDishImageOpen}
+          newDishIngredientsOpen={newDishIngredientsOpen}
+          newImageAnalysis={newImageAnalysis}
+          newImageCameraInputRef={newImageCameraInputRef}
+          newImageDragActive={newImageDragActive}
+          newImageInputRef={newImageInputRef}
+          newIngredientExactMatch={newIngredientExactMatch}
+          newIngredientSearch={newIngredientSearch}
+          newItemAllergens={newItemAllergens}
+          newItemCategory={newItemCategory}
+          newItemDescription={newItemDescription}
+          newItemImageFit={newItemImageFit}
+          newItemIngredientIds={newItemIngredientIds}
+          newItemName={newItemName}
+          newItemPrice={newItemPrice}
+          newItemSpiceLevel={newItemSpiceLevel}
+          newSelectableExtraAllergens={newSelectableExtraAllergens}
+          onNewImageChange={onNewImageChange}
+          openQuickCreateIngredient={openQuickCreateIngredient}
+          selectableCategories={selectableCategories}
+          setDraggingNewIngredientId={setDraggingNewIngredientId}
+          setNewDishActiveTab={setNewDishActiveTab}
+          setNewDishIdentityOpen={setNewDishIdentityOpen}
+          setNewDishImageOpen={setNewDishImageOpen}
+          setNewDishIngredientsOpen={setNewDishIngredientsOpen}
+          setNewImageDragActive={setNewImageDragActive}
+          setNewIngredientSearch={setNewIngredientSearch}
+          setNewItemAllergens={setNewItemAllergens}
+          setNewItemCategory={setNewItemCategory}
+          setNewItemDescription={setNewItemDescription}
+          setNewItemImageFit={setNewItemImageFit}
+          setNewItemIngredientIds={setNewItemIngredientIds}
+          setNewItemName={setNewItemName}
+          setNewItemPrice={setNewItemPrice}
+          setNewItemSpiceLevel={setNewItemSpiceLevel}
+          setShowItemModal={setShowItemModal}
+          setShowMobilePhotoPicker={setShowMobilePhotoPicker}
+          setShowNewExtraAllergensPanel={setShowNewExtraAllergensPanel}
+          setShowNewIngredientResults={setShowNewIngredientResults}
+          showMobilePhotoPicker={showMobilePhotoPicker}
+          showNewExtraAllergensPanel={showNewExtraAllergensPanel}
+          showNewIngredientResults={showNewIngredientResults}
+        />
       ) : null}
 
       {editingItem ? (
-        <div className="admin-modal-backdrop" role="presentation">
-          <div
-            className="admin-modal menu-item-modal"
-            role="dialog"
-            aria-modal="true"
-            aria-label="Modifica piatto"
-          >
-            <div className="admin-modal-head">
-              <h3>Modifica piatto</h3>
-              <button
-                type="button"
-                className="icon-btn"
-                onClick={() => {
-                  setShowEditMobilePhotoPicker(false);
-                  setEditImageDragActive(false);
-                  setEditingItemId(null);
-                }}
-                aria-label="Chiudi modifica piatto"
-              >
-                ×
-              </button>
-            </div>
-
-            <form
-              className="booking-form menu-item-form"
-              onSubmit={saveEditedItem}
-            >
-              <div className="menu-item-tabs" role="tablist" aria-label="Modifica piatto">
-                <button
-                  type="button"
-                  role="tab"
-                  aria-selected={editDishActiveTab === "identity"}
-                  className={
-                    editDishActiveTab === "identity"
-                      ? "menu-item-tab active"
-                      : "menu-item-tab"
-                  }
-                  onClick={() => setEditDishActiveTab("identity")}
-                >
-                  Identità del piatto
-                </button>
-                <button
-                  type="button"
-                  role="tab"
-                  aria-selected={editDishActiveTab === "ingredients"}
-                  className={
-                    editDishActiveTab === "ingredients"
-                      ? "menu-item-tab active"
-                      : "menu-item-tab"
-                  }
-                  onClick={() => setEditDishActiveTab("ingredients")}
-                >
-                  Ingredienti e allergeni
-                </button>
-                <button
-                  type="button"
-                  role="tab"
-                  aria-selected={editDishActiveTab === "image"}
-                  className={
-                    editDishActiveTab === "image"
-                      ? "menu-item-tab active"
-                      : "menu-item-tab"
-                  }
-                  onClick={() => setEditDishActiveTab("image")}
-                >
-                  Immagine
-                </button>
-              </div>
-
-              <button
-                type="button"
-                className="menu-item-section-break menu-item-section-toggle"
-                onClick={() => setEditDishIdentityOpen((prev) => !prev)}
-                aria-expanded={editDishIdentityOpen}
-              >
-                <div>
-                  <h4>Identità del piatto</h4>
-                </div>
-                <span className="menu-item-section-chevron" aria-hidden>
-                  ↓
-                </span>
-              </button>
-              {editDishIdentityOpen ? (
-                <div className="menu-item-tab-panel" role="tabpanel">
-                  <label>
-                    Nome
-                    <input
-                      value={editItemName}
-                      onChange={(event) => {
-                        setEditItemName(event.currentTarget.value);
-                      }}
-                      required
-                    />
-                  </label>
-
-                  <label>
-                    Descrizione (opzionale)
-                    <textarea
-                      rows={3}
-                      maxLength={MENU_DESCRIPTION_MAX_LENGTH}
-                      value={editItemDescription}
-                      onChange={(event) => {
-                        setEditItemDescription(event.currentTarget.value);
-                      }}
-                      placeholder="Es. Impasto leggero, cottura croccante e gusto deciso."
-                    />
-                  </label>
-
-                  <div className="two-cols">
-                    <label className="menu-item-price-field">
-                      <span className="menu-item-price-label">Prezzo</span>
-                      <span className="menu-item-price-input-wrap">
-                        <span className="menu-item-price-currency">€</span>
-                        <input
-                          type="text"
-                          inputMode="decimal"
-                          placeholder="12,00"
-                          value={editItemPrice}
-                          onChange={(event) => {
-                            setEditItemPrice(
-                              formatPriceDraft(event.currentTarget.value),
-                            );
-                          }}
-                          required
-                        />
-                      </span>
-                    </label>
-                    <label>
-                      Categoria
-                      <select
-                        value={editItemCategory}
-                        onChange={(event) => {
-                          setEditItemCategory(event.currentTarget.value);
-                        }}
-                        required
-                      >
-                        {selectableCategories.map((category) => (
-                          <option key={category.id} value={category.name}>
-                            {category.name}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
-                    <label>
-                      Piccantezza (opzionale)
-                      <div
-                        className="menu-item-spice-picker"
-                        role="group"
-                        aria-label="Piccantezza"
-                      >
-                        {[
-                          { value: 0, label: "No", icon: "○" },
-                          { value: 1, label: "Poco", icon: "🌶" },
-                          { value: 2, label: "Media", icon: "🌶🌶" },
-                          { value: 3, label: "Alta", icon: "🌶🌶🌶" },
-                        ].map((option) => (
-                          <button
-                            key={option.value}
-                            type="button"
-                            className={
-                              editItemSpiceLevel === option.value
-                                ? "menu-item-spice-btn active"
-                                : "menu-item-spice-btn"
-                            }
-                            onClick={() => setEditItemSpiceLevel(option.value)}
-                            aria-pressed={editItemSpiceLevel === option.value}
-                          >
-                            <span aria-hidden>{option.icon}</span>
-                            <span>{option.label}</span>
-                          </button>
-                        ))}
-                      </div>
-                      <select
-                        className="menu-item-spice-select-hidden"
-                        value={String(editItemSpiceLevel)}
-                        onChange={(event) => {
-                          setEditItemSpiceLevel(
-                            parseSpiceLevel(event.currentTarget.value),
-                          );
-                        }}
-                      >
-                        <option value="0">Non specificata</option>
-                        <option value="1">🌶 Poco piccante</option>
-                        <option value="2">🌶🌶 Piccante</option>
-                        <option value="3">🌶🌶🌶 Molto piccante</option>
-                      </select>
-                    </label>
-                  </div>
-
-                  <label>
-                    Mostra in Le nostre firme
-                    <select
-                      value={editItemSpecial ? "1" : "0"}
-                      onChange={(event) => {
-                        setEditItemSpecial(event.currentTarget.value === "1");
-                      }}
-                    >
-                      <option value="0">No</option>
-                      <option value="1">Si, metti la stella</option>
-                    </select>
-                  </label>
-                </div>
-              ) : null}
-
-              <button
-                type="button"
-                className="menu-item-section-break menu-item-section-toggle"
-                onClick={() => setEditDishIngredientsOpen((prev) => !prev)}
-                aria-expanded={editDishIngredientsOpen}
-              >
-                <div>
-                  <h4>Ingredienti e allergeni</h4>
-                </div>
-                <span className="menu-item-section-chevron" aria-hidden>
-                  ↓
-                </span>
-              </button>
-              {editDishIngredientsOpen ? (
-                <div className="menu-item-tab-panel" role="tabpanel">
-                  <label className="menu-item-field-ingredients">
-                    Ingredienti
-                    <div className="ingredient-picker-wrap">
-                      <input
-                        className="chip-dropdown-input ingredient-search-input"
-                        value={editIngredientSearch}
-                        onFocus={() => {
-                          setShowEditIngredientResults(
-                            editIngredientSearch.trim().length >= 3,
-                          );
-                        }}
-                        onChange={(event) => {
-                          const value = event.currentTarget.value;
-                          setEditIngredientSearch(value);
-                          setShowEditIngredientResults(value.trim().length >= 3);
-                        }}
-                        onKeyDown={(event) => {
-                          if (event.key !== "Enter") return;
-                          event.preventDefault();
-                          const result = addIngredientFromQuery(
-                            editIngredientSearch,
-                            editItemIngredientIds,
-                            setEditItemIngredientIds,
-                            "edit",
-                          );
-                          if (result === "added" || result === "create") {
-                            setEditIngredientSearch("");
-                            setShowEditIngredientResults(false);
-                          }
-                        }}
-                        placeholder="Cerca o aggiungi ingrediente..."
-                      />
-                      {showEditIngredientResults &&
-                      editIngredientSearch.trim().length >= 3 ? (
-                        <div className="ingredient-search-dropdown">
-                          {filteredEditIngredientOptions.length > 0
-                            ? filteredEditIngredientOptions
-                                .slice(0, 10)
-                                .map((ingredient) => {
-                                  const active = editItemIngredientIds.includes(
-                                    ingredient.id,
-                                  );
-                                  return (
-                                    <button
-                                      type="button"
-                                      key={ingredient.id}
-                                      className={
-                                        active
-                                          ? "ingredient-search-item active"
-                                          : "ingredient-search-item"
-                                      }
-                                      onMouseDown={(event) => {
-                                        event.preventDefault();
-                                        setEditItemIngredientIds((prev) =>
-                                          toggleInArray(prev, ingredient.id),
-                                        );
-                                        setShowEditIngredientResults(false);
-                                        setEditIngredientSearch("");
-                                      }}
-                                    >
-                                      <div>
-                                        <strong>{ingredient.name}</strong>
-                                        {ingredient.allergeni.length > 0 ? (
-                                          <div className="chip-wrap">
-                                            {ingredient.allergeni.map((key) => (
-                                              <span
-                                                className="allergen-chip"
-                                                key={`${ingredient.id}-${key}`}
-                                              >
-                                                <span
-                                                  className="allergen-mini-icon"
-                                                  aria-hidden
-                                                >
-                                                  <AllergenIcon type={key} />
-                                                </span>
-                                                <span>
-                                                  {allergenMap[key]?.label ?? key}
-                                                </span>
-                                              </span>
-                                            ))}
-                                          </div>
-                                        ) : null}
-                                      </div>
-                                    </button>
-                                  );
-                                })
-                            : null}
-                          {!editIngredientExactMatch &&
-                          editIngredientSearch.trim().length >= 2 ? (
-                            <button
-                              type="button"
-                              className="ingredient-search-item create-item"
-                              onMouseDown={(event) => {
-                                event.preventDefault();
-                                openQuickCreateIngredient(
-                                  editIngredientSearch,
-                                  "edit",
-                                );
-                                setShowEditIngredientResults(false);
-                                setEditIngredientSearch("");
-                              }}
-                            >
-                              + Crea &ldquo;{editIngredientSearch.trim()}&rdquo;
-                            </button>
-                          ) : null}
-                          {filteredEditIngredientOptions.length === 0 &&
-                          !(
-                            !editIngredientExactMatch &&
-                            editIngredientSearch.trim().length >= 2
-                          ) ? (
-                            <div className="ingredient-empty-state">
-                              <p>Nessun ingrediente trovato</p>
-                            </div>
-                          ) : null}
-                        </div>
-                      ) : null}
-                    </div>
-                    <div className="ingredient-selected-head">
-                      <strong>
-                        Ingredienti selezionati ({editItemIngredientIds.length})
-                      </strong>
-                    </div>
-                    <div className="chip-wrap selected-chip-preview">
-                      {editItemIngredientIds.map((ingredientId) => {
-                        const ingredient = ingredientMap[ingredientId];
-                        if (!ingredient) return null;
-                        return (
-                          <button
-                            type="button"
-                            className="ingredient-chip ordered-chip"
-                            key={ingredientId}
-                            draggable
-                            onDragStart={() => {
-                              setDraggingEditIngredientId(ingredientId);
-                            }}
-                            onDragOver={(event) => {
-                              event.preventDefault();
-                            }}
-                            onDrop={() => {
-                              if (!draggingEditIngredientId) return;
-                              setEditItemIngredientIds((prev) =>
-                                reorderIds(
-                                  prev,
-                                  draggingEditIngredientId,
-                                  ingredientId,
-                                ),
-                              );
-                              setDraggingEditIngredientId(null);
-                            }}
-                            onDragEnd={() => {
-                              setDraggingEditIngredientId(null);
-                            }}
-                            onClick={() => {
-                              setEditItemIngredientIds((prev) =>
-                                prev.filter((id) => id !== ingredientId),
-                              );
-                            }}
-                            title="Trascina per riordinare, clicca per rimuovere"
-                          >
-                            <span aria-hidden>✓</span>
-                            <span>{ingredient.name}</span>
-                            <span aria-hidden>✕</span>
-                          </button>
-                        );
-                      })}
-                    </div>
-                    <div className="ingredient-selected-head">
-                      <strong>Allergeni rilevati</strong>
-                    </div>
-                    <div className="chip-wrap">
-                      {editDetectedAllergenKeys.length > 0 ? (
-                        editDetectedAllergenKeys.map((key) => (
-                          <span
-                            className="allergen-chip"
-                            key={`edit-detected-${key}`}
-                          >
-                            <span className="allergen-mini-icon" aria-hidden>
-                              <AllergenIcon type={key} />
-                            </span>
-                            <span>{allergenMap[key]?.label ?? key}</span>
-                          </span>
-                        ))
-                      ) : (
-                        <span className="section-subtitle">
-                          Nessun allergene rilevato
-                        </span>
-                      )}
-                    </div>
-                    <div className="menu-item-allergen-panel">
-                      <button
-                        type="button"
-                        className="menu-item-allergen-trigger"
-                        onClick={() =>
-                          setShowEditExtraAllergensPanel((prev) => !prev)
-                        }
-                        aria-expanded={showEditExtraAllergensPanel}
-                      >
-                        <span>Allergeni extra</span>
-                        <strong>
-                          {editItemAllergens.length > 0
-                            ? `${editItemAllergens.length} selezionati`
-                            : "Nessuno"}
-                        </strong>
-                      </button>
-                      {editItemAllergens.length > 0 ? (
-                        <div className="chip-wrap menu-item-allergen-summary">
-                          {editItemAllergens.map((key) => (
-                            <span className="allergen-chip" key={`edit-extra-${key}`}>
-                              <span className="allergen-mini-icon" aria-hidden>
-                                <AllergenIcon type={key} />
-                              </span>
-                              <span>{allergenMap[key]?.label ?? key}</span>
-                            </span>
-                          ))}
-                        </div>
-                      ) : null}
-                      {showEditExtraAllergensPanel ? (
-                        <div className="allergen-picker compact menu-item-allergen-drawer">
-                          {editSelectableExtraAllergens.map((allergen) => {
-                            const active = editItemAllergens.includes(allergen.key);
-                            return (
-                              <button
-                                key={allergen.key}
-                                type="button"
-                                className={
-                                  active
-                                    ? "allergen-toggle active"
-                                    : "allergen-toggle"
-                                }
-                                onClick={() => {
-                                  setEditItemAllergens((prev) =>
-                                    toggleInArray(prev, allergen.key),
-                                  );
-                                }}
-                              >
-                                <span className="allergen-mini-icon" aria-hidden>
-                                  <AllergenIcon type={allergen.key} />
-                                </span>
-                                <span>{allergen.label}</span>
-                              </button>
-                            );
-                          })}
-                        </div>
-                      ) : null}
-                    </div>
-                  </label>
-                </div>
-              ) : null}
-
-              <button
-                type="button"
-                className="menu-item-section-break menu-item-section-toggle"
-                onClick={() => setEditDishImageOpen((prev) => !prev)}
-                aria-expanded={editDishImageOpen}
-              >
-                <div>
-                  <h4>Immagine e resa visiva</h4>
-                </div>
-                <span className="menu-item-section-chevron" aria-hidden>
-                  ↓
-                </span>
-              </button>
-              {editDishImageOpen ? (
-                <div className="menu-item-tab-panel" role="tabpanel">
-                  <label className="menu-item-field-image">
-                    <span className="menu-item-image-head">
-                      <span>Immagine</span>
-                      <span className="menu-item-image-fit-group">
-                        <button
-                          type="button"
-                          className={
-                            editItemImageFit === "cover"
-                              ? "menu-item-image-fit-btn active"
-                              : "menu-item-image-fit-btn"
-                          }
-                          aria-pressed={editItemImageFit === "cover"}
-                          disabled={!hasEditImage}
-                          onClick={() => setEditItemImageFit("cover")}
-                        >
-                          Zoomata
-                        </button>
-                        <button
-                          type="button"
-                          className={
-                            editItemImageFit === "contain"
-                              ? "menu-item-image-fit-btn active"
-                              : "menu-item-image-fit-btn"
-                          }
-                          aria-pressed={editItemImageFit === "contain"}
-                          disabled={!hasEditImage}
-                          onClick={() => setEditItemImageFit("contain")}
-                        >
-                          Intera
-                        </button>
-                      </span>
-                    </span>
-                    <input
-                      ref={editImageInputRef}
-                      className="menu-item-hidden-file-input"
-                      type="file"
-                      accept="image/*"
-                      onChange={(event) => {
-                        const file = event.currentTarget.files?.[0] ?? null;
-                        void onEditImageChange(file);
-                      }}
-                    />
-                    <input
-                      ref={editImageCameraInputRef}
-                      className="menu-item-hidden-file-input"
-                      type="file"
-                      accept="image/*"
-                      capture="environment"
-                      onChange={(event) => {
-                        const file = event.currentTarget.files?.[0] ?? null;
-                        void onEditImageChange(file);
-                      }}
-                    />
-                    <div
-                      className={
-                        editImageDragActive
-                          ? "menu-item-upload-dropzone active"
-                          : "menu-item-upload-dropzone"
-                      }
-                      onDragOver={(event) => {
-                        event.preventDefault();
-                        setEditImageDragActive(true);
-                      }}
-                      onDragLeave={(event) => {
-                        event.preventDefault();
-                        setEditImageDragActive(false);
-                      }}
-                      onDrop={(event) => {
-                        event.preventDefault();
-                        const file = event.dataTransfer.files?.[0] ?? null;
-                        void onEditImageChange(file);
-                      }}
-                    >
-                      <div className="menu-item-upload-copy">
-                        <strong>
-                          {hasEditImage
-                            ? "Immagine pronta"
-                            : "Trascina qui la foto del piatto"}
-                        </strong>
-                        <span>
-                          Desktop: drag and drop. Mobile: scatta o scegli dalla
-                          galleria.
-                        </span>
-                      </div>
-                      <div className="menu-item-upload-actions">
-                        <button
-                          type="button"
-                          className="admin-mini-btn menu-item-desktop-upload-btn"
-                          onClick={() => editImageInputRef.current?.click()}
-                        >
-                          Scegli foto
-                        </button>
-                        <button
-                          type="button"
-                          className="admin-mini-btn menu-item-mobile-upload-btn"
-                          onClick={() => setShowEditMobilePhotoPicker(true)}
-                        >
-                          Aggiungi foto
-                        </button>
-                      </div>
-                      {showEditMobilePhotoPicker ? (
-                        <div className="menu-item-mobile-picker">
-                          <button
-                            type="button"
-                            className="menu-item-mobile-picker-option"
-                            onClick={() => editImageInputRef.current?.click()}
-                          >
-                            Scegli da galleria
-                          </button>
-                          <button
-                            type="button"
-                            className="menu-item-mobile-picker-option"
-                            onClick={() => editImageCameraInputRef.current?.click()}
-                          >
-                            Scatta foto
-                          </button>
-                          <button
-                            type="button"
-                            className="menu-item-mobile-picker-cancel"
-                            onClick={() => setShowEditMobilePhotoPicker(false)}
-                          >
-                            Annulla
-                          </button>
-                        </div>
-                      ) : null}
-                    </div>
-                  </label>
-
-                  {editImageAnalysis ? (
-                    <div className="menu-image-meta-panel">
-                      <span
-                        className={`admin-image-quality-badge inline ${editImageAnalysis.qualityTier}`}
-                      >
-                        {getMenuImageQualityLabel(editImageAnalysis.qualityTier)}
-                      </span>
-                      <p className="menu-image-meta-text">
-                        Originale {editImageAnalysis.originalWidth}×
-                        {editImageAnalysis.originalHeight} ·{" "}
-                        {formatBytes(editImageAnalysis.originalFileSize)}
-                      </p>
-                      {editImageAnalysis.warning ? (
-                        <p className="menu-image-warning">
-                          {editImageAnalysis.warning}
-                        </p>
-                      ) : null}
-                    </div>
-                  ) : editingItemMeta?.qualityTier ? (
-                    <div className="menu-image-meta-panel">
-                      <span
-                        className={`admin-image-quality-badge inline ${editingItemMeta.qualityTier}`}
-                      >
-                        {getMenuImageQualityLabel(editingItemMeta.qualityTier)}
-                      </span>
-                      <p className="menu-image-meta-text">
-                        Originale {editingItemMeta.originalWidth ?? "?"}×
-                        {editingItemMeta.originalHeight ?? "?"}
-                        {editingItemMeta.originalFileSize
-                          ? ` · ${formatBytes(editingItemMeta.originalFileSize)}`
-                          : ""}
-                        {editingItemMeta.optimizedFileSize
-                          ? ` · WebP ${formatBytes(editingItemMeta.optimizedFileSize)}`
-                          : ""}
-                      </p>
-                    </div>
-                  ) : null}
-
-                  <div className="admin-preview-box">
-                    {hasEditImage ? (
-                      <img
-                        src={
-                          editImagePreview ||
-                          editingItem.immagine ||
-                          DEFAULT_MENU_IMAGE
-                        }
-                        alt="Anteprima modifica piatto"
-                        className="admin-preview-image"
-                      />
-                    ) : (
-                      <div className="admin-preview-placeholder">
-                        Nessuna immagine caricata
-                      </div>
-                    )}
-                  </div>
-                </div>
-              ) : null}
-
-              <button
-                className="btn-success menu-item-submit"
-                type="submit"
-                disabled={savingId === editingItem.id}
-              >
-                {savingId === editingItem.id
-                  ? "Salvataggio..."
-                  : "Salva"}
-              </button>
-            </form>
-          </div>
-        </div>
+        <MenuEditDishModal
+          addIngredientFromQuery={addIngredientFromQuery}
+          allergenMap={allergenMap}
+          draggingEditIngredientId={draggingEditIngredientId}
+          editDetectedAllergenKeys={editDetectedAllergenKeys}
+          editDishActiveTab={editDishActiveTab}
+          editDishIdentityOpen={editDishIdentityOpen}
+          editDishImageOpen={editDishImageOpen}
+          editDishIngredientsOpen={editDishIngredientsOpen}
+          editImageAnalysis={editImageAnalysis}
+          editImageCameraInputRef={editImageCameraInputRef}
+          editImageDragActive={editImageDragActive}
+          editImageInputRef={editImageInputRef}
+          editImagePreview={editImagePreview}
+          editingItem={editingItem}
+          editingItemMeta={editingItemMeta}
+          editIngredientExactMatch={editIngredientExactMatch}
+          editIngredientSearch={editIngredientSearch}
+          editItemAllergens={editItemAllergens}
+          editItemCategory={editItemCategory}
+          editItemDescription={editItemDescription}
+          editItemImageFit={editItemImageFit}
+          editItemIngredientIds={editItemIngredientIds}
+          editItemName={editItemName}
+          editItemPrice={editItemPrice}
+          editItemSpecial={editItemSpecial}
+          editItemSpiceLevel={editItemSpiceLevel}
+          editSelectableExtraAllergens={editSelectableExtraAllergens}
+          filteredEditIngredientOptions={filteredEditIngredientOptions}
+          hasEditImage={hasEditImage}
+          ingredientMap={ingredientMap}
+          onEditImageChange={onEditImageChange}
+          openQuickCreateIngredient={openQuickCreateIngredient}
+          saveEditedItem={saveEditedItem}
+          savingId={savingId}
+          selectableCategories={selectableCategories}
+          setDraggingEditIngredientId={setDraggingEditIngredientId}
+          setEditDishActiveTab={setEditDishActiveTab}
+          setEditDishIdentityOpen={setEditDishIdentityOpen}
+          setEditDishImageOpen={setEditDishImageOpen}
+          setEditDishIngredientsOpen={setEditDishIngredientsOpen}
+          setEditImageDragActive={setEditImageDragActive}
+          setEditingItemId={setEditingItemId}
+          setEditIngredientSearch={setEditIngredientSearch}
+          setEditItemAllergens={setEditItemAllergens}
+          setEditItemCategory={setEditItemCategory}
+          setEditItemDescription={setEditItemDescription}
+          setEditItemImageFit={setEditItemImageFit}
+          setEditItemIngredientIds={setEditItemIngredientIds}
+          setEditItemName={setEditItemName}
+          setEditItemPrice={setEditItemPrice}
+          setEditItemSpecial={setEditItemSpecial}
+          setEditItemSpiceLevel={setEditItemSpiceLevel}
+          setShowEditExtraAllergensPanel={setShowEditExtraAllergensPanel}
+          setShowEditIngredientResults={setShowEditIngredientResults}
+          setShowEditMobilePhotoPicker={setShowEditMobilePhotoPicker}
+          showEditExtraAllergensPanel={showEditExtraAllergensPanel}
+          showEditIngredientResults={showEditIngredientResults}
+          showEditMobilePhotoPicker={showEditMobilePhotoPicker}
+        />
       ) : null}
 
       {showQuickIngredientCreate ? (
-        <div className="admin-modal-backdrop" role="presentation">
-          <div
-            className="admin-modal ingredient-quick-modal"
-            role="dialog"
-            aria-modal="true"
-            aria-label="Crea ingrediente veloce"
-          >
-            <div className="admin-modal-head">
-              <h3>Crea ingrediente</h3>
-              <button
-                type="button"
-                className="icon-btn"
-                onClick={() => {
-                  setShowQuickIngredientCreate(false);
-                }}
-                aria-label="Chiudi creazione ingrediente veloce"
-              >
-                ×
-              </button>
-            </div>
-
-            <div className="booking-form">
-              <label>
-                Nome
-                <input
-                  value={quickIngredientName}
-                  onChange={(event) => {
-                    setQuickIngredientName(event.currentTarget.value);
-                  }}
-                  placeholder="Es. Pistacchio"
-                />
-              </label>
-
-              <label>
-                Allergeni
-                <div className="allergen-picker compact">
-                  {ALLERGENS.map((allergen) => {
-                    const active = quickIngredientAllergens.includes(
-                      allergen.key,
-                    );
-                    return (
-                      <button
-                        type="button"
-                        key={allergen.key}
-                        className={
-                          active ? "allergen-toggle active" : "allergen-toggle"
-                        }
-                        onClick={() => {
-                          setQuickIngredientAllergens((prev) =>
-                            toggleInArray(prev, allergen.key),
-                          );
-                        }}
-                      >
-                        <span className="allergen-mini-icon" aria-hidden>
-                          <AllergenIcon type={allergen.key} />
-                        </span>
-                        <span>{allergen.label}</span>
-                      </button>
-                    );
-                  })}
-                </div>
-              </label>
-
-              <div className="admin-menu-toolbar minimal-right">
-                <button
-                  type="button"
-                  className="admin-mini-btn"
-                  onClick={() => {
-                    setShowQuickIngredientCreate(false);
-                  }}
-                >
-                  Annulla
-                </button>
-                <button
-                  type="button"
-                  className="btn-success"
-                  disabled={busy}
-                  onClick={() => {
-                    void saveQuickIngredient();
-                  }}
-                >
-                  {busy ? "Salvataggio..." : "Salva"}
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
+        <MenuQuickIngredientModal
+          busy={busy}
+          quickIngredientAllergens={quickIngredientAllergens}
+          quickIngredientName={quickIngredientName}
+          saveQuickIngredient={saveQuickIngredient}
+          setQuickIngredientAllergens={setQuickIngredientAllergens}
+          setQuickIngredientName={setQuickIngredientName}
+          setShowQuickIngredientCreate={setShowQuickIngredientCreate}
+        />
       ) : null}
 
       {showReorderMode ? (
-        <div
-          className="admin-modal-backdrop reorder-backdrop"
-          role="presentation"
-        >
-          <div
-            className="admin-modal reorder-modal"
-            role="dialog"
-            aria-modal="true"
-            aria-label="Riordina piatti"
-          >
-            <div className="reorder-header-wrap">
-              <div className="admin-modal-head reorder-head">
-                <h3>Riordina piatti</h3>
-                <button
-                  type="button"
-                  className="icon-btn"
-                  onClick={() => {
-                    setShowReorderMode(false);
-                    setReorderDropTargetId(null);
-                    setDraggingReorderItemId(null);
-                  }}
-                  aria-label="Chiudi modalita riordino"
-                >
-                  ×
-                </button>
-              </div>
-
-              <p className="section-subtitle reorder-subtitle">
-                Categoria: {activeCategory || "Nessuna"}
-              </p>
-            </div>
-
-            <div
-              className="reorder-list"
-              role="list"
-              aria-label="Ordine piatti"
-            >
-              {visibleItems.map((item, index) => {
-                const isDragging = draggingReorderItemId === item.id;
-                const isDropTarget =
-                  reorderDropTargetId === item.id && !isDragging;
-                const isFirst = index === 0;
-                const isLast = index === visibleItems.length - 1;
-
-                return (
-                  <article
-                    key={`reorder-${item.id}`}
-                    className={
-                      isDragging
-                        ? "reorder-row is-dragging"
-                        : isDropTarget
-                          ? "reorder-row is-drop-target"
-                          : "reorder-row"
-                    }
-                    role="listitem"
-                    onDragEnter={() => {
-                      setReorderDropTargetId(item.id);
-                    }}
-                    onDragOver={(event) => {
-                      event.preventDefault();
-                      setReorderDropTargetId(item.id);
-                    }}
-                    onDrop={() => {
-                      if (!draggingReorderItemId) return;
-                      void reorderCategoryItems(draggingReorderItemId, item.id);
-                      setDraggingReorderItemId(null);
-                      setReorderDropTargetId(null);
-                    }}
-                    onDragEnd={() => {
-                      setDraggingReorderItemId(null);
-                      setReorderDropTargetId(null);
-                    }}
-                  >
-                    <div className="reorder-name-box">
-                      <span className="reorder-title">{item.nome}</span>
-                    </div>
-                    <div
-                      className="reorder-actions"
-                      aria-label="Azioni riordino"
-                    >
-                      <button
-                        type="button"
-                        className="reorder-shift-btn"
-                        disabled={isFirst || busy}
-                        onClick={() => {
-                          void moveItemByStep(item.id, -1);
-                        }}
-                        aria-label={`Sposta su ${item.nome}`}
-                      >
-                        ↑
-                      </button>
-                      <button
-                        type="button"
-                        className="reorder-shift-btn"
-                        disabled={isLast || busy}
-                        onClick={() => {
-                          void moveItemByStep(item.id, 1);
-                        }}
-                        aria-label={`Sposta giu ${item.nome}`}
-                      >
-                        ↓
-                      </button>
-                      <button
-                        type="button"
-                        className="reorder-drag-handle"
-                        draggable
-                        onDragStart={(event) => {
-                          setReorderDragGhost(event, item.nome);
-                          setDraggingReorderItemId(item.id);
-                          setReorderDropTargetId(item.id);
-                        }}
-                        onDragEnd={() => {
-                          setDraggingReorderItemId(null);
-                          setReorderDropTargetId(null);
-                        }}
-                        aria-label={`Trascina ${item.nome}`}
-                        title="Trascina da qui per riordinare"
-                      >
-                        ⋮⋮
-                      </button>
-                    </div>
-                    {isDropTarget ? (
-                      <span className="reorder-slot-placeholder" aria-hidden />
-                    ) : null}
-                  </article>
-                );
-              })}
-            </div>
-
-            <div className="admin-menu-toolbar minimal-right reorder-footer-bar">
-              <button
-                type="button"
-                className="btn-success"
-                onClick={() => {
-                  setShowReorderMode(false);
-                  setReorderDropTargetId(null);
-                  setDraggingReorderItemId(null);
-                }}
-              >
-                Fine
-              </button>
-            </div>
-          </div>
-        </div>
+        <MenuReorderOverlay
+          activeCategory={activeCategory}
+          busy={busy}
+          draggingReorderItemId={draggingReorderItemId}
+          moveItemByStep={moveItemByStep}
+          reorderCategoryItems={reorderCategoryItems}
+          reorderDropTargetId={reorderDropTargetId}
+          setDraggingReorderItemId={setDraggingReorderItemId}
+          setReorderDropTargetId={setReorderDropTargetId}
+          setShowReorderMode={setShowReorderMode}
+          visibleItems={visibleItems}
+        />
       ) : null}
     </section>
   );
