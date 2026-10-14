@@ -50,13 +50,21 @@ export default function PrivacyPage() {
                 la prenotazione, contattarti in caso di variazioni e inviarti il
                 riepilogo della richiesta.
               </p>
+              <p>
+                Il giorno della prenotazione ti inviamo un promemoria e, il
+                giorno dopo, un&apos;unica email per chiederti, se vuoi, una
+                recensione. Puoi opporti in qualsiasi momento scrivendo a{" "}
+                <a href="mailto:info@pizzeriaduecentogrammi.it">info@pizzeriaduecentogrammi.it</a>.
+              </p>
             </section>
 
             <section>
               <h2>Base giuridica</h2>
               <p>
                 Il trattamento e necessario per gestire la tua richiesta di
-                prenotazione e le misure precontrattuali connesse.
+                prenotazione e le misure precontrattuali connesse. L&apos;email
+                di richiesta recensione si basa sul nostro legittimo interesse
+                a conoscere il parere dei clienti.
               </p>
             </section>
 
@@ -73,7 +81,9 @@ export default function PrivacyPage() {
               <p>
                 I dati possono essere trattati da fornitori tecnici coinvolti
                 nel funzionamento del sito, dell&apos;email e dell&apos;hosting,
-                nominati ove necessario come responsabili del trattamento.
+                compreso il servizio di messaggistica usato per avvisare il
+                personale delle nuove prenotazioni (Telegram), nominati ove
+                necessario come responsabili del trattamento.
               </p>
             </section>
 
