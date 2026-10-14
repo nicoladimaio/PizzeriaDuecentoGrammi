@@ -19,9 +19,9 @@ Lista delle attività aperte sul sito. Si aggiorna man mano che si chiudono i pu
 
 ## Manutenzione
 
-3. **Dividere i pannelli admin** (`src/components/admin-menu-panel.tsx` e `admin-reservations-panel.tsx`) in componenti più piccoli senza cambiare il comportamento, e correggere i 13 errori di lint rimasti (`react-hooks/set-state-in-effect`), tutti in quei due file. L'utente prova il pannello.
+3. ~~Dividere i pannelli admin e correggere i 13 errori di lint~~: fatto. Dopo il deploy l'utente prova bene il pannello (menu e prenotazioni).
 4. **Unificare le collezioni `reservations` e `reservation_status`**: piano, script di migrazione con prova a secco (lo lancia l'utente), poi codice.
-5. **Foto forse inutilizzate** in `public/assets` (birre, bibite, birra_spina, crocchè, frittatina, montanare): verificare con l'utente dal pannello se qualche piatto le usa; se no, eliminarle.
+5. ~~Foto inutilizzate~~: eliminate birre, bibite, birra_spina, crocchè e logo1.png. Frittatina e montanare restano (usate da piatti del menu).
 
 ## Migliorie future
 
