@@ -193,6 +193,13 @@
         "subject": "Wir erwarten Sie heute - Duecento Grammi",
         "title": "Wir erwarten Sie heute",
         "intro": "wir möchten Sie an Ihre heutige Reservierung bei Duecento Grammi erinnern."
+      },
+      "review": {
+        "subject": "Wie hat es Ihnen gefallen? - Duecento Grammi",
+        "title": "Danke für Ihren Besuch",
+        "intro": "vielen Dank, dass Sie gestern bei Duecento Grammi gegessen haben! Wenn es Ihnen gefallen hat, würde uns eine Bewertung auf Google sehr helfen: Das dauert nur wenige Sekunden.",
+        "button": "Bewertung schreiben",
+        "footnote": "Sie erhalten diese E-Mail nur einmal, weil Sie bei uns reserviert haben. Wir schreiben Ihnen sonst nicht."
       }
     },
     "page": {

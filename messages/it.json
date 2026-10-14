@@ -193,6 +193,13 @@
         "subject": "Ti aspettiamo oggi - Duecento Grammi",
         "title": "Ti aspettiamo oggi",
         "intro": "ti ricordiamo la tua prenotazione di oggi da Duecento Grammi."
+      },
+      "review": {
+        "subject": "Com'è andata? - Duecento Grammi",
+        "title": "Grazie per la visita",
+        "intro": "grazie per aver cenato ieri da Duecento Grammi! Se ti è piaciuto, ci aiuteresti molto lasciando una recensione su Google: bastano pochi secondi.",
+        "button": "Lascia una recensione",
+        "footnote": "Ricevi questa email una sola volta perché hai prenotato da noi. Non ti scriveremo per altro."
       }
     },
     "page": {

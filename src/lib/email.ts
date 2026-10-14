@@ -5,7 +5,7 @@ import {
   formatWhen,
   getReservationTranslator,
 } from "@/lib/reservation-i18n";
-import { ADMIN_RESERVATIONS_URL, LOGO_URL } from "@/lib/seo";
+import { ADMIN_RESERVATIONS_URL, GOOGLE_REVIEW_URL, LOGO_URL } from "@/lib/seo";
 
 // Email al cliente: nella lingua in cui ha prenotato (messages/*.json,
 // namespace "Reservation"). Email al proprietario: sempre in italiano.
@@ -55,6 +55,14 @@ type CustomerReminderEmailParams = {
   guests: number;
   locale: AppLocale;
   cancelUrl: string;
+};
+
+type CustomerReviewRequestEmailParams = {
+  toEmail: string;
+  customerName: string;
+  date: string;
+  time: string;
+  locale: AppLocale;
 };
 
 type OwnerProposalOutcomeEmailParams = {
@@ -173,6 +181,8 @@ type CustomerEmailContent = {
   /** Pulsanti principali (es. accetta/rifiuta proposta). */
   buttons?: Array<{ href: string; label: string; color: string }>;
   cancelUrl?: string;
+  /** Riga finale in piccolo, sotto i contatti. */
+  footnote?: string;
 };
 
 const buildCustomerEmail = ({
@@ -183,6 +193,7 @@ const buildCustomerEmail = ({
   rows,
   buttons = [],
   cancelUrl,
+  footnote,
 }: CustomerEmailContent) => {
   const t = getReservationTranslator(locale);
   const greeting = t("email.greeting", { name: customerName });
@@ -207,6 +218,11 @@ const buildCustomerEmail = ({
         : ""
     }
     <p style="margin:20px 0 0;font-size:13px;line-height:1.55;color:#4a5d68;">${escapeHtml(contact)}</p>
+    ${
+      footnote
+        ? `<p style="margin:12px 0 0;font-size:12px;line-height:1.5;color:#7a8a93;">${escapeHtml(footnote)}</p>`
+        : ""
+    }
   `,
     locale,
   );
@@ -224,6 +240,7 @@ const buildCustomerEmail = ({
       : []),
     "",
     contact,
+    ...(footnote ? ["", footnote] : []),
   ].join("\n");
 
   return { html, text };
@@ -438,6 +455,39 @@ export const sendCustomerReminderEmail = async (
   await sendWithResend({
     to: params.toEmail,
     subject: t("email.reminder.subject"),
+    text,
+    html,
+  });
+};
+
+export const sendCustomerReviewRequestEmail = async (
+  params: CustomerReviewRequestEmailParams,
+): Promise<void> => {
+  const t = getReservationTranslator(params.locale);
+  const { html, text } = buildCustomerEmail({
+    locale: params.locale,
+    customerName: params.customerName,
+    title: t("email.review.title"),
+    intro: t("email.review.intro"),
+    rows: [
+      [
+        t("email.whenLabel"),
+        formatWhen(params.date, params.time, params.locale),
+      ],
+    ],
+    buttons: [
+      {
+        href: GOOGLE_REVIEW_URL,
+        label: t("email.review.button"),
+        color: "#234452",
+      },
+    ],
+    footnote: t("email.review.footnote"),
+  });
+
+  await sendWithResend({
+    to: params.toEmail,
+    subject: t("email.review.subject"),
     text,
     html,
   });

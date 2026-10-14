@@ -1,6 +1,6 @@
-import crypto from "crypto";
 import { NextResponse } from "next/server";
 import { FieldValue } from "firebase-admin/firestore";
+import { rejectUnauthorizedCron } from "@/lib/cron-auth";
 import { getAdminDb } from "@/lib/firebase-admin";
 import { sendCustomerReminderEmail } from "@/lib/email";
 import { toAppLocale } from "@/lib/reservation-i18n";
@@ -11,15 +11,6 @@ import { getRomeNow } from "@/lib/rome-time";
 // La chiama ogni mattina la funzione pianificata di Netlify
 // (netlify/functions/reservation-reminders.mts) con CRON_SECRET.
 // Senza CRON_SECRET i promemoria sono spenti.
-
-const isAuthorized = (request: Request, secret: string) => {
-  const header = request.headers.get("authorization") ?? "";
-  const expected = `Bearer ${secret}`;
-  return (
-    header.length === expected.length &&
-    crypto.timingSafeEqual(Buffer.from(header), Buffer.from(expected))
-  );
-};
 
 type ReservationForReminder = {
   code?: string;
@@ -34,16 +25,11 @@ type ReservationForReminder = {
 };
 
 export async function POST(request: Request) {
-  const secret = process.env.CRON_SECRET?.trim();
-  if (!secret) {
-    return NextResponse.json(
-      { error: "Promemoria disattivati (CRON_SECRET mancante)." },
-      { status: 503 },
-    );
-  }
-  if (!isAuthorized(request, secret)) {
-    return NextResponse.json({ error: "Non autorizzato." }, { status: 401 });
-  }
+  const rejected = rejectUnauthorizedCron(
+    request,
+    "Promemoria disattivati (CRON_SECRET mancante).",
+  );
+  if (rejected) return rejected;
 
   try {
     const db = getAdminDb();

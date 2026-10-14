@@ -193,6 +193,13 @@
         "subject": "See you today - Duecento Grammi",
         "title": "See you today",
         "intro": "this is a reminder of your booking today at Duecento Grammi."
+      },
+      "review": {
+        "subject": "How was it? - Duecento Grammi",
+        "title": "Thanks for dining with us",
+        "intro": "thank you for dining at Duecento Grammi yesterday! If you enjoyed it, a review on Google would help us a lot: it only takes a few seconds.",
+        "button": "Leave a review",
+        "footnote": "You are receiving this email only once because you booked a table with us. We will not write to you about anything else."
       }
     },
     "page": {

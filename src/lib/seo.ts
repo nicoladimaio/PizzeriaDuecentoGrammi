@@ -9,6 +9,9 @@ export const LOGO_URL = `${SITE_URL}/assets/Centro.png`;
 export const DEFAULT_OG_IMAGE = `${SITE_URL}/assets/og-image.jpg`;
 /** Link alle prenotazioni nell'area riservata (email al proprietario). */
 export const ADMIN_RESERVATIONS_URL = `${SITE_URL}/riservato/dashboard?tab=reservations`;
+/** Apre direttamente la finestra "scrivi una recensione" della pizzeria su Google. */
+export const GOOGLE_REVIEW_URL =
+  "https://search.google.com/local/writereview?placeid=ChIJJ7IZlERVOhMRzgTC-K8AT3w";
 
 type PageSeoInput = {
   description: string;

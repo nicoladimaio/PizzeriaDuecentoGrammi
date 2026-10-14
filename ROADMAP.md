@@ -27,8 +27,8 @@ Lista delle attività aperte sul sito. Si aggiorna man mano che si chiudono i pu
 
 Poco lavoro, molto utili (consigliate per prime: 6, 7, 10):
 
-6. Email di richiesta recensione su Google il giorno dopo la cena (stesso meccanismo del promemoria).
-7. Notifica immediata al titolare per ogni nuova prenotazione (es. Telegram), oltre all'email.
+6. ~~Email di richiesta recensione su Google il giorno dopo la cena~~: fatta (funzione pianificata alle 12, prenotazioni confermate di ieri). Si attiva con il prossimo deploy.
+7. Notifica Telegram al titolare per ogni nuova prenotazione: codice pronto. Manca: creare il bot con @BotFather, gruppo privato con bot e titolare, `TELEGRAM_BOT_TOKEN` e `TELEGRAM_CHAT_ID` su Netlify e nel `.env`.
 8. Interruttore "esaurito oggi" sui piatti nel pannello, per nasconderli al volo senza cancellarli.
 9. Avviso in cima al sito per chiusure, ferie o eventi, gestito dal pannello.
 10. Copia di sicurezza automatica del database (es. settimanale).

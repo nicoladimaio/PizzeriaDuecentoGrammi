@@ -22,6 +22,7 @@ import {
 import { getRomeNow } from "@/lib/rome-time";
 import { toAppLocale } from "@/lib/reservation-i18n";
 import { buildCancelUrl } from "@/lib/reservation-links";
+import { sendOwnerNewReservationTelegram } from "@/lib/telegram";
 
 class SlotUnavailableError extends Error {}
 
@@ -217,6 +218,20 @@ export async function POST(request: Request) {
       console.error("Errore invio email proprietario", error);
       ownerNotificationError =
         "Richiesta salvata, ma email proprietario non inviata.";
+    }
+
+    try {
+      await sendOwnerNewReservationTelegram({
+        customerName: parsed.data.customerName,
+        phone: normalizedPhone,
+        date: parsed.data.date,
+        time: parsed.data.time,
+        guests: parsed.data.guests,
+        notes: parsed.data.notes,
+      });
+    } catch (error) {
+      // La prenotazione resta salvata e l'email al titolare è già partita.
+      console.error("Errore invio notifica Telegram", error);
     }
 
     return NextResponse.json({
