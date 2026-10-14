@@ -9,6 +9,20 @@ import {
   buildCancelUrl,
   buildProposalResponseUrls,
 } from "@/lib/reservation-links";
+import {
+  findReservationByCode,
+  writeLegacyStatusCopy,
+} from "@/lib/reservation-store";
+
+type ReservationData = {
+  customerName?: string;
+  email?: string;
+  locale?: string;
+  date: string;
+  time: string;
+  guests?: number;
+  status?: string;
+};
 
 const decisionSchema = z
   .object({
@@ -56,96 +70,50 @@ export async function POST(
     }
 
     const db = getAdminDb();
-    const statusRef = db.collection("reservation_status").doc(code);
-    const statusSnapshot = await statusRef.get();
+    const nowIso = new Date().toISOString();
 
-    if (!statusSnapshot.exists) {
+    // Prenotazione e copia di compatibilità aggiornate nella stessa
+    // transazione. Restituisce i dati di prima dell'aggiornamento.
+    const reservation = await db.runTransaction(async (transaction) => {
+      const found = await findReservationByCode(db, code, transaction);
+      if (!found) return null;
+
+      const update = {
+        status: parsed.data.action,
+        ownerResponse: parsed.data.ownerResponse ?? "",
+        proposedDate: parsed.data.proposedDate ?? "",
+        proposedTime: parsed.data.proposedTime ?? "",
+        updatedAt: nowIso,
+        updatedAtServer: FieldValue.serverTimestamp(),
+      };
+
+      transaction.update(found.ref, update);
+      writeLegacyStatusCopy(db, transaction, found.ref.id, {
+        ...found.data,
+        ...update,
+      });
+
+      return found.data as ReservationData;
+    });
+
+    if (!reservation) {
       return NextResponse.json(
         { error: "Prenotazione non trovata." },
         { status: 404 },
       );
     }
 
-    const statusDoc = statusSnapshot.data() as {
-      reservationId?: string;
-      customerName: string;
-      phone?: string;
-      email?: string;
-      date: string;
-      time: string;
-      guests: number;
-      status?: "pending" | "confirmed" | "rejected" | "proposed" | "cancelled";
-    };
-
-    const nowIso = new Date().toISOString();
-    let reservationId = statusDoc.reservationId;
-
-    if (!reservationId) {
-      const fallbackQuery = await db
-        .collection("reservations")
-        .where("code", "==", code)
-        .limit(1)
-        .get();
-
-      if (!fallbackQuery.empty) {
-        reservationId = fallbackQuery.docs[0].id;
-        await statusRef.update({ reservationId });
-      }
-    }
-
-    if (!reservationId) {
-      return NextResponse.json(
-        { error: "ID prenotazione mancante." },
-        { status: 500 },
-      );
-    }
-
-    const statusUpdate = {
-      status: parsed.data.action,
-      ownerResponse: parsed.data.ownerResponse ?? "",
-      proposedDate: parsed.data.proposedDate ?? "",
-      proposedTime: parsed.data.proposedTime ?? "",
-      updatedAt: nowIso,
-      updatedAtServer: FieldValue.serverTimestamp(),
-    };
-
-    await statusRef.update(statusUpdate);
-
-    await db
-      .collection("reservations")
-      .doc(reservationId)
-      .update({
-        ...statusUpdate,
-      });
-
     let customerNotificationSent = false;
     let customerNotificationError: string | undefined;
 
     try {
-      const reservationSnapshot = await db
-        .collection("reservations")
-        .doc(reservationId)
-        .get();
-
-      const reservationDoc = reservationSnapshot.data() as
-        | {
-            customerName?: string;
-            email?: string;
-            locale?: string;
-          }
-        | undefined;
-      const locale = toAppLocale(reservationDoc?.locale);
-
+      const locale = toAppLocale(reservation.locale);
       const customerEmail =
-        typeof reservationDoc?.email === "string"
-          ? reservationDoc.email.trim()
-          : typeof statusDoc.email === "string"
-            ? statusDoc.email.trim()
-            : "";
+        typeof reservation.email === "string" ? reservation.email.trim() : "";
 
       if (customerEmail) {
         const customerEmailAction =
-          parsed.data.action === "rejected" && statusDoc.status === "confirmed"
+          parsed.data.action === "rejected" && reservation.status === "confirmed"
             ? "cancelled"
             : parsed.data.action;
 
@@ -156,12 +124,11 @@ export async function POST(
 
         await sendCustomerDecisionEmail({
           toEmail: customerEmail,
-          customerName:
-            reservationDoc?.customerName || statusDoc.customerName || "Cliente",
+          customerName: reservation.customerName || "Cliente",
           action: customerEmailAction,
-          date: statusDoc.date,
-          time: statusDoc.time,
-          guests: statusDoc.guests,
+          date: reservation.date,
+          time: reservation.time,
+          guests: reservation.guests,
           proposedDate: parsed.data.proposedDate,
           proposedTime: parsed.data.proposedTime,
           ownerResponse: parsed.data.ownerResponse,
@@ -169,7 +136,7 @@ export async function POST(
           proposalRejectUrl: proposalUrls?.rejectUrl,
           cancelUrl:
             customerEmailAction === "confirmed"
-              ? buildCancelUrl(code, statusDoc.date, locale)
+              ? buildCancelUrl(code, reservation.date, locale)
               : undefined,
           locale,
         });

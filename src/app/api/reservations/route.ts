@@ -22,6 +22,7 @@ import {
 import { getRomeNow } from "@/lib/rome-time";
 import { toAppLocale } from "@/lib/reservation-i18n";
 import { buildCancelUrl } from "@/lib/reservation-links";
+import { RESERVATIONS, writeLegacyStatusCopy } from "@/lib/reservation-store";
 import { sendOwnerNewReservationTelegram } from "@/lib/telegram";
 
 class SlotUnavailableError extends Error {}
@@ -105,7 +106,7 @@ export async function POST(request: Request) {
 
     const nowIso = new Date().toISOString();
     const code = buildReservationCode();
-    const reservationId = db.collection("reservations").doc().id;
+    const reservationId = db.collection(RESERVATIONS).doc().id;
     const normalizedPhone = (reservationData.phone ?? "").trim();
 
     const reservationDoc = {
@@ -124,34 +125,11 @@ export async function POST(request: Request) {
       updatedAtServer: FieldValue.serverTimestamp(),
     };
 
-    const statusDoc = {
-      reservationId,
-      code,
-      customerName: parsed.data.customerName,
-      phone: normalizedPhone,
-      email: parsed.data.email,
-      date: parsed.data.date,
-      time: parsed.data.time,
-      guests: parsed.data.guests,
-      status: "pending",
-      arrived: false,
-      ownerResponse: "",
-      proposedDate: "",
-      proposedTime: "",
-      privacyAcknowledged: parsed.data.privacyAcknowledged,
-      bookingTermsAccepted: parsed.data.bookingTermsAccepted,
-      privacyPolicyVersion: parsed.data.privacyPolicyVersion,
-      bookingTermsVersion: parsed.data.bookingTermsVersion,
-      legalAcceptedAt: nowIso,
-      updatedAt: nowIso,
-      updatedAtServer: FieldValue.serverTimestamp(),
-    };
-
     // Conteggio posti e scrittura nella stessa transazione: se due clienti
     // prenotano l'ultimo tavolo nello stesso istante, uno dei due viene
     // rifiutato invece di sforare la capienza.
     const slotQuery = db
-      .collection("reservations")
+      .collection(RESERVATIONS)
       .where("date", "==", reservationData.date)
       .where("time", "==", reservationData.time);
 
@@ -165,10 +143,10 @@ export async function POST(request: Request) {
         }
 
         transaction.set(
-          db.collection("reservations").doc(reservationId),
+          db.collection(RESERVATIONS).doc(reservationId),
           reservationDoc,
         );
-        transaction.set(db.collection("reservation_status").doc(code), statusDoc);
+        writeLegacyStatusCopy(db, transaction, reservationId, reservationDoc);
       });
     } catch (error) {
       if (error instanceof SlotUnavailableError) {

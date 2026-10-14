@@ -3,6 +3,11 @@ import { FieldValue } from "firebase-admin/firestore";
 import { z } from "zod";
 import { requireAdmin } from "@/lib/admin-auth";
 import { getAdminDb } from "@/lib/firebase-admin";
+import {
+  deleteLegacyStatusCopy,
+  findReservationByCode,
+  writeLegacyStatusCopy,
+} from "@/lib/reservation-store";
 
 const updateReservationSchema = z.object({
   arrived: z.boolean(),
@@ -19,24 +24,10 @@ export async function DELETE(
     const { code } = await context.params;
     const db = getAdminDb();
 
-    const reservationQuery = await db
-      .collection("reservations")
-      .where("code", "==", code)
-      .limit(1)
-      .get();
-
-    const statusRef = db.collection("reservation_status").doc(code);
+    const found = await findReservationByCode(db, code);
     const batch = db.batch();
-
-    if (!reservationQuery.empty) {
-      batch.delete(reservationQuery.docs[0].ref);
-    }
-
-    const statusSnapshot = await statusRef.get();
-    if (statusSnapshot.exists) {
-      batch.delete(statusRef);
-    }
-
+    if (found) batch.delete(found.ref);
+    deleteLegacyStatusCopy(db, batch, code);
     await batch.commit();
 
     return NextResponse.json({ ok: true });
@@ -70,33 +61,28 @@ export async function PATCH(
     const db = getAdminDb();
     const nowIso = new Date().toISOString();
 
-    const reservationQuery = await db
-      .collection("reservations")
-      .where("code", "==", code)
-      .limit(1)
-      .get();
+    const updated = await db.runTransaction(async (transaction) => {
+      const found = await findReservationByCode(db, code, transaction);
+      if (!found) return false;
 
-    if (reservationQuery.empty) {
+      const update = {
+        arrived: parsed.data.arrived,
+        updatedAt: nowIso,
+        updatedAtServer: FieldValue.serverTimestamp(),
+      };
+      transaction.update(found.ref, update);
+      writeLegacyStatusCopy(db, transaction, found.ref.id, {
+        ...found.data,
+        ...update,
+      });
+      return true;
+    });
+
+    if (!updated) {
       return NextResponse.json(
         { error: "Prenotazione non trovata." },
         { status: 404 },
       );
-    }
-
-    await reservationQuery.docs[0].ref.update({
-      arrived: parsed.data.arrived,
-      updatedAt: nowIso,
-      updatedAtServer: FieldValue.serverTimestamp(),
-    });
-
-    const statusRef = db.collection("reservation_status").doc(code);
-    const statusSnapshot = await statusRef.get();
-    if (statusSnapshot.exists) {
-      await statusRef.update({
-        arrived: parsed.data.arrived,
-        updatedAt: nowIso,
-        updatedAtServer: FieldValue.serverTimestamp(),
-      });
     }
 
     return NextResponse.json({ ok: true, arrived: parsed.data.arrived });

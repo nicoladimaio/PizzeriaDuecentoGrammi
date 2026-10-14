@@ -20,7 +20,9 @@ Lista delle attività aperte sul sito. Si aggiorna man mano che si chiudono i pu
 ## Manutenzione
 
 3. ~~Dividere i pannelli admin e correggere i 13 errori di lint~~: fatto. Dopo il deploy l'utente prova bene il pannello (menu e prenotazioni).
-4. **Unificare le collezioni `reservations` e `reservation_status`**: piano, script di migrazione con prova a secco (lo lancia l'utente), poi codice.
+4. **Unificare le collezioni `reservations` e `reservation_status`**:
+   - Fase A, fatta (esce col deploy del 21): le API leggono solo `reservations` (ricerca per codice, `src/lib/reservation-store.ts`); `reservation_status` resta come copia di compatibilità, riscritta dalla prenotazione nella stessa transazione, così si può tornare alla versione precedente. Confronto prima del lavoro (`scripts/check-reservation-collections.mjs`): 35/35, nessuna differenza. Provata su emulatore Firestore in tutti i passaggi. Dopo il deploy: prenotazione di prova completa sul sito vero (proposta, accetta, annulla).
+   - Fase B, a un deploy successivo, quando la A ha funzionato per qualche settimana: togliere la copia (`writeLegacyStatusCopy`/`deleteLegacyStatusCopy`), eliminare la collezione `reservation_status` con uno script (prima a secco) e la sua regola in `firestore.rules`.
 5. ~~Foto inutilizzate~~: eliminate birre, bibite, birra_spina, crocchè e logo1.png. Frittatina e montanare restano (usate da piatti del menu).
 
 ## Migliorie future

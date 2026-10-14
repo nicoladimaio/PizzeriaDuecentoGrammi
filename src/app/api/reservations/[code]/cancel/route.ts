@@ -13,14 +13,17 @@ import {
   notFoundPage,
 } from "@/lib/reservation-action-page";
 import { formatWhen, getReservationTranslator } from "@/lib/reservation-i18n";
+import {
+  findReservationByCode,
+  writeLegacyStatusCopy,
+} from "@/lib/reservation-store";
 import { getRomeNow } from "@/lib/rome-time";
 import type { AppLocale } from "@/i18n/routing";
 
 // Annullamento da parte del cliente, dal link "Annulla prenotazione" nelle
 // email: il link (GET) mostra la pagina di conferma, il click (POST) annulla.
 
-type StatusDoc = {
-  reservationId?: string;
+type ReservationData = {
   customerName?: string;
   phone?: string;
   email?: string;
@@ -32,9 +35,9 @@ type StatusDoc = {
 
 const CANCELLABLE_STATUSES = new Set(["pending", "confirmed", "proposed"]);
 
-const isCancellable = (statusDoc: StatusDoc) =>
-  CANCELLABLE_STATUSES.has(statusDoc.status) &&
-  statusDoc.date >= getRomeNow().dateKey;
+const isCancellable = (reservation: ReservationData) =>
+  CANCELLABLE_STATUSES.has(reservation.status) &&
+  reservation.date >= getRomeNow().dateKey;
 
 const notPossiblePage = (locale: AppLocale) => {
   const t = getReservationTranslator(locale);
@@ -61,22 +64,19 @@ export async function GET(
       return invalidLinkPage(locale);
     }
 
-    const statusSnapshot = await getAdminDb()
-      .collection("reservation_status")
-      .doc(code)
-      .get();
-    if (!statusSnapshot.exists) return notFoundPage(locale);
+    const found = await findReservationByCode(getAdminDb(), code);
+    if (!found) return notFoundPage(locale);
 
-    const statusDoc = statusSnapshot.data() as StatusDoc;
-    if (!isCancellable(statusDoc)) return notPossiblePage(locale);
+    const reservation = found.data as ReservationData;
+    if (!isCancellable(reservation)) return notPossiblePage(locale);
 
     const t = getReservationTranslator(locale);
     return htmlPage(
       locale,
       t("page.cancel.question"),
       `<p style="margin:0 0 8px;font-size:15px;line-height:1.6;">${escapeHtml(
-        t("page.cancel.details", { guests: statusDoc.guests ?? 1 }),
-      )} <strong>${escapeHtml(formatWhen(statusDoc.date, statusDoc.time, locale))}</strong></p>
+        t("page.cancel.details", { guests: reservation.guests ?? 1 }),
+      )} <strong>${escapeHtml(formatWhen(reservation.date, reservation.time, locale))}</strong></p>
       ${confirmForm({ token }, t("page.cancel.button"), "#b42318")}`,
     );
   } catch (error) {
@@ -99,25 +99,13 @@ export async function POST(
     }
 
     const db = getAdminDb();
-    const statusRef = db.collection("reservation_status").doc(code);
 
     const outcome = await db.runTransaction(async (transaction) => {
-      const statusSnapshot = await transaction.get(statusRef);
-      if (!statusSnapshot.exists) return { kind: "not_found" as const };
+      const found = await findReservationByCode(db, code, transaction);
+      if (!found) return { kind: "not_found" as const };
 
-      const statusDoc = statusSnapshot.data() as StatusDoc;
-      if (!isCancellable(statusDoc)) return { kind: "not_possible" as const };
-
-      let reservationId = statusDoc.reservationId;
-      if (!reservationId) {
-        const fallbackQuery = await transaction.get(
-          db.collection("reservations").where("code", "==", code).limit(1),
-        );
-        reservationId = fallbackQuery.empty
-          ? undefined
-          : fallbackQuery.docs[0].id;
-      }
-      if (!reservationId) return { kind: "not_found" as const };
+      const reservation = found.data as ReservationData;
+      if (!isCancellable(reservation)) return { kind: "not_possible" as const };
 
       const nowIso = new Date().toISOString();
       const update = {
@@ -127,25 +115,28 @@ export async function POST(
         updatedAtServer: FieldValue.serverTimestamp(),
       };
 
-      transaction.update(statusRef, { ...update, reservationId });
-      transaction.update(db.collection("reservations").doc(reservationId), update);
+      transaction.update(found.ref, update);
+      writeLegacyStatusCopy(db, transaction, found.ref.id, {
+        ...found.data,
+        ...update,
+      });
 
-      return { kind: "cancelled" as const, statusDoc };
+      return { kind: "cancelled" as const, reservation };
     });
 
     if (outcome.kind === "not_found") return notFoundPage(locale);
     if (outcome.kind === "not_possible") return notPossiblePage(locale);
 
-    const { statusDoc } = outcome;
+    const { reservation } = outcome;
     try {
       await sendOwnerCustomerCancelledEmail({
         code,
-        customerName: statusDoc.customerName || "Cliente",
-        phone: statusDoc.phone,
-        email: statusDoc.email,
-        date: statusDoc.date,
-        time: statusDoc.time,
-        guests: statusDoc.guests ?? 0,
+        customerName: reservation.customerName || "Cliente",
+        phone: reservation.phone,
+        email: reservation.email,
+        date: reservation.date,
+        time: reservation.time,
+        guests: reservation.guests ?? 0,
       });
     } catch (error) {
       console.error("Errore invio email proprietario annullamento", error);

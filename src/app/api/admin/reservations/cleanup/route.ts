@@ -1,11 +1,16 @@
 import { NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/admin-auth";
 import { getAdminDb } from "@/lib/firebase-admin";
+import {
+  RESERVATIONS,
+  deleteLegacyStatusCopy,
+} from "@/lib/reservation-store";
 import { addDaysToDateKey, getRomeNow } from "@/lib/rome-time";
 
 const HISTORY_RETENTION_DAYS = 14;
 // Firestore accetta al massimo 500 operazioni per batch e ogni prenotazione
-// ne richiede 2 (prenotazione + stato): 200 per batch lascia margine.
+// ne richiede 2 (prenotazione + copia di compatibilità): 200 per batch
+// lascia margine.
 const RESERVATIONS_PER_BATCH = 200;
 
 export async function POST(request: Request) {
@@ -20,7 +25,7 @@ export async function POST(request: Request) {
     );
 
     const oldReservations = await db
-      .collection("reservations")
+      .collection(RESERVATIONS)
       .where("date", "<=", retentionCutoffKey)
       .get();
 
@@ -38,10 +43,7 @@ export async function POST(request: Request) {
       for (const doc of chunk) {
         const data = doc.data() as { code?: string };
         batch.delete(doc.ref);
-
-        if (data.code) {
-          batch.delete(db.collection("reservation_status").doc(data.code));
-        }
+        deleteLegacyStatusCopy(db, batch, data.code);
       }
 
       await batch.commit();

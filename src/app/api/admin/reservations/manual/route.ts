@@ -3,6 +3,7 @@ import { FieldValue } from "firebase-admin/firestore";
 import { z } from "zod";
 import { requireAdmin } from "@/lib/admin-auth";
 import { getAdminDb } from "@/lib/firebase-admin";
+import { RESERVATIONS, writeLegacyStatusCopy } from "@/lib/reservation-store";
 import { buildReservationCode } from "@/lib/reservation-code";
 import {
   DATE_KEY_REGEX,
@@ -39,7 +40,7 @@ export async function POST(request: Request) {
     const db = getAdminDb();
     const nowIso = new Date().toISOString();
     const code = buildReservationCode();
-    const reservationId = db.collection("reservations").doc().id;
+    const reservationId = db.collection(RESERVATIONS).doc().id;
     const normalizedEmail = (parsed.data.email ?? "").trim();
     const normalizedPhone = (parsed.data.phone ?? "").trim();
 
@@ -48,7 +49,7 @@ export async function POST(request: Request) {
     const { capacityPerSlot: totalCapacity } = await resolveReservationSettings(db);
 
     const occupancySnap = await db
-      .collection("reservations")
+      .collection(RESERVATIONS)
       .where("date", "==", parsed.data.date)
       .where("time", "==", parsed.data.time)
       .get();
@@ -85,25 +86,10 @@ export async function POST(request: Request) {
       createdManually: true,
     };
 
-    await db.collection("reservations").doc(reservationId).set(reservationDoc);
-
-    await db.collection("reservation_status").doc(code).set({
-      reservationId,
-      code,
-      customerName: parsed.data.customerName,
-      phone: normalizedPhone,
-      email: normalizedEmail,
-      date: parsed.data.date,
-      time: parsed.data.time,
-      guests: parsed.data.guests,
-      status: "confirmed",
-      arrived: false,
-      ownerResponse: "",
-      proposedDate: "",
-      proposedTime: "",
-      updatedAt: nowIso,
-      updatedAtServer: FieldValue.serverTimestamp(),
-    });
+    const batch = db.batch();
+    batch.set(db.collection(RESERVATIONS).doc(reservationId), reservationDoc);
+    writeLegacyStatusCopy(db, batch, reservationId, reservationDoc);
+    await batch.commit();
 
     return NextResponse.json({ ok: true, code });
   } catch (error) {

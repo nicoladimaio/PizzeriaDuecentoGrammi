@@ -14,6 +14,10 @@ import {
   paragraph,
 } from "@/lib/reservation-action-page";
 import { formatWhen, getReservationTranslator } from "@/lib/reservation-i18n";
+import {
+  findReservationByCode,
+  writeLegacyStatusCopy,
+} from "@/lib/reservation-store";
 import type { AppLocale } from "@/i18n/routing";
 
 // Risposta del cliente a una proposta di orario: il link nell'email (GET)
@@ -21,8 +25,7 @@ import type { AppLocale } from "@/i18n/routing";
 
 type Decision = "accept" | "reject";
 
-type StatusDoc = {
-  reservationId?: string;
+type ReservationData = {
   customerName?: string;
   phone?: string;
   email?: string;
@@ -64,25 +67,21 @@ export async function GET(
       return invalidLinkPage(locale);
     }
 
-    const statusSnapshot = await getAdminDb()
-      .collection("reservation_status")
-      .doc(code)
-      .get();
-
-    if (!statusSnapshot.exists) {
+    const found = await findReservationByCode(getAdminDb(), code);
+    if (!found) {
       return notFoundPage(locale);
     }
 
-    const statusDoc = statusSnapshot.data() as StatusDoc;
-    if (statusDoc.status !== "proposed") {
+    const reservation = found.data as ReservationData;
+    if (reservation.status !== "proposed") {
       return alreadyAnsweredPage(locale);
     }
 
     const t = getReservationTranslator(locale);
     const accept = decision === "accept";
     const proposedWhen = formatWhen(
-      statusDoc.proposedDate || statusDoc.date,
-      statusDoc.proposedTime || statusDoc.time,
+      reservation.proposedDate || reservation.date,
+      reservation.proposedTime || reservation.time,
       locale,
     );
 
@@ -93,7 +92,7 @@ export async function GET(
         : t("page.proposal.rejectQuestion"),
       `${paragraph(
         t("page.proposal.requested", {
-          when: formatWhen(statusDoc.date, statusDoc.time, locale),
+          when: formatWhen(reservation.date, reservation.time, locale),
         }),
       )}
       <p style="margin:8px 0 0;font-size:15px;line-height:1.6;">${escapeHtml(t("page.proposal.proposed"))} <strong>${escapeHtml(proposedWhen)}</strong></p>
@@ -135,61 +134,52 @@ export async function POST(
     }
 
     const db = getAdminDb();
-    const statusRef = db.collection("reservation_status").doc(code);
 
     // Lettura e scrittura nella stessa transazione: due click ravvicinati (o
     // "accetta" e "rifiuta" insieme) non possono registrare due risposte.
     const outcome = await db.runTransaction(async (transaction) => {
-      const statusSnapshot = await transaction.get(statusRef);
-      if (!statusSnapshot.exists) return { kind: "not_found" as const };
+      const found = await findReservationByCode(db, code, transaction);
+      if (!found) return { kind: "not_found" as const };
 
-      const statusDoc = statusSnapshot.data() as StatusDoc;
-      if (statusDoc.status !== "proposed") {
+      const reservation = found.data as ReservationData;
+      if (reservation.status !== "proposed") {
         return { kind: "already_answered" as const };
       }
-
-      let reservationId = statusDoc.reservationId;
-      if (!reservationId) {
-        const fallbackQuery = await transaction.get(
-          db.collection("reservations").where("code", "==", code).limit(1),
-        );
-        reservationId = fallbackQuery.empty
-          ? undefined
-          : fallbackQuery.docs[0].id;
-      }
-      if (!reservationId) return { kind: "not_found" as const };
 
       const accepted = decision === "accept";
       const update = {
         status: accepted ? "confirmed" : "rejected",
-        date: accepted ? statusDoc.proposedDate || statusDoc.date : statusDoc.date,
-        time: accepted ? statusDoc.proposedTime || statusDoc.time : statusDoc.time,
+        date: accepted ? reservation.proposedDate || reservation.date : reservation.date,
+        time: accepted ? reservation.proposedTime || reservation.time : reservation.time,
         updatedAt: new Date().toISOString(),
         updatedAtServer: FieldValue.serverTimestamp(),
       };
 
-      transaction.update(statusRef, { ...update, reservationId });
-      transaction.update(db.collection("reservations").doc(reservationId), update);
+      transaction.update(found.ref, update);
+      writeLegacyStatusCopy(db, transaction, found.ref.id, {
+        ...found.data,
+        ...update,
+      });
 
-      return { kind: "updated" as const, statusDoc, update };
+      return { kind: "updated" as const, reservation, update };
     });
 
     if (outcome.kind === "not_found") return notFoundPage(locale);
     if (outcome.kind === "already_answered") return alreadyAnsweredPage(locale);
 
-    const { statusDoc, update } = outcome;
+    const { reservation, update } = outcome;
 
     try {
       await sendOwnerProposalOutcomeEmail({
         code,
-        customerName: statusDoc.customerName || "Cliente",
-        phone: statusDoc.phone,
-        email: statusDoc.email,
+        customerName: reservation.customerName || "Cliente",
+        phone: reservation.phone,
+        email: reservation.email,
         decision,
-        date: statusDoc.date,
-        time: statusDoc.time,
-        proposedDate: statusDoc.proposedDate,
-        proposedTime: statusDoc.proposedTime,
+        date: reservation.date,
+        time: reservation.time,
+        proposedDate: reservation.proposedDate,
+        proposedTime: reservation.proposedTime,
       });
     } catch (error) {
       console.error("Errore invio email proprietario esito proposta", error);
