@@ -120,6 +120,7 @@
     "summaryEmail": "Email",
     "summaryDocs": "Accepted documents",
     "summaryDocsValue": "privacy policy and booking terms",
+    "waitNotice": "The time shown is when your table is booked. On our busiest evenings, especially at weekends, you may have to wait up to about 20 minutes before being seated. Thank you for your patience!",
     "confirmAndSend": "Confirm and send",
     "errors": {
       "name": "Please enter your full name.",
@@ -152,6 +153,7 @@
   "Reservation": {
     "dateAtTime": "{date} at {time}",
     "contact": "If you need anything, call us on {phone}.",
+    "waitNotice": "The time shown is when your table is booked. On our busiest evenings, especially at weekends, you may have to wait up to about 20 minutes before being seated. Thank you for your patience!",
     "email": {
       "greeting": "Hi {name},",
       "whenLabel": "Date and time",

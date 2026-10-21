@@ -932,6 +932,7 @@ export function ReservationForm() {
               <p className="booking-selection-summary">
                 {t("summaryDocs")}: <strong>{t("summaryDocsValue")}</strong>
               </p>
+              <p className="booking-wait-notice">{t("waitNotice")}</p>
             </div>
             <div className="booking-step-actions two-buttons booking-review-actions">
               <button

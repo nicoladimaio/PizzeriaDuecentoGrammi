@@ -120,6 +120,7 @@
     "summaryEmail": "E-Mail",
     "summaryDocs": "Akzeptierte Dokumente",
     "summaryDocsValue": "Datenschutz und Reservierungsbedingungen",
+    "waitNotice": "Die angegebene Uhrzeit ist die Uhrzeit Ihrer Tischreservierung. An besonders vollen Abenden, vor allem am Wochenende, kann es bis zu etwa 20 Minuten dauern, bis Sie Platz nehmen können. Vielen Dank für Ihre Geduld!",
     "confirmAndSend": "Bestätigen und senden",
     "errors": {
       "name": "Bitte Vor- und Nachnamen eingeben.",
@@ -152,6 +153,7 @@
   "Reservation": {
     "dateAtTime": "{date} um {time} Uhr",
     "contact": "Bei Fragen erreichen Sie uns telefonisch unter {phone}.",
+    "waitNotice": "Die angegebene Uhrzeit ist die Uhrzeit Ihrer Tischreservierung. An besonders vollen Abenden, vor allem am Wochenende, kann es bis zu etwa 20 Minuten dauern, bis Sie Platz nehmen können. Vielen Dank für Ihre Geduld!",
     "email": {
       "greeting": "Hallo {name},",
       "whenLabel": "Datum und Uhrzeit",

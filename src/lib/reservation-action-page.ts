@@ -62,14 +62,15 @@ export const paragraph = (text: string) =>
 export const messagePage = (
   locale: AppLocale,
   title: string,
-  message: string,
+  message: string | string[],
   ok = true,
 ) => {
   const t = getReservationTranslator(locale);
+  const paragraphs = Array.isArray(message) ? message : [message];
   return htmlPage(
     locale,
     title,
-    `${paragraph(message)}${paragraph(t("contact", { phone: PIZZERIA_PHONE }))}`,
+    `${paragraphs.map(paragraph).join("")}${paragraph(t("contact", { phone: PIZZERIA_PHONE }))}`,
     { ok, status: ok ? 200 : 400 },
   );
 };

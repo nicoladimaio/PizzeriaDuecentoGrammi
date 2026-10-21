@@ -190,9 +190,12 @@ export async function POST(
       return messagePage(
         locale,
         t("page.proposal.acceptedTitle"),
-        t("page.proposal.acceptedText", {
-          when: formatWhen(update.date, update.time, locale),
-        }),
+        [
+          t("page.proposal.acceptedText", {
+            when: formatWhen(update.date, update.time, locale),
+          }),
+          t("waitNotice"),
+        ],
       );
     }
 

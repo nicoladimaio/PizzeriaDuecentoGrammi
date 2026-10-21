@@ -178,6 +178,8 @@ type CustomerEmailContent = {
   title: string;
   intro: string;
   rows: Array<[string, string]>;
+  /** Avviso evidenziato sotto i dettagli (es. possibile attesa al tavolo). */
+  notice?: string;
   /** Pulsanti principali (es. accetta/rifiuta proposta). */
   buttons?: Array<{ href: string; label: string; color: string }>;
   cancelUrl?: string;
@@ -191,6 +193,7 @@ const buildCustomerEmail = ({
   title,
   intro,
   rows,
+  notice,
   buttons = [],
   cancelUrl,
   footnote,
@@ -204,6 +207,11 @@ const buildCustomerEmail = ({
     `
     ${paragraphHtml(`${escapeHtml(greeting)}<br />${escapeHtml(intro)}`)}
     ${detailsTableHtml(rows.map(([label, value]) => [label, escapeHtml(value)]))}
+    ${
+      notice
+        ? `<p style="margin:14px 0 0;padding:10px 12px;border-left:4px solid #c8902e;background:#fdf6e9;border-radius:6px;font-size:13px;line-height:1.55;color:#5a4318;">${escapeHtml(notice)}</p>`
+        : ""
+    }
     ${
       buttons.length > 0
         ? `<p style="margin:16px 0 0;">${buttons
@@ -232,6 +240,7 @@ const buildCustomerEmail = ({
     intro,
     "",
     ...rows.map(([label, value]) => `${label}: ${value}`),
+    ...(notice ? ["", notice] : []),
     ...(buttons.length > 0
       ? ["", ...buttons.map((button) => `${button.label}: ${button.href}`)]
       : []),
@@ -421,6 +430,7 @@ export const sendCustomerDecisionEmail = async (
     title: t(`email.${key}.title`),
     intro: t(`email.${key}.intro`),
     rows,
+    notice: params.action === "confirmed" ? t("waitNotice") : undefined,
     buttons,
     cancelUrl: params.action === "confirmed" ? params.cancelUrl : undefined,
   });
@@ -449,6 +459,7 @@ export const sendCustomerReminderEmail = async (
       ],
       ...guestsAndNotesRows(params.locale, params.guests, undefined),
     ],
+    notice: t("waitNotice"),
     cancelUrl: params.cancelUrl,
   });
 

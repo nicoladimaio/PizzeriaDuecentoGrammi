@@ -8,8 +8,8 @@ import {
   sendOwnerNewReservationEmail,
 } from "@/lib/email";
 import {
+  ACCEPTED_BOOKING_TERMS_VERSIONS,
   ACCEPTED_PRIVACY_POLICY_VERSIONS,
-  BOOKING_TERMS_VERSION,
 } from "@/lib/reservation-policies";
 import { verifyTurnstileToken } from "@/lib/turnstile";
 import {
@@ -48,7 +48,7 @@ const createReservationSchema = z.object({
   privacyAcknowledged: z.literal(true),
   bookingTermsAccepted: z.literal(true),
   privacyPolicyVersion: z.enum(ACCEPTED_PRIVACY_POLICY_VERSIONS),
-  bookingTermsVersion: z.literal(BOOKING_TERMS_VERSION),
+  bookingTermsVersion: z.enum(ACCEPTED_BOOKING_TERMS_VERSIONS),
   // Lingua del sito al momento della prenotazione (per future email tradotte).
   locale: z.enum(["it", "en", "es", "de"]).optional(),
   turnstileToken: z.string().max(2048).optional(),

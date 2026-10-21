@@ -49,6 +49,12 @@ export default function BookingTermsPage() {
             <section>
               <h2>Puntualita</h2>
               <p>
+                L&apos;orario indicato è quello della prenotazione del tavolo.
+                Nelle serate più affollate, soprattutto nel weekend, potrebbe
+                esserci un&apos;attesa fino a circa 20 minuti prima di
+                accomodarvi.
+              </p>
+              <p>
                 In caso di ritardo ti chiediamo di avvisarci tempestivamente.
                 Senza comunicazioni, il tavolo potrebbe non essere piu
                 garantito in funzione dell&apos;operativita del locale.

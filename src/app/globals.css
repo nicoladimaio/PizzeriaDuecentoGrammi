@@ -1854,6 +1854,17 @@ p {
   color: #4a6370;
 }
 
+.booking-wait-notice {
+  margin: 0.4rem 0 0;
+  padding: 0.55rem 0.7rem;
+  border-left: 4px solid #c8902e;
+  border-radius: 6px;
+  background: #fdf6e9;
+  font-size: 0.8rem;
+  line-height: 1.45;
+  color: #5a4318;
+}
+
 .booking-loader-overlay {
   position: fixed;
   inset: 0;
