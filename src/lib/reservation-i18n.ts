@@ -1,5 +1,6 @@
 import { createTranslator } from "next-intl";
 import { routing, type AppLocale } from "@/i18n/routing";
+import { isNoOutsideCakesDay } from "@/lib/reservation-policies";
 import de from "../../messages/de.json";
 import en from "../../messages/en.json";
 import es from "../../messages/es.json";
@@ -43,6 +44,15 @@ export const formatDateKey = (dateKey: string, locale: AppLocale): string => {
     year: "numeric",
     timeZone: "UTC",
   }).format(new Date(Date.UTC(year, month - 1, day, 12)));
+};
+
+/** Avvisi per chi ha il tavolo confermato: attesa possibile e, il sabato, niente torte. */
+export const getTableNotices = (dateKey: string, locale: AppLocale): string[] => {
+  const t = getReservationTranslator(locale);
+  return [
+    t("waitNotice"),
+    ...(isNoOutsideCakesDay(dateKey) ? [t("saturdayCakeNotice")] : []),
+  ];
 };
 
 /** "sabato 3 ottobre 2026 alle 20:30" */

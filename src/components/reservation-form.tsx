@@ -15,6 +15,7 @@ import {
   BOOKING_TERMS_VERSION,
   PRIVACY_POLICY_PATH,
   PRIVACY_POLICY_VERSION,
+  isNoOutsideCakesDay,
 } from "@/lib/reservation-policies";
 
 const buildReservationSchema = (errorText: (key: string) => string) =>
@@ -139,6 +140,7 @@ export function ReservationForm() {
     null,
   );
   const [selectedDate, setSelectedDate] = useState("");
+  const showCakeNotice = selectedDate !== "" && isNoOutsideCakesDay(selectedDate);
   const [selectedTime, setSelectedTime] = useState("");
   const [step3View, setStep3View] = useState<BookingStep3View>("date");
 
@@ -823,6 +825,10 @@ export function ReservationForm() {
               />
             </label>
 
+            {showCakeNotice ? (
+              <p className="booking-notice">{t("saturdayCakeNotice")}</p>
+            ) : null}
+
             <label>
               {t("notes")}
               <textarea
@@ -932,7 +938,10 @@ export function ReservationForm() {
               <p className="booking-selection-summary">
                 {t("summaryDocs")}: <strong>{t("summaryDocsValue")}</strong>
               </p>
-              <p className="booking-wait-notice">{t("waitNotice")}</p>
+              <p className="booking-notice">{t("waitNotice")}</p>
+              {showCakeNotice ? (
+                <p className="booking-notice">{t("saturdayCakeNotice")}</p>
+              ) : null}
             </div>
             <div className="booking-step-actions two-buttons booking-review-actions">
               <button

@@ -13,7 +13,11 @@ import {
   notFoundPage,
   paragraph,
 } from "@/lib/reservation-action-page";
-import { formatWhen, getReservationTranslator } from "@/lib/reservation-i18n";
+import {
+  formatWhen,
+  getReservationTranslator,
+  getTableNotices,
+} from "@/lib/reservation-i18n";
 import {
   findReservationByCode,
   writeLegacyStatusCopy,
@@ -194,7 +198,7 @@ export async function POST(
           t("page.proposal.acceptedText", {
             when: formatWhen(update.date, update.time, locale),
           }),
-          t("waitNotice"),
+          ...getTableNotices(update.date, locale),
         ],
       );
     }
