@@ -51,7 +51,6 @@ type AvailabilityResponse = {
     closeTime: string;
     slotMinutes: number;
     saturdaySlotMinutes?: number;
-    sameDayClosedAfterOpen?: boolean;
   };
   error?: string;
 };

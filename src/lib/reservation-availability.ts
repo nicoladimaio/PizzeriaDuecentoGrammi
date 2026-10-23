@@ -221,28 +221,36 @@ export const getSlotTimes = (settings: ReservationSettings): string[] => {
   return slotTimes;
 };
 
-/** Il giorno di oggi non si prenota più online dopo l'apertura. */
-export const isSameDayClosed = (
-  settings: ReservationSettings,
-  romeNow: RomeNow,
-): boolean => romeNow.minutes >= settings.openMinutes;
-
-/** Giorno chiuso: giorno di riposo, ferie o oggi dopo l'apertura. */
+/** Giorno chiuso: giorno di riposo o ferie (salvo aperture straordinarie). */
 export const isDayClosed = (
   date: string,
   settings: ReservationSettings,
-  romeNow: RomeNow,
 ): boolean => {
   const isClosedByRules =
     !settings.workingDays.includes(getWeekdayOfDateKey(date)) ||
     settings.holidays.has(date);
-  const isClosedBySameDayCutoff =
-    date === romeNow.dateKey && isSameDayClosed(settings, romeNow);
 
-  return (
-    (isClosedByRules && !settings.specialOpenings.has(date)) ||
-    isClosedBySameDayCutoff
-  );
+  return isClosedByRules && !settings.specialOpenings.has(date);
+};
+
+/** Minuti minimi tra la prenotazione online e l'inizio della fascia. */
+export const SAME_DAY_MARGIN_MINUTES = 15;
+
+/**
+ * Fascia di oggi troppo vicina: la si può prenotare fino a 15 minuti prima
+ * (es. 21:00 fino alle 20:45). Le fasce dopo mezzanotte contano come più tardi.
+ */
+export const isSlotTooSoon = (
+  date: string,
+  time: string,
+  settings: ReservationSettings,
+  romeNow: RomeNow,
+): boolean => {
+  if (date !== romeNow.dateKey) return false;
+  const slotMinutes = parseMinutes(time);
+  const slotServiceMinutes =
+    slotMinutes < settings.openMinutes ? slotMinutes + 24 * 60 : slotMinutes;
+  return slotServiceMinutes - SAME_DAY_MARGIN_MINUTES < romeNow.minutes;
 };
 
 /** Fascia disattivata dall'area riservata per quel giorno della settimana. */
@@ -267,8 +275,9 @@ export const getSlotRejectionReason = (
 ): "out_of_range" | "closed" | "invalid_time" | null => {
   const lastBookableDate = addDaysToDateKey(romeNow.dateKey, MAX_BOOKING_DAYS - 1);
   if (date < romeNow.dateKey || date > lastBookableDate) return "out_of_range";
-  if (isDayClosed(date, settings, romeNow)) return "closed";
+  if (isDayClosed(date, settings)) return "closed";
   if (!getSlotTimes(settings).includes(time)) return "invalid_time";
   if (isSlotDisabled(date, time, settings)) return "closed";
+  if (isSlotTooSoon(date, time, settings, romeNow)) return "closed";
   return null;
 };

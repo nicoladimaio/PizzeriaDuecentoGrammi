@@ -6,8 +6,8 @@ import {
   MAX_BOOKING_DAYS,
   getSlotTimes,
   isDayClosed,
-  isSameDayClosed,
   isSlotDisabled,
+  isSlotTooSoon,
   resolveReservationSettings,
 } from "@/lib/reservation-availability";
 import { addDaysToDateKey, getRomeNow } from "@/lib/rome-time";
@@ -37,7 +37,6 @@ export async function GET(request: Request) {
     const slotTimes = getSlotTimes(settings);
 
     const romeNow = getRomeNow();
-    const sameDayClosedAfterOpen = isSameDayClosed(settings, romeNow);
 
     const startKey = romeNow.dateKey;
     const endKey = addDaysToDateKey(startKey, MAX_BOOKING_DAYS - 1);
@@ -79,7 +78,7 @@ export async function GET(request: Request) {
     for (let i = 0; i < MAX_BOOKING_DAYS; i += 1) {
       const date = addDaysToDateKey(startKey, i);
 
-      const slots = isDayClosed(date, settings, romeNow)
+      const slots = isDayClosed(date, settings)
         ? slotTimes.map((time) => ({
             time,
             available: false,
@@ -92,6 +91,7 @@ export async function GET(request: Request) {
               time,
               available:
                 !isSlotDisabled(date, time, settings) &&
+                !isSlotTooSoon(date, time, settings, romeNow) &&
                 remainingSeats >= guests,
               remainingSeats,
             };
@@ -117,7 +117,6 @@ export async function GET(request: Request) {
         slotMinutes: settings.slotMinutes,
         capacityPerSlot: settings.capacityPerSlot,
         workingDays: settings.workingDays,
-        sameDayClosedAfterOpen,
       },
     });
   } catch (error) {
