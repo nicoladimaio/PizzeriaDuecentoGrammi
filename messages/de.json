@@ -121,7 +121,7 @@
     "summaryDocs": "Akzeptierte Dokumente",
     "summaryDocsValue": "Datenschutz und Reservierungsbedingungen",
     "waitNotice": "Die angegebene Uhrzeit ist die Uhrzeit Ihrer Tischreservierung. An besonders vollen Abenden, vor allem am Wochenende, kann es bis zu etwa 20 Minuten dauern, bis Sie Platz nehmen können. Vielen Dank für Ihre Geduld!",
-    "saturdayCakeNotice": "Am Samstagabend können wir leider keine mitgebrachten Torten annehmen.",
+    "saturdayCakeNotice": "Wir weisen unsere geschätzten Gäste darauf hin, dass das Mitbringen von Torten am Samstagabend nicht gestattet ist.",
     "confirmAndSend": "Bestätigen und senden",
     "errors": {
       "name": "Bitte Vor- und Nachnamen eingeben.",
@@ -155,7 +155,7 @@
     "dateAtTime": "{date} um {time} Uhr",
     "contact": "Bei Fragen erreichen Sie uns telefonisch unter {phone}.",
     "waitNotice": "Die angegebene Uhrzeit ist die Uhrzeit Ihrer Tischreservierung. An besonders vollen Abenden, vor allem am Wochenende, kann es bis zu etwa 20 Minuten dauern, bis Sie Platz nehmen können. Vielen Dank für Ihre Geduld!",
-    "saturdayCakeNotice": "Am Samstagabend können wir leider keine mitgebrachten Torten annehmen.",
+    "saturdayCakeNotice": "Wir weisen unsere geschätzten Gäste darauf hin, dass das Mitbringen von Torten am Samstagabend nicht gestattet ist.",
     "email": {
       "greeting": "Hallo {name},",
       "whenLabel": "Datum und Uhrzeit",

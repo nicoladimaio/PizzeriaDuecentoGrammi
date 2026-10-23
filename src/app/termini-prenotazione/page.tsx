@@ -55,8 +55,8 @@ export default function BookingTermsPage() {
                 accomodarvi.
               </p>
               <p>
-                Il sabato sera non possiamo accettare torte portate
-                dall&apos;esterno.
+                Si informa la gentile clientela che il sabato sera non è
+                consentito introdurre torte.
               </p>
               <p>
                 In caso di ritardo ti chiediamo di avvisarci tempestivamente.

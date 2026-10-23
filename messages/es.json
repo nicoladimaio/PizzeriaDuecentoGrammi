@@ -121,7 +121,7 @@
     "summaryDocs": "Documentos aceptados",
     "summaryDocsValue": "privacidad y condiciones de reserva",
     "waitNotice": "La hora indicada es la de la reserva de la mesa. En las noches de más afluencia, sobre todo los fines de semana, puede haber una espera de hasta unos 20 minutos antes de poder sentaros. ¡Gracias por la paciencia!",
-    "saturdayCakeNotice": "Los sábados por la noche no podemos aceptar tartas traídas de fuera.",
+    "saturdayCakeNotice": "Se informa a nuestra estimada clientela de que los sábados por la noche no está permitido traer tartas.",
     "confirmAndSend": "Confirmar y enviar",
     "errors": {
       "name": "Introduce tu nombre y apellidos.",
@@ -155,7 +155,7 @@
     "dateAtTime": "{date} a las {time}",
     "contact": "Para cualquier cosa, puedes llamarnos al {phone}.",
     "waitNotice": "La hora indicada es la de la reserva de la mesa. En las noches de más afluencia, sobre todo los fines de semana, puede haber una espera de hasta unos 20 minutos antes de poder sentaros. ¡Gracias por la paciencia!",
-    "saturdayCakeNotice": "Los sábados por la noche no podemos aceptar tartas traídas de fuera.",
+    "saturdayCakeNotice": "Se informa a nuestra estimada clientela de que los sábados por la noche no está permitido traer tartas.",
     "email": {
       "greeting": "Hola, {name}:",
       "whenLabel": "Fecha y hora",

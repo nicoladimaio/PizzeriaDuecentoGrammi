@@ -121,7 +121,7 @@
     "summaryDocs": "Documenti accettati",
     "summaryDocsValue": "privacy e termini prenotazione",
     "waitNotice": "L'orario indicato è quello della prenotazione del tavolo. Nelle serate più affollate, soprattutto nel weekend, potrebbe esserci un'attesa fino a circa 20 minuti prima di accomodarvi. Grazie per la pazienza!",
-    "saturdayCakeNotice": "Il sabato sera non possiamo accettare torte portate dall'esterno.",
+    "saturdayCakeNotice": "Si informa la gentile clientela che il sabato sera non è consentito introdurre torte.",
     "confirmAndSend": "Conferma e invia",
     "errors": {
       "name": "Inserisci nome e cognome.",
@@ -155,7 +155,7 @@
     "dateAtTime": "{date} alle {time}",
     "contact": "Per qualsiasi cosa puoi chiamarci allo {phone}.",
     "waitNotice": "L'orario indicato è quello della prenotazione del tavolo. Nelle serate più affollate, soprattutto nel weekend, potrebbe esserci un'attesa fino a circa 20 minuti prima di accomodarvi. Grazie per la pazienza!",
-    "saturdayCakeNotice": "Il sabato sera non possiamo accettare torte portate dall'esterno.",
+    "saturdayCakeNotice": "Si informa la gentile clientela che il sabato sera non è consentito introdurre torte.",
     "email": {
       "greeting": "Ciao {name},",
       "whenLabel": "Data e ora",
